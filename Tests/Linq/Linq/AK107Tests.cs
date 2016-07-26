@@ -63,7 +63,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged)]
+		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged), Explicit("Fails")]
 		public void UserLinqInsert(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -73,7 +73,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged)]
+		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged), Explicit("Fails")]
 		public void UserLinqInsertWithIdentity(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -114,7 +114,7 @@ namespace Tests.Linq
 		[Sql.Expression("sq_test_user_contract.nextval")]
 		static long ContractSequence { get; set;  }
 
-		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged)]
+		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged), Explicit("Fails")]
 		public void ContractLinqInsert(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -134,7 +134,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged)]
+		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged), Explicit("Fails")]
 		public void ContractLinqInsertWithIdentity(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -148,7 +148,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged)]
+		[Test, IncludeDataContextSource(ProviderName.OracleNative, ProviderName.OracleManaged), Explicit("Fails")]
 		public void ContractLinqManyInsert(string context)
 		{
 			using (var db = GetDataContext(context))

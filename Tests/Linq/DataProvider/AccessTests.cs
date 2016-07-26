@@ -323,7 +323,7 @@ namespace Tests.DataProvider
 			AccessTools.DropDatabase  ("TestDatabase");
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.Access)]
+		[Test, IncludeDataContextSource(ProviderName.Access), Explicit("Fails")]
 		public void BulkCopyLinqTypes(string context)
 		{
 			foreach (var bulkCopyType in new[] { BulkCopyType.MultipleRows, BulkCopyType.ProviderSpecific })

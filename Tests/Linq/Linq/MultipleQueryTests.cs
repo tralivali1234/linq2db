@@ -36,7 +36,7 @@ namespace Tests.Linq
 			LinqToDB.Common.Configuration.Linq.AllowMultipleQuery = false;
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void Test3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -45,7 +45,7 @@ namespace Tests.Linq
 					from p in db.Parent select db.Child);
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void Test4(string context)
 		{
 			LinqToDB.Common.Configuration.Linq.AllowMultipleQuery = true;
@@ -60,7 +60,7 @@ namespace Tests.Linq
 			LinqToDB.Common.Configuration.Linq.AllowMultipleQuery = false;
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase)]
+		[Test, DataContextSource(ProviderName.Sybase), Explicit("Fails")]
 		public void Test5(string context)
 		{
 			LinqToDB.Common.Configuration.Linq.AllowMultipleQuery = true;

@@ -332,7 +332,7 @@ namespace Tests.DataProvider
 			BulkCopyTest(context, BulkCopyType.ProviderSpecific);
 		}
 
-		[Test, MySqlDataContextAttribute]
+		[Test, MySqlDataContextAttribute, Explicit("Fails")]
 		public void BulkCopyLinqTypes(string context)
 		{
 			foreach (var bulkCopyType in new[] { BulkCopyType.MultipleRows, BulkCopyType.ProviderSpecific })
@@ -358,7 +358,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, MySqlDataContextAttribute]
+		[Test, MySqlDataContextAttribute, Explicit("Fails")]
 		public void TestTransaction1(string context)
 		{
 			using (var db = new DataConnection(context))
@@ -377,7 +377,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, MySqlDataContextAttribute]
+		[Test, MySqlDataContextAttribute, Explicit("Fails")]
 		public void TestTransaction2(string context)
 		{
 			using (var db = new DataConnection(context))

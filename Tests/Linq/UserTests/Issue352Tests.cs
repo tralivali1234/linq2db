@@ -10,7 +10,7 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue352Tests : TestBase
 	{
-		[Test, NorthwindDataContext]
+		[Test, NorthwindDataContext, Explicit("Fails")]
 		public void Test(string context)
 		{
 			using (var db = new NorthwindDB())

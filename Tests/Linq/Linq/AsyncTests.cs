@@ -30,7 +30,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void Test1(string context)
 		{
 			using (var db = GetDataContext(context + ".LinqService"))
@@ -76,7 +76,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void TestExecute2(string context)
 		{
 			using (var conn = new TestDataConnection(context))

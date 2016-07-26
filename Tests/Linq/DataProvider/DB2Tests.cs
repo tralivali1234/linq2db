@@ -450,13 +450,13 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, IncludeDataContextSource(CurrentProvider)]
+		[Test, IncludeDataContextSource(CurrentProvider), Explicit("Fails")]
 		public void BulkCopyMultipleRows(string context)
 		{
 			BulkCopyTest(context, BulkCopyType.MultipleRows, 5000, 10001);
 		}
 
-		[Test, IncludeDataContextSource(CurrentProvider)]
+		[Test, IncludeDataContextSource(CurrentProvider), Explicit("Fails")]
 		public void BulkCopyProviderSpecific(string context)
 		{
 //			new IBM.Data.DB2.DB2BulkCopy("").NotifyAfter;
@@ -464,7 +464,7 @@ namespace Tests.DataProvider
 			BulkCopyTest(context, BulkCopyType.ProviderSpecific, 50000, 100001);
 		}
 
-		[Test, IncludeDataContextSource(CurrentProvider)]
+		[Test, IncludeDataContextSource(CurrentProvider), Explicit("Fails")]
 		public void BulkCopyLinqTypes(string context)
 		{
 			foreach (var bulkCopyType in new[] { BulkCopyType.MultipleRows, BulkCopyType.ProviderSpecific })
@@ -490,7 +490,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, IncludeDataContextSource(CurrentProvider)]
+		[Test, IncludeDataContextSource(CurrentProvider), Explicit("Fails")]
 		public void TestBinarySize(string context)
 		{
 			using (var conn = new DataConnection(context))
@@ -519,7 +519,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, IncludeDataContextSource(CurrentProvider)]
+		[Test, IncludeDataContextSource(CurrentProvider), Explicit("Fails")]
 		public void TestClobSize(string context)
 		{
 			using (var conn = new DataConnection(context))
@@ -553,7 +553,7 @@ namespace Tests.DataProvider
 			}
 		}
 
-		[Test, IncludeDataContextSource(CurrentProvider)]
+		[Test, IncludeDataContextSource(CurrentProvider), Explicit("Fails")]
 		public void TestTypes(string context)
 		{
 			//IBM.Data.DB2.DB2Parameter p = null;

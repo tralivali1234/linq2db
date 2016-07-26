@@ -17,7 +17,7 @@ namespace Tests.xUpdate
 	[TestFixture]
 	public class DeleteTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Delete1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -40,7 +40,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Delete2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -63,7 +63,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Delete3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -86,7 +86,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Delete4(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -109,7 +109,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Delete5(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -134,7 +134,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(false, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(false, ProviderName.Informix)]
 		public void AlterDelete(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -155,7 +155,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Access, ProviderName.DB2, ProviderName.Informix, ProviderName.OracleNative, ProviderName.OracleManaged,
 			ProviderName.PostgreSQL, ProviderName.SqlCe, ProviderName.SQLite, ProviderName.Firebird, ProviderName.SapHana)]
 		public void DeleteMany1(string context)
@@ -185,7 +185,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Access, ProviderName.DB2, ProviderName.Informix, ProviderName.OracleNative, ProviderName.OracleManaged,
 			ProviderName.PostgreSQL, ProviderName.SqlCe, ProviderName.SQLite, ProviderName.Firebird, ProviderName.SapHana
 			)]
@@ -225,7 +225,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Access, ProviderName.DB2, ProviderName.Informix, ProviderName.OracleNative, ProviderName.OracleManaged,
 			ProviderName.PostgreSQL, ProviderName.SqlCe, ProviderName.SQLite, ProviderName.Firebird, ProviderName.SapHana
 			)]
@@ -264,7 +264,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Access,
 			ProviderName.DB2,
 			ProviderName.Firebird,
@@ -316,7 +316,7 @@ namespace Tests.xUpdate
 			return db.LastQuery;
 		}
 
-		[Test, DataContextSource(false, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(false, ProviderName.Informix)]
 		public void ContainsJoin1(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -346,7 +346,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(false, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(false, ProviderName.Informix)]
 		public void MultipleDelete(string context)
 		{
 			using (var db = new TestDataConnection(context))

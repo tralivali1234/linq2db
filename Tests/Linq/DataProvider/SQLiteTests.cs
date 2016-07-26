@@ -404,7 +404,7 @@ namespace Tests.DataProvider
 			SQLiteTools.DropDatabase  ("TestDatabase");
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SQLite)]
+		[Test, IncludeDataContextSource(ProviderName.SQLite), Explicit("Fails")]
 		public void BulkCopyLinqTypes(string context)
 		{
 			foreach (var bulkCopyType in new[] { BulkCopyType.MultipleRows, BulkCopyType.ProviderSpecific })

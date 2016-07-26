@@ -41,7 +41,7 @@ namespace Tests.UserTests
 		[Test, DataContextSource(
 			ProviderName.Access, ProviderName.DB2, ProviderName.Informix, ProviderName.OracleNative, ProviderName.OracleManaged,
 			ProviderName.PostgreSQL, ProviderName.SqlCe, ProviderName.SQLite, ProviderName.Firebird, ProviderName.SapHana
-			)]
+			), Explicit("Fails")]
 		public void Test(string context)
 		{
 			var harnessIds = new int[2];

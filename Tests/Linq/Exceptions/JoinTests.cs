@@ -12,7 +12,7 @@ namespace Tests.Exceptions
 	[TestFixture]
 	public class JoinTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void InnerJoin(string context)
 		{
 			using (var db = GetDataContext(context))

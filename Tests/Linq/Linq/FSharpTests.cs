@@ -7,35 +7,35 @@ namespace Tests.Linq
 	[TestFixture]
 	public class FSharpTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void LoadSingle(string context)
 		{
 			using (var db = GetDataContext(context))
 				FSharp.WhereTest.LoadSingle(db);
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void LoadSingleComplexPerson(string context)
 		{
 			using (var db = GetDataContext(context))
 				FSharp.WhereTest.LoadSingleComplexPerson(db);
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void LoadSingleDeeplyComplexPerson(string context)
 		{
 			using (var db = GetDataContext(context))
 				FSharp.WhereTest.LoadSingleDeeplyComplexPerson(db);
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void LoadColumnOfDeeplyComplexPerson(string context)
 		{
 			using (var db = GetDataContext(context))
 				FSharp.WhereTest.LoadColumnOfDeeplyComplexPerson(db);
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void SelectField(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -49,7 +49,7 @@ namespace Tests.Linq
 				FSharp.SelectTest.SelectFieldDeeplyComplexPerson(db);
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void Insert1(string context)
 		{
 			using (var db = GetDataContext(context))

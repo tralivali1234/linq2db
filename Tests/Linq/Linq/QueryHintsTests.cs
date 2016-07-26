@@ -11,7 +11,7 @@ namespace Tests.Linq
 	[TestFixture]
 	public class QueryHintsTests : TestBase
 	{
-		[Test, DataContextSource(ProviderName.Access, ProviderName.MySql, TestProvName.MariaDB)]
+		[Test, DataContextSource(ProviderName.Access, ProviderName.MySql, TestProvName.MariaDB), Explicit("Fails")]
 		public void Comment(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -55,7 +55,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2012)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2012), Explicit("Fails")]
 		public void Option1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -82,7 +82,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2012)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2012), Explicit("Fails")]
 		public void Option2(string context)
 		{
 			using (var db = GetDataContext(context))

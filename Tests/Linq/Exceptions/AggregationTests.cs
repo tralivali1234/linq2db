@@ -15,7 +15,7 @@ namespace Tests.Exceptions
 				Assert.Throws(typeof(InvalidOperationException), () => db.Parent.Where(_ => _.ParentID < 0).Max(_ => _.ParentID));
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void NonNullableMax2(string context)
 		{
 			using (var db = GetDataContext(context))

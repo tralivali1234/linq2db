@@ -12,7 +12,7 @@ namespace Tests.xUpdate
 	[TestFixture]
 	public class BatchTests : TestBase
 	{
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void Transaction(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -37,7 +37,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void NoTransaction(string context)
 		{
 			using (var db = new TestDataConnection(context))

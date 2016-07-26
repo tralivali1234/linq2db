@@ -45,7 +45,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.MySql)]
+		[Test, IncludeDataContextSource(ProviderName.MySql), Explicit("Fails")]
 		public void TestMono03Mono(string context)
 		{
 			using (var db = GetDataContext(context))

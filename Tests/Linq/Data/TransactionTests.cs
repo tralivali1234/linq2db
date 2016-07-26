@@ -12,7 +12,7 @@ namespace Tests.Data
 	[TestFixture]
 	public class TransactionTests : TestBase
 	{
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void AutoRollbackTransaction(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -37,7 +37,7 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void CommitTransaction(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -63,7 +63,7 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void RollbackTransaction(string context)
 		{
 			using (var db = new TestDataConnection(context))

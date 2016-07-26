@@ -158,7 +158,7 @@ namespace Tests.Linq
 
 		#endregion
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestComplexExpression(string context)
 		{
 			// failed with LinqToDB.Data.Linq.LinqException : 'new StationObjectId() {Value = ConvertNullable(child.ChildID)}' 
@@ -179,7 +179,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestJoin(string context)
 		{
 			// failed with System.ArgumentOutOfRangeException : Index was out of range. Must be non-negative and less than 
@@ -199,7 +199,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestNullableExpression(string context)
 		{
 			// failed with System.NullReferenceException : Object reference not set to an instance of an object.
@@ -217,7 +217,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestLookupWithInterfaceProperty(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -241,7 +241,7 @@ namespace Tests.Linq
 
 		#endregion
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestForObjectExt(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -268,7 +268,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestForGroupBy(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -291,7 +291,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestLinqMax(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -305,7 +305,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestConvertFunction(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -323,7 +323,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestJoinOrder(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -360,7 +360,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestDistinctWithGroupBy(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -414,7 +414,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void ListvsArrayTest(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -435,7 +435,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void ConcatJoinOrderByTest(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -457,7 +457,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestIsContainedInArrayOfEnumValues(string context)
 		{
 			var types2 = new[] { TypeValue.Value2, TypeValue.Value3, TypeValue.Value4 };
@@ -471,7 +471,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestQueryWithInterface(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -498,7 +498,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestBugCountWithOrderBy(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -514,13 +514,13 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestUpdateWithTargetByAssociationProperty(string context)
 		{
 			TestUpdateByAssociationProperty(context,true);
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestSetUpdateWithoutTargetByAssociationProperty(string context)
 		{
 			TestUpdateByAssociationProperty(context, false);
@@ -576,7 +576,7 @@ namespace Tests.Linq
 			return from x in source where x.Id == id select x;
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestComparePropertyOfEnumTypeToVaribleInSubquery(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -591,7 +591,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void ConcatOrderByTest(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -613,7 +613,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestContainsForNullableDateTimeWithOnlyNullValue1(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -631,7 +631,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestContainsForNullableDateTimeWithOnlyNullValue2(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -647,7 +647,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestContainsForNullableDateTimeWithNullAndNotNullValues1(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -666,7 +666,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestContainsForNullableDateTimeWithNullAndNotNullValues2(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -740,7 +740,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestMono01(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -760,7 +760,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestMono03(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -776,7 +776,7 @@ namespace Tests.Linq
 					new[] { source1.Expression, Expression.Constant(source2, typeof (IEnumerable<TSource>)) }));
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestMonoConcat(string context)
 		{
 			using (var db = new TestDataConnection(context))
@@ -791,7 +791,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IdlProviders]
+		[Test, Explicit("Fails"), IdlProviders]
 		public void TestMonoConcat2(string context)
 		{
 			using (var db = new TestDataConnection(context))

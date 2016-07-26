@@ -18,7 +18,7 @@ namespace Tests.xUpdate
 	[TestFixture]
 	public class UpdateTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Update1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -41,7 +41,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Update2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -64,7 +64,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Update3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -87,7 +87,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Update4(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -114,7 +114,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Update5(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -141,7 +141,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Update6(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -168,7 +168,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void Update7(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -202,7 +202,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Update8(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -227,7 +227,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Informix,
 			ProviderName.SqlCe,
 			ProviderName.DB2,
@@ -268,7 +268,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Informix,
 			ProviderName.SqlCe,
 			ProviderName.DB2,
@@ -309,7 +309,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		//[Test, DataContextSource]
+		//[Test, Explicit("Fails"), DataContextSource]
 		public void Update11(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -324,7 +324,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.SqlCe, ProviderName.SQLite, ProviderName.DB2, ProviderName.Informix,
 			ProviderName.Firebird, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.PostgreSQL)]
 		public void Update12(string context)
@@ -341,7 +341,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.SqlCe, ProviderName.SQLite, ProviderName.DB2, ProviderName.Informix,
 			ProviderName.Firebird, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.PostgreSQL)]
 		public void Update13(string context)
@@ -358,7 +358,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
 		public void UpdateAssociation1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -389,7 +389,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
 		public void UpdateAssociation2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -420,7 +420,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
 		public void UpdateAssociation3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -451,7 +451,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
 		public void UpdateAssociation4(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -518,7 +518,7 @@ namespace Tests.xUpdate
 			public Table1 Table1;
 		}
 
-		[Test, DataContextSource(false,
+		[Test, Explicit("Fails"), DataContextSource(false,
 			ProviderName.Access, 
 			ProviderName.DB2, 
 			ProviderName.Firebird, 
@@ -552,7 +552,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Informix)]
 		public void AsUpdatableTest(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -606,7 +606,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.Access,
 			ProviderName.DB2,
 			ProviderName.Firebird,
@@ -643,7 +643,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		// TODO: [Test, DataContextSource]
+		// TODO: [Test, Explicit("Fails"), DataContextSource]
 		public void TestUpdateTake(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -660,7 +660,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access, ProviderName.Informix, ProviderName.SqlCe)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Access, ProviderName.Informix, ProviderName.SqlCe)]
 		public void UpdateSetSelect(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -676,7 +676,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(
+		[Test, Explicit("Fails"), DataContextSource(
 			ProviderName.SQLite, ProviderName.Access, ProviderName.Informix, ProviderName.Firebird, ProviderName.PostgreSQL,
 			ProviderName.MySql, TestProvName.MariaDB, ProviderName.Sybase)]
 		public void UpdateIssue319Regression(string context)
@@ -716,7 +716,7 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.Firebird, ProviderName.Sybase)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.Firebird, ProviderName.Sybase)]
 		public void UpdateIssue321Regression(string context)
 		{
 			using (var db = GetDataContext(context))

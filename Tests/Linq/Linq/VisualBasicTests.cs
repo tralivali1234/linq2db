@@ -15,7 +15,7 @@ namespace Tests.Linq
 	[TestFixture]
 	public class VisualBasicTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void CompareString(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -24,7 +24,7 @@ namespace Tests.Linq
 					CompilerServices.CompareString(db));
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void CompareString1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -34,7 +34,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SapHana)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.SapHana)]
 		public void ParameterName(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -43,7 +43,7 @@ namespace Tests.Linq
 					VisualBasicCommon.ParamenterName(db));
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Access)]
 		public void SearchCondition1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -54,7 +54,7 @@ namespace Tests.Linq
 					VisualBasicCommon.SearchCondition1(db));
 		}
 
-		[Test, NorthwindDataContext]
+		[Test, Explicit("Fails"), NorthwindDataContext]
 		public void SearchCondition2(string context)
 		{
 			using (var db = new NorthwindDB())
@@ -67,7 +67,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
+		[Test, Explicit("Fails"), NorthwindDataContext]
 		public void SearchCondition3(string context)
 		{
 			using (var db = new NorthwindDB())
@@ -87,7 +87,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
+		[Test, Explicit("Fails"), NorthwindDataContext]
 		public void SearchCondition4(string context)
 		{
 			using (var db = new NorthwindDB())

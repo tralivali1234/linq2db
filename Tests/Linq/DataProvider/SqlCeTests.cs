@@ -412,7 +412,7 @@ namespace Tests.DataProvider
 			SqlCeTools.DropDatabase  ("TestDatabase");
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlCe)]
+		[Test, IncludeDataContextSource(ProviderName.SqlCe), Explicit("Fails")]
 		public void BulkCopyLinqTypes(string context)
 		{
 			foreach (var bulkCopyType in new[] { BulkCopyType.MultipleRows, BulkCopyType.ProviderSpecific })

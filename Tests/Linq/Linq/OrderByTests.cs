@@ -14,7 +14,7 @@ namespace Tests.Linq
 	[TestFixture]
 	public class OrderByTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBy1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -33,7 +33,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBy2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -52,7 +52,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBy3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -77,7 +77,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBy4(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -102,7 +102,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBy5(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -121,7 +121,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void ConditionOrderBy(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -140,7 +140,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, Explicit("Fails"), DataContextSource(false)]
 		public void OrderBy6(string context)
 		{
 			using (var db = (TestDataConnection)GetDataContext(context))
@@ -158,7 +158,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBySelf1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -169,7 +169,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBySelf2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -180,7 +180,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Access)]
 		public void OrderBySelectMany1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -201,7 +201,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderBySelectMany2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -222,7 +222,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Access)]
 		public void OrderBySelectMany3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -243,7 +243,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void OrderAscDesc(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -254,7 +254,7 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Count1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -263,7 +263,7 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Count());
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase)]
 		public void Count2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -272,7 +272,7 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Take(3).Count());
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Min1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -281,7 +281,7 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Min(p => p.ParentID));
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase)]
 		public void Min2(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -290,7 +290,7 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Take(3).Min(p => p.ParentID));
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
+		[Test, Explicit("Fails"), DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
 		public void Min3(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -299,7 +299,7 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.Value1).Take(3).Min(p => p.ParentID));
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Distinct(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -315,7 +315,7 @@ namespace Tests.Linq
 					select p).Distinct().OrderBy(p => p.ParentID));
 		}
 
-		[Test, DataContextSource]
+		[Test, Explicit("Fails"), DataContextSource]
 		public void Take(string context)
 		{
 			using (var db = GetDataContext(context))

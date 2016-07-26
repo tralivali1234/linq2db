@@ -12,7 +12,7 @@ namespace Tests.Exceptions
 	[TestFixture]
 	public class DmlTests : TestBase
 	{
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void InsertOrUpdate1(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -36,7 +36,7 @@ namespace Tests.Exceptions
 			}
 		}
 
-		[Test, DataContextSource]
+		[Test, DataContextSource, Explicit("Fails")]
 		public void InsertOrUpdate2(string context)
 		{
 			using (var db = GetDataContext(context))

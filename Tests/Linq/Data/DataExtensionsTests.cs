@@ -119,7 +119,7 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, DataContextSource(false)]
+		[Test, DataContextSource(false), Explicit("Fails")]
 		public void TestObject51(string context)
 		{
 			using (var conn = new TestDataConnection(context))

@@ -7,7 +7,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using JetBrains.Annotations;
 
 namespace LinqToDB.Linq
 {
@@ -25,18 +24,17 @@ namespace LinqToDB.Linq
 		readonly IDataContext _dataContext;
 
 		public Expression     Expression  { get; set; }
-		public Type           ElementType { get { return typeof(T); } }
-		public IQueryProvider Provider    { get { return this;      } }
+		public Type           ElementType => typeof(T);
+		public IQueryProvider Provider    => this;
 
 		#region SqlText
 
 		[DebuggerBrowsable(DebuggerBrowsableState.Never)]
-		private string _sqlTextHolder;
+		string _sqlTextHolder;
 
-// ReSharper disable InconsistentNaming
-		[UsedImplicitly]
-		private string _sqlText { get { return SqlText; }}
-// ReSharper restore InconsistentNaming
+		// ReSharper disable once InconsistentNaming
+		// ReSharper disable once UnusedMember.Local
+		string _sqlText => SqlText;
 
 		public  string  SqlText
 		{
@@ -59,18 +57,21 @@ namespace LinqToDB.Linq
 			}
 		}
 
+		public IDataContextInfo DataContextInfo { get; set; }
+
 		#endregion
 
 		public IQueryable CreateQuery(Expression expression)
 		{
 			if (expression == null)
-				throw new ArgumentNullException("expression");
+				throw new ArgumentNullException(nameof(expression));
 
 			var elementType = expression.Type.GetItemType() ?? expression.Type;
 
 			try
 			{
-				return (IQueryable)Activator.CreateInstance(typeof(ExpressionQueryImplNew<>).MakeGenericType(elementType), new object[] { _dataContext, expression });
+				return (IQueryable)Activator
+					.CreateInstance(typeof(ExpressionQueryImplNew<>).MakeGenericType(elementType), _dataContext, expression);
 			}
 			catch (TargetInvocationException ex)
 			{
@@ -81,7 +82,7 @@ namespace LinqToDB.Linq
 		public IQueryable<TElement> CreateQuery<TElement>(Expression expression)
 		{
 			if (expression == null)
-				throw new ArgumentNullException("expression");
+				throw new ArgumentNullException(nameof(expression));
 
 			return new ExpressionQueryImplNew<TElement>(_dataContext, expression);
 		}

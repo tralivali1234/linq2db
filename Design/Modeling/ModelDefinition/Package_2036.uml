@@ -1,13 +1,23 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<package xmlns:dm0="http://schemas.microsoft.com/VisualStudio/2008/DslTools/Core" xmlns:dm1="http://schemas.microsoft.com/dsltools/Kernel" xmlns:dm2="http://schemas.microsoft.com/dsltools/Component" xmlns:dm3="http://schemas.microsoft.com/dsltools/UseCase" xmlns:dm4="http://schemas.microsoft.com/dsltools/Activity" xmlns:dm5="http://schemas.microsoft.com/dsltools/Interaction" xmlns:dm6="http://schemas.microsoft.com/dsltools/UmlModelLibrary" xmlns:dm7="http://schemas.microsoft.com/dsltools/UmlDiagrams" xmlns:dm8="http://schemas.microsoft.com/dsltools/LogicalClassDesigner" xmlns:dm9="http://schemas.microsoft.com/VisualStudio/TeamArchitect/SequenceDesigner"
+<package xmlns:dm0="http://schemas.microsoft.com/VisualStudio/2008/DslTools/Core" xmlns:dm1="http://schemas.microsoft.com/dsltools/Kernel" xmlns:dm2="http://schemas.microsoft.com/dsltools/Component" xmlns:dm3="http://schemas.microsoft.com/dsltools/Activity" xmlns:dm4="http://schemas.microsoft.com/dsltools/UseCase" xmlns:dm5="http://schemas.microsoft.com/dsltools/Interaction" xmlns:dm6="http://schemas.microsoft.com/dsltools/UmlModelLibrary" xmlns:dm7="http://schemas.microsoft.com/dsltools/UmlDiagrams" xmlns:dm8="http://schemas.microsoft.com/dsltools/LogicalClassDesigner" xmlns:dm9="http://schemas.microsoft.com/VisualStudio/TeamArchitect/SequenceDesigner"
   dslVersion="1.0.0.0"
   Id="154c1ef9-4adc-4b2f-af19-313680ec255f"
   name="Linq" xmlns="http://schemas.microsoft.com/dsltools/ModelStore">
+  <importedPackagesInternal>
+    <packageImport
+      Id="204b31d1-6a9c-42f5-9003-1bf143aba662"
+      visibility="Public">
+      <packageMoniker
+        Id="774ddf19-c7f8-404b-af4b-bc8c0b3dddc0"
+        LastKnownName="System"
+        LastKnownLocation="Package_2109.uml" />
+    </packageImport>
+  </importedPackagesInternal>
   <packagedElements>
     <packageHasNamedElement>
       <class
         Id="6ab79105-36fa-4c28-a2b5-6b7d7424e7ef"
-        name="ExpressionQuery&lt;T&gt;"
+        name="ExpressionQuery"
         visibility="Private"
         isAbstract="true"
         isLeaf="false"
@@ -17,16 +27,78 @@
             Id="eea57a15-1d13-4f1b-b363-9411c369a257">
             <interfaceMoniker
               Id="d2807f09-540e-4a77-a0d4-0fe24f1f304e"
-              LastKnownName="IExpressionQuery&lt;T&gt;"
+              LastKnownName="IExpressionQuery"
               LastKnownLocation="Package_2036.uml" />
           </interfaceRealization>
         </suppliersInternal>
+        <targetEnds>
+          <association
+            Id="94fd18ed-8104-496b-bf56-d929e56c799b"
+            isDerived="false"
+            sourceEndRoleName=""
+            targetEndRoleName="GetQuery"
+            isLeaf="false"
+            isAbstract="false">
+            <classMoniker
+              Id="92f256f7-09a5-4d78-a638-1041ebc80657"
+              LastKnownName="Query"
+              LastKnownLocation="Package_2036.uml" />
+            <relationshipOwnedElementsInternal>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="12f11e5d-7191-4cc0-a0dc-7161905d5acf"
+                  visibility="Private"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="Composite"
+                  isComposite="false"
+                  isNavigableOwned="false" />
+              </associationHasOwnedEnds>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="c8b22e91-7212-4275-8741-1d364b6d1f74"
+                  name="GetQuery"
+                  visibility="Private"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="true" />
+              </associationHasOwnedEnds>
+            </relationshipOwnedElementsInternal>
+          </association>
+        </targetEnds>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="bfb54b27-2824-45e5-bd7e-22864faf778a"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="f9c5c0ed-2526-4587-9a04-c88f3c00528c">
+                <ownedParameterableElement>
+                  <class
+                    Id="47de48e6-932f-4f8b-ae7f-4f9354311014"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </class>
     </packageHasNamedElement>
     <packageHasNamedElement>
       <class
         Id="da5696d4-a960-4285-9ebd-55c57e9c9851"
-        name="TableQuery&lt;T&gt;"
+        name="TableQuery"
         visibility="Private"
         isAbstract="false"
         isLeaf="false"
@@ -36,7 +108,7 @@
             Id="6dc93196-98af-467f-be5b-df86b2aa3f18">
             <interfaceMoniker
               Id="6b47141e-52db-4dad-b9dd-267752f5f23c"
-              LastKnownName="ITable&lt;T&gt;"
+              LastKnownName="ITable"
               LastKnownLocation="Package_2036.uml" />
           </interfaceRealization>
         </suppliersInternal>
@@ -46,16 +118,36 @@
             isSubstitutable="false">
             <classMoniker
               Id="6ab79105-36fa-4c28-a2b5-6b7d7424e7ef"
-              LastKnownName="ExpressionQuery&lt;T&gt;"
+              LastKnownName="ExpressionQuery"
               LastKnownLocation="Package_2036.uml" />
           </generalization>
         </generalsInternal>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="6df4b162-421d-43c9-bf59-3599ebb01869"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="52fda2de-3a6f-4c7e-a734-d74cf6f1ffac">
+                <ownedParameterableElement>
+                  <class
+                    Id="49d9ef8f-0d67-4625-b7b8-324fa4ba9971"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </class>
     </packageHasNamedElement>
     <packageHasNamedElement>
       <class
         Id="e97ad2cf-6593-4335-a228-f8c455be5f78"
-        name="ExpressionQueryImpl&lt;T&gt;"
+        name="ExpressionQueryImpl"
         visibility="Private"
         isAbstract="false"
         isLeaf="false"
@@ -66,16 +158,36 @@
             isSubstitutable="false">
             <classMoniker
               Id="6ab79105-36fa-4c28-a2b5-6b7d7424e7ef"
-              LastKnownName="ExpressionQuery&lt;T&gt;"
+              LastKnownName="ExpressionQuery"
               LastKnownLocation="Package_2036.uml" />
           </generalization>
         </generalsInternal>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="f374608d-b152-4b81-aebc-046876840af9"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="6223d2e8-c908-49c2-92a8-38ec353481b7">
+                <ownedParameterableElement>
+                  <class
+                    Id="94572b12-c27c-441d-b539-45ba4f06392c"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </class>
     </packageHasNamedElement>
     <packageHasNamedElement>
       <Interface
         Id="6b47141e-52db-4dad-b9dd-267752f5f23c"
-        name="ITable&lt;T&gt;"
+        name="ITable"
         isAbstract="false"
         isLeaf="false">
         <generalsInternal>
@@ -84,16 +196,36 @@
             isSubstitutable="false">
             <interfaceMoniker
               Id="d2807f09-540e-4a77-a0d4-0fe24f1f304e"
-              LastKnownName="IExpressionQuery&lt;T&gt;"
+              LastKnownName="IExpressionQuery"
               LastKnownLocation="Package_2036.uml" />
           </generalization>
         </generalsInternal>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="832d8c9d-c6f7-4562-8212-5c53f9aa8cd1"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="ea773a3c-b9e4-4a35-a1b0-6885d2f5f67d">
+                <ownedParameterableElement>
+                  <class
+                    Id="33d2d907-2eed-4095-9f37-243508baed4c"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </Interface>
     </packageHasNamedElement>
     <packageHasNamedElement>
       <Interface
         Id="d2807f09-540e-4a77-a0d4-0fe24f1f304e"
-        name="IExpressionQuery&lt;T&gt;"
+        name="IExpressionQuery"
         isAbstract="false"
         isLeaf="false">
         <generalsInternal>
@@ -102,7 +234,7 @@
             isSubstitutable="false">
             <interfaceMoniker
               Id="cf9e5da3-7f6d-40f3-9205-ed8de649c20f"
-              LastKnownName="IOrderedQueryable&lt;T&gt;"
+              LastKnownName="IOrderedQueryable"
               LastKnownLocation="Package_2109.uml" />
           </generalization>
           <generalization
@@ -114,6 +246,26 @@
               LastKnownLocation="Package_2109.uml" />
           </generalization>
         </generalsInternal>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="5aeb3315-5792-4357-a6b3-4b86d49b9528"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="1bafa1ab-29a3-4372-8e0e-d27e21ee33b2">
+                <ownedParameterableElement>
+                  <class
+                    Id="c71f6323-4309-4773-b745-a114c2893798"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </Interface>
     </packageHasNamedElement>
     <packageHasNamedElement>
@@ -130,6 +282,540 @@
         isAbstract="false"
         isLeaf="false"
         isActiveClass="false" />
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="92f256f7-09a5-4d78-a638-1041ebc80657"
+        name="Query"
+        visibility="Private"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <targetEnds>
+          <association
+            Id="e04f64b5-5f12-4a26-9ddd-b786872f0c62"
+            isDerived="false"
+            sourceEndRoleName=""
+            targetEndRoleName="QueryBuilder"
+            isLeaf="false"
+            isAbstract="false">
+            <classMoniker
+              Id="a07fca17-7cb1-41af-95cf-94eef3b96179"
+              LastKnownName="QueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+            <relationshipOwnedElementsInternal>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="69185b1d-bb56-461c-8563-858a344a8d58"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false"
+                  isNavigableOwned="false" />
+              </associationHasOwnedEnds>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="485e5539-57fb-45ee-824f-db0f1fd7d84b"
+                  name="QueryBuilder"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false" />
+              </associationHasOwnedEnds>
+            </relationshipOwnedElementsInternal>
+          </association>
+        </targetEnds>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="becbdf74-f306-423a-9b2d-85c02bc2b992"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="19032379-d3ac-49de-b040-7c87073b3c7f">
+                <ownedParameterableElement>
+                  <class
+                    Id="1ee202b0-dd02-417e-8c5d-10467c334dfc"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
+        <ownedOperationsInternal>
+          <operation
+            Id="a22a47da-d36f-4d68-aa2c-fd2f8e10e4a4"
+            name="GetQuery"
+            isLeaf="false"
+            isStatic="false"
+            isAbstract="false"
+            concurrency="Sequential"
+            isQuery="false" />
+        </ownedOperationsInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="017c3041-2d85-438a-a60a-d60c231182f9"
+        name="QueryBuilder"
+        visibility="Private"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false" />
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="a07fca17-7cb1-41af-95cf-94eef3b96179"
+        name="QueryBuilder"
+        visibility="Private"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="cc607c7c-245f-4e92-b871-8341e1980480"
+            isSubstitutable="false">
+            <classMoniker
+              Id="017c3041-2d85-438a-a60a-d60c231182f9"
+              LastKnownName="QueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+        <targetEnds>
+          <association
+            Id="56dbf4d7-ba43-4f4f-b8e5-3a13e4cf1dc0"
+            isDerived="false"
+            sourceEndRoleName=""
+            targetEndRoleName=""
+            isLeaf="false"
+            isAbstract="false">
+            <classMoniker
+              Id="8999f4aa-0c89-4dd9-bec9-9e647f66f0ee"
+              LastKnownName="QueryExpression"
+              LastKnownLocation="Package_2036.uml" />
+            <relationshipOwnedElementsInternal>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="f8284219-3386-4205-bb69-e0ccb879d8c5"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false"
+                  isNavigableOwned="false" />
+              </associationHasOwnedEnds>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="8f01f0e2-bdb5-420e-8c40-e2365c4dcc1e"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false">
+                  <lowerValueInternal>
+                    <literalString
+                      Id="b12e518a-2019-4f65-bd26-5ece059bf3c9"
+                      name="Lower"
+                      value="*" />
+                  </lowerValueInternal>
+                  <upperValueInternal>
+                    <literalString
+                      Id="cebc0047-cfb8-47bb-bf1f-67a7a9e6a4e0"
+                      name="Upper"
+                      value="*" />
+                  </upperValueInternal>
+                </memberEnd>
+              </associationHasOwnedEnds>
+            </relationshipOwnedElementsInternal>
+          </association>
+        </targetEnds>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="9606d688-be3c-43a5-b56c-efc1037aea48"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="8ba25d5e-2dd3-4273-9d36-99ab3e57e4e6">
+                <ownedParameterableElement>
+                  <class
+                    Id="43a95ed9-f096-49d8-ba86-b5e57d8d495d"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="8999f4aa-0c89-4dd9-bec9-9e647f66f0ee"
+        name="QueryExpression"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="94d2c3e6-9451-45cb-8304-67f2a9df67f6"
+            isSubstitutable="false">
+            <classMoniker
+              Id="06f4a640-ddc8-400a-8e94-37c4586b5365"
+              LastKnownName="QueryExpression"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+        <targetEnds>
+          <association
+            Id="25c74cbf-7335-4c87-b9c2-6905fa2e5ee8"
+            isDerived="false"
+            sourceEndRoleName="First/Last"
+            targetEndRoleName=""
+            isLeaf="false"
+            isAbstract="false">
+            <interfaceMoniker
+              Id="65a6c961-c06f-4f48-87ed-506dadff7081"
+              LastKnownName="IExpressionBuilder"
+              LastKnownLocation="Package_2036.uml" />
+            <relationshipOwnedElementsInternal>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="57de2809-3fc1-44b2-81d7-7529cc14b719"
+                  name="First/Last"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="Shared"
+                  isComposite="false"
+                  isNavigableOwned="false" />
+              </associationHasOwnedEnds>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="8741979d-2121-464f-9092-f344d179e3aa"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false">
+                  <lowerValueInternal>
+                    <literalString
+                      Id="8fd711a3-301d-403c-ae5a-b4b29295cf29"
+                      name="Lower"
+                      value="2" />
+                  </lowerValueInternal>
+                  <upperValueInternal>
+                    <literalString
+                      Id="000c420c-9d47-4b35-ad05-a0b909b3ea2b"
+                      name="Upper"
+                      value="2" />
+                  </upperValueInternal>
+                </memberEnd>
+              </associationHasOwnedEnds>
+            </relationshipOwnedElementsInternal>
+          </association>
+        </targetEnds>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="78e85960-0e6d-4865-9293-e0b1977c5ae7"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="18e6efc8-2f9d-4669-8eaa-5cac5e4abb60">
+                <ownedParameterableElement>
+                  <class
+                    Id="29f7c5ba-6366-4e06-aade-4898abe594c9"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="06f4a640-ddc8-400a-8e94-37c4586b5365"
+        name="QueryExpression"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="fab15ac7-c19f-4125-895a-f837d6718a82"
+            isSubstitutable="false">
+            <classMoniker
+              Id="24e72a17-8b27-4f90-aa5b-7912c97369d0"
+              LastKnownName="Expression"
+              LastKnownLocation="Package_2109.uml" />
+          </generalization>
+        </generalsInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <Interface
+        Id="65a6c961-c06f-4f48-87ed-506dadff7081"
+        name="IExpressionBuilder"
+        isAbstract="false"
+        isLeaf="false" />
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
+        name="ExpressionBuilderBase"
+        isAbstract="true"
+        isLeaf="false"
+        isActiveClass="false">
+        <suppliersInternal>
+          <interfaceRealization
+            Id="ac31d040-5597-4e47-867b-899d37cda481">
+            <interfaceMoniker
+              Id="65a6c961-c06f-4f48-87ed-506dadff7081"
+              LastKnownName="IExpressionBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </interfaceRealization>
+          <dependency
+            Id="de06d94d-8e3e-4f39-bfa9-532fdffa63b2">
+            <classMoniker
+              Id="017c3041-2d85-438a-a60a-d60c231182f9"
+              LastKnownName="QueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </dependency>
+        </suppliersInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="c8be9755-55ea-4de3-95d1-ad470b5aa4ff"
+        name="TableExpressionBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="f5d12fdc-6f67-4b26-aeda-fb7675edd217"
+            isSubstitutable="false">
+            <classMoniker
+              Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
+              LastKnownName="ExpressionBuilderBase"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+        <targetEnds>
+          <association
+            Id="d663f8b0-420d-4f27-b287-e9d34ae0c8a4"
+            isDerived="false"
+            sourceEndRoleName=""
+            targetEndRoleName=""
+            isLeaf="false"
+            isAbstract="false">
+            <classMoniker
+              Id="6cbf16dd-d0d0-4b21-b5fe-33b9a4ed4454"
+              LastKnownName="TableSqlQueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+            <relationshipOwnedElementsInternal>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="3e2613d3-9a65-4efc-8067-375195e584c2"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="Shared"
+                  isComposite="false"
+                  isNavigableOwned="false" />
+              </associationHasOwnedEnds>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="2427d970-d9a5-49b4-97a0-1ae6853f6d8d"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false" />
+              </associationHasOwnedEnds>
+            </relationshipOwnedElementsInternal>
+          </association>
+        </targetEnds>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="9456ba5f-9da1-492c-bf68-dacfd2bfb71b"
+        name="SelectExpressionBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="5996b2bb-9cdc-4095-a734-9e10081d33f2"
+            isSubstitutable="false">
+            <classMoniker
+              Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
+              LastKnownName="ExpressionBuilderBase"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+        <targetEnds>
+          <association
+            Id="c333ad8c-ea4f-4cb6-b4df-636954fc82a4"
+            isDerived="false"
+            sourceEndRoleName=""
+            targetEndRoleName=""
+            isLeaf="false"
+            isAbstract="false">
+            <classMoniker
+              Id="c82fd557-df2c-4762-a7e7-c750a7d8db3c"
+              LastKnownName="ProjectionSqlQueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+            <relationshipOwnedElementsInternal>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="1a65c98d-3427-491b-b328-5d4ec09c80a3"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="Shared"
+                  isComposite="false"
+                  isNavigableOwned="false" />
+              </associationHasOwnedEnds>
+              <associationHasOwnedEnds>
+                <memberEnd
+                  Id="de5f58e2-c905-42dd-b87f-27e9768b4607"
+                  isLeaf="false"
+                  isStatic="false"
+                  isReadOnly="false"
+                  isDerived="false"
+                  isDerivedUnion="false"
+                  aggregation="None"
+                  isComposite="false" />
+              </associationHasOwnedEnds>
+            </relationshipOwnedElementsInternal>
+          </association>
+        </targetEnds>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="e77dd061-9068-479b-b33d-95caf6916330"
+        name="WhereExpressionBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="03cf81ba-1f79-4ffb-aa37-6a62eae4eb66"
+            isSubstitutable="false">
+            <classMoniker
+              Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
+              LastKnownName="ExpressionBuilderBase"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="629057da-367c-431a-b7ec-3b6019e478b7"
+        name="TableFunctionExpressionBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="fce18166-493b-4132-8b8a-aad134c7269e"
+            isSubstitutable="false">
+            <classMoniker
+              Id="c8be9755-55ea-4de3-95d1-ad470b5aa4ff"
+              LastKnownName="TableExpressionBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="6cbf16dd-d0d0-4b21-b5fe-33b9a4ed4454"
+        name="TableSqlQueryBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="616c4868-1a97-4484-a9f2-4db206e1a043"
+            isSubstitutable="false">
+            <classMoniker
+              Id="a9f3dc44-c8c0-416d-97ec-f7f58c220260"
+              LastKnownName="SqlQueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="c82fd557-df2c-4762-a7e7-c750a7d8db3c"
+        name="ProjectionSqlQueryBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <generalsInternal>
+          <generalization
+            Id="4e3579d3-bd3c-49bb-89bd-7ef6cf743458"
+            isSubstitutable="false">
+            <classMoniker
+              Id="a9f3dc44-c8c0-416d-97ec-f7f58c220260"
+              LastKnownName="SqlQueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </generalization>
+        </generalsInternal>
+      </class>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="a9f3dc44-c8c0-416d-97ec-f7f58c220260"
+        name="SqlQueryBuilder"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false">
+        <suppliersInternal>
+          <dependency
+            Id="e260dcf2-aefe-4b0d-b62a-6df56ba8153c">
+            <classMoniker
+              Id="017c3041-2d85-438a-a60a-d60c231182f9"
+              LastKnownName="QueryBuilder"
+              LastKnownLocation="Package_2036.uml" />
+          </dependency>
+        </suppliersInternal>
+      </class>
     </packageHasNamedElement>
   </packagedElements>
 </package>

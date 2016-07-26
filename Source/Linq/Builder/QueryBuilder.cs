@@ -104,14 +104,14 @@ namespace LinqToDB.Linq.Builder
 					{
 						var c = (ConstantExpression)expression;
 						if (c.Value is ITable)
-							return CreateQueryExpression(new TableBuilderNew(expression));
+							return CreateQueryExpression(new TableExpressionBuilder(expression));
 						break;
 					}
 
 				case ExpressionType.MemberAccess:
 					{
 						if (typeof(ITable).IsSameOrParentOf(expression.Type))
-							return CreateQueryExpression(new TableBuilderNew(expression));
+							return CreateQueryExpression(new TableExpressionBuilder(expression));
 						break;
 					}
 
@@ -121,12 +121,12 @@ namespace LinqToDB.Linq.Builder
 
 						if (call.Method.Name == "GetTable")
 							if (typeof(ITable).IsSameOrParentOf(expression.Type))
-								return CreateQueryExpression(new TableBuilderNew(expression));
+								return CreateQueryExpression(new TableExpressionBuilder(expression));
 
 						var attr = Query.MappingSchema.GetAttribute<Sql.TableFunctionAttribute>(call.Method, a => a.Configuration);
 
 						if (attr != null)
-							return CreateQueryExpression(new TableFunctionBuilder(this, expression));
+							return CreateQueryExpression(new TableFunctionExpressionBuilder(this, expression));
 
 						if (call.IsQueryable())
 						{
@@ -138,9 +138,9 @@ namespace LinqToDB.Linq.Builder
 								{
 									switch (call.Method.Name)
 									{
-										case "Select" : return SelectBuilder1.Translate(qe, call);
+										case "Select" : return SelectExpressionBuilder.Translate(qe, call);
 										case "Where"  :
-										case "Having" : return WhereBuilder1. Translate(qe, call);
+										case "Having" : return WhereExpressionBuilder. Translate(qe, call);
 									}
 								}
 							}
@@ -163,7 +163,7 @@ namespace LinqToDB.Linq.Builder
 		{
 		}
 
-		public new QueryNew<T> Query { get { return (QueryNew<T>)base.Query; } }
+		public new QueryNew<T> Query => (QueryNew<T>)base.Query;
 
 		protected override Expression CreateQueryExpression(IExpressionBuilder expressionBuilder)
 		{
@@ -196,6 +196,16 @@ namespace LinqToDB.Linq.Builder
 			return BuildQuery<T>(expr);
 		}
 
+		void BuildQuery(QueryExpression<T> expression)
+		{
+			SqlQuery sql = null;
+
+			for (var builder = expression.First; builder != null; builder = builder.Next)
+				sql = builder.BuildSql(this, sql);
+
+			expression.Last.BuildQuery(this);
+		}
+
 		static Func<IDataContext,Expression,TResult> BuildQuery<TResult>(Expression expr)
 		{
 			if (expr.Type != typeof(TResult))
@@ -205,16 +215,6 @@ namespace LinqToDB.Linq.Builder
 				expr, DataContextParameter, ExpressionParameter);
 
 			return l.Compile();
-		}
-
-		void BuildQuery(QueryExpression<T> expression)
-		{
-			SqlQuery sql = null;
-
-			for (var builder = expression.First; builder != null; builder = builder.Next)
-				sql = builder.BuildSql(this, sql);
-
-			expression.Last.BuildQuery(this);
 		}
 
 		public Expression BuildQueryExpression(QueryExpression<T> expression)

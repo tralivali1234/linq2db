@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<modelStoreModel xmlns:dm0="http://schemas.microsoft.com/VisualStudio/2008/DslTools/Core" xmlns:dm1="http://schemas.microsoft.com/dsltools/Kernel" xmlns:dm2="http://schemas.microsoft.com/dsltools/Component" xmlns:dm3="http://schemas.microsoft.com/dsltools/UseCase" xmlns:dm4="http://schemas.microsoft.com/dsltools/Activity" xmlns:dm5="http://schemas.microsoft.com/dsltools/Interaction" xmlns:dm6="http://schemas.microsoft.com/dsltools/UmlModelLibrary" xmlns:dm7="http://schemas.microsoft.com/dsltools/UmlDiagrams" xmlns:dm8="http://schemas.microsoft.com/dsltools/LogicalClassDesigner" xmlns:dm9="http://schemas.microsoft.com/VisualStudio/TeamArchitect/SequenceDesigner"
+<modelStoreModel xmlns:dm0="http://schemas.microsoft.com/VisualStudio/2008/DslTools/Core" xmlns:dm1="http://schemas.microsoft.com/dsltools/Kernel" xmlns:dm2="http://schemas.microsoft.com/dsltools/Component" xmlns:dm3="http://schemas.microsoft.com/dsltools/Activity" xmlns:dm4="http://schemas.microsoft.com/dsltools/UseCase" xmlns:dm5="http://schemas.microsoft.com/dsltools/Interaction" xmlns:dm6="http://schemas.microsoft.com/dsltools/UmlModelLibrary" xmlns:dm7="http://schemas.microsoft.com/dsltools/UmlDiagrams" xmlns:dm8="http://schemas.microsoft.com/dsltools/LogicalClassDesigner" xmlns:dm9="http://schemas.microsoft.com/VisualStudio/TeamArchitect/SequenceDesigner"
   dslVersion="1.0.0.0"
   Id="e3097497-b34d-473b-97c8-43c0829fac4d"
   name="Modeling" xmlns="http://schemas.microsoft.com/dsltools/ModelStore">
@@ -357,22 +357,22 @@
             </covered>
           </executionOccurrenceSpecification>
           <messageOccurrenceSpecification
-            Id="08bb90c5-f5e8-4f4d-8081-968325adc61e"
-            name="MessageOccurrenceSpecification47">
-            <covered>
-              <lifelineMoniker
-                Id="3ac3760b-81a2-44c4-b18f-bd38b05ab358"
-                LastKnownName="db : DataConnection"
-                LastKnownLocation="Modeling.uml" />
-            </covered>
-          </messageOccurrenceSpecification>
-          <messageOccurrenceSpecification
             Id="e9670091-ecfc-4985-b30e-42758f1f8936"
             name="MessageOccurrenceSpecification48">
             <covered>
               <lifelineMoniker
                 Id="6b1ece21-1aff-433b-b7f7-cd9e11b60e73"
                 LastKnownName="q1 : TableQuery&lt;T&gt; : IQueryable&lt;T&gt;"
+                LastKnownLocation="Modeling.uml" />
+            </covered>
+          </messageOccurrenceSpecification>
+          <messageOccurrenceSpecification
+            Id="08bb90c5-f5e8-4f4d-8081-968325adc61e"
+            name="MessageOccurrenceSpecification47">
+            <covered>
+              <lifelineMoniker
+                Id="3ac3760b-81a2-44c4-b18f-bd38b05ab358"
+                LastKnownName="db : DataConnection"
                 LastKnownLocation="Modeling.uml" />
             </covered>
           </messageOccurrenceSpecification>
@@ -641,22 +641,22 @@
             </covered>
           </executionOccurrenceSpecification>
           <messageOccurrenceSpecification
-            Id="ad74dd94-6fd4-41e2-817f-7a6f79ae31a3"
-            name="MessageOccurrenceSpecification59">
-            <covered>
-              <lifelineMoniker
-                Id="4d812e85-b90b-49c7-b16d-2bd2d2429225"
-                LastKnownName="this"
-                LastKnownLocation="Modeling.uml" />
-            </covered>
-          </messageOccurrenceSpecification>
-          <messageOccurrenceSpecification
             Id="c6f98261-3427-4a80-8361-d9f2d449ae96"
             name="MessageOccurrenceSpecification60">
             <covered>
               <lifelineMoniker
                 Id="6b1ece21-1aff-433b-b7f7-cd9e11b60e73"
                 LastKnownName="q1 : TableQuery&lt;T&gt; : IQueryable&lt;T&gt;"
+                LastKnownLocation="Modeling.uml" />
+            </covered>
+          </messageOccurrenceSpecification>
+          <messageOccurrenceSpecification
+            Id="ad74dd94-6fd4-41e2-817f-7a6f79ae31a3"
+            name="MessageOccurrenceSpecification59">
+            <covered>
+              <lifelineMoniker
+                Id="4d812e85-b90b-49c7-b16d-2bd2d2429225"
+                LastKnownName="this"
                 LastKnownLocation="Modeling.uml" />
             </covered>
           </messageOccurrenceSpecification>
@@ -789,24 +789,6 @@
             </nestedOccurrences>
           </behaviorExecutionSpecification>
           <executionOccurrenceSpecification
-            Id="0d36f648-168f-47cc-9be2-5f45d2c51d80"
-            name="ExecutionOccurrenceSpecification43">
-            <event>
-              <executionOccurrenceSpecificationReferencesEvent>
-                <executionEventMoniker
-                  Id="e70faeb3-9697-42ad-b0e0-2404e0ed7fce"
-                  LastKnownName="ExecutionEvent"
-                  LastKnownLocation="Modeling.uml" />
-              </executionOccurrenceSpecificationReferencesEvent>
-            </event>
-            <covered>
-              <lifelineMoniker
-                Id="ef774fc7-e9b8-481a-97f0-29414847f2a1"
-                LastKnownName="Expression : MethodCallExpression"
-                LastKnownLocation="Modeling.uml" />
-            </covered>
-          </executionOccurrenceSpecification>
-          <executionOccurrenceSpecification
             Id="71ae983f-cd81-4ad5-9937-09101be6090e"
             name="ExecutionOccurrenceSpecification40">
             <event>
@@ -821,6 +803,24 @@
               <lifelineMoniker
                 Id="6b1ece21-1aff-433b-b7f7-cd9e11b60e73"
                 LastKnownName="q1 : TableQuery&lt;T&gt; : IQueryable&lt;T&gt;"
+                LastKnownLocation="Modeling.uml" />
+            </covered>
+          </executionOccurrenceSpecification>
+          <executionOccurrenceSpecification
+            Id="0d36f648-168f-47cc-9be2-5f45d2c51d80"
+            name="ExecutionOccurrenceSpecification43">
+            <event>
+              <executionOccurrenceSpecificationReferencesEvent>
+                <executionEventMoniker
+                  Id="e70faeb3-9697-42ad-b0e0-2404e0ed7fce"
+                  LastKnownName="ExecutionEvent"
+                  LastKnownLocation="Modeling.uml" />
+              </executionOccurrenceSpecificationReferencesEvent>
+            </event>
+            <covered>
+              <lifelineMoniker
+                Id="ef774fc7-e9b8-481a-97f0-29414847f2a1"
+                LastKnownName="Expression : MethodCallExpression"
                 LastKnownLocation="Modeling.uml" />
             </covered>
           </executionOccurrenceSpecification>
@@ -933,22 +933,22 @@
             </covered>
           </executionOccurrenceSpecification>
           <messageOccurrenceSpecification
-            Id="eb6976ef-20ff-4d20-a82f-0dcdf0ccc3fb"
-            name="MessageOccurrenceSpecification68">
-            <covered>
-              <lifelineMoniker
-                Id="4d812e85-b90b-49c7-b16d-2bd2d2429225"
-                LastKnownName="this"
-                LastKnownLocation="Modeling.uml" />
-            </covered>
-          </messageOccurrenceSpecification>
-          <messageOccurrenceSpecification
             Id="fe02e51e-7603-4765-bc81-67285613df7f"
             name="MessageOccurrenceSpecification67">
             <covered>
               <lifelineMoniker
                 Id="0614e11d-1143-4691-9a86-16aea12c3a15"
                 LastKnownName="q2 : ExpressionQuery&lt;T&gt; : IQueryable&lt;T&gt;"
+                LastKnownLocation="Modeling.uml" />
+            </covered>
+          </messageOccurrenceSpecification>
+          <messageOccurrenceSpecification
+            Id="eb6976ef-20ff-4d20-a82f-0dcdf0ccc3fb"
+            name="MessageOccurrenceSpecification68">
+            <covered>
+              <lifelineMoniker
+                Id="4d812e85-b90b-49c7-b16d-2bd2d2429225"
+                LastKnownName="this"
                 LastKnownLocation="Modeling.uml" />
             </covered>
           </messageOccurrenceSpecification>
@@ -1758,7 +1758,7 @@
     <packageHasNamedElement>
       <packageMoniker
         Id="774ddf19-c7f8-404b-af4b-bc8c0b3dddc0"
-        LastKnownName="System.Linq"
+        LastKnownName="System"
         LastKnownLocation="Package_2109.uml" />
     </packageHasNamedElement>
     <packageHasNamedElement>

@@ -5,7 +5,7 @@ namespace LinqToDB.Linq.Builder
 {
 	using SqlQuery;
 
-	class SelectBuilder1 : ExpressionBuilderBase
+	class SelectExpressionBuilder : ExpressionBuilderBase
 	{
 		public static QueryExpression Translate(QueryExpression qe, MethodCallExpression expression)
 		{
@@ -22,10 +22,10 @@ namespace LinqToDB.Linq.Builder
 					return qe;
 			}
 
-			return qe.AddBuilder(new SelectBuilder1(expression));
+			return qe.AddBuilder(new SelectExpressionBuilder(expression));
 		}
 
-		SelectBuilder1(Expression expression) : base(expression)
+		SelectExpressionBuilder(Expression expression) : base(expression)
 		{
 		}
 

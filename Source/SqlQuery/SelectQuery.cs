@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -10,7 +9,6 @@ using System.Threading;
 namespace LinqToDB.SqlQuery
 {
 	using LinqToDB.Extensions;
-	using Reflection;
 
 	[DebuggerDisplay("SQL = {SqlText}")]
 	public class SelectQuery : SqlQuery, ISqlTableSource

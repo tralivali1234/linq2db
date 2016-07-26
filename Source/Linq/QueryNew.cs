@@ -113,7 +113,7 @@ namespace LinqToDB.Linq
 							var testFile = new ExpressionTestGenerator().GenerateSource(expr);
 #if !SILVERLIGHT && !NETFX_CORE
 							DataConnection.WriteTraceLine(
-								"Expression test code generated: '" + testFile + "'.", 
+								"Expression test code generated: '" + testFile + "'.",
 								DataConnection.TraceSwitch.DisplayName);
 #endif
 						}

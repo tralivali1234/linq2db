@@ -10,6 +10,7 @@ namespace LinqToDB.Reflection
 	using Common;
 
 	[DebuggerDisplay("Type = {Type}")]
+	[PublicAPI]
 	public abstract class TypeAccessor
 	{
 		#region Protected Emit Helpers

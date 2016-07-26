@@ -6,14 +6,14 @@ namespace LinqToDB.Linq.Builder
 	using LinqToDB.Expressions;
 	using SqlQuery;
 
-	class WhereBuilder1 : ExpressionBuilderBase
+	class WhereExpressionBuilder : ExpressionBuilderBase
 	{
 		public static QueryExpression Translate(QueryExpression qe, MethodCallExpression expression)
 		{
-			return qe.AddBuilder(new WhereBuilder1(expression));
+			return qe.AddBuilder(new WhereExpressionBuilder(expression));
 		}
 
-		WhereBuilder1(MethodCallExpression expression) : base(expression)
+		WhereExpressionBuilder(MethodCallExpression expression) : base(expression)
 		{
 			_isHaving  = expression.Method.Name == "Having";
 		}

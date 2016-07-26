@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<package xmlns:dm0="http://schemas.microsoft.com/VisualStudio/2008/DslTools/Core" xmlns:dm1="http://schemas.microsoft.com/dsltools/Kernel" xmlns:dm2="http://schemas.microsoft.com/dsltools/Component" xmlns:dm3="http://schemas.microsoft.com/dsltools/UseCase" xmlns:dm4="http://schemas.microsoft.com/dsltools/Activity" xmlns:dm5="http://schemas.microsoft.com/dsltools/Interaction" xmlns:dm6="http://schemas.microsoft.com/dsltools/UmlModelLibrary" xmlns:dm7="http://schemas.microsoft.com/dsltools/UmlDiagrams" xmlns:dm8="http://schemas.microsoft.com/dsltools/LogicalClassDesigner" xmlns:dm9="http://schemas.microsoft.com/VisualStudio/TeamArchitect/SequenceDesigner"
+<package xmlns:dm0="http://schemas.microsoft.com/VisualStudio/2008/DslTools/Core" xmlns:dm1="http://schemas.microsoft.com/dsltools/Kernel" xmlns:dm2="http://schemas.microsoft.com/dsltools/Component" xmlns:dm3="http://schemas.microsoft.com/dsltools/Activity" xmlns:dm4="http://schemas.microsoft.com/dsltools/UseCase" xmlns:dm5="http://schemas.microsoft.com/dsltools/Interaction" xmlns:dm6="http://schemas.microsoft.com/dsltools/UmlModelLibrary" xmlns:dm7="http://schemas.microsoft.com/dsltools/UmlDiagrams" xmlns:dm8="http://schemas.microsoft.com/dsltools/LogicalClassDesigner" xmlns:dm9="http://schemas.microsoft.com/VisualStudio/TeamArchitect/SequenceDesigner"
   dslVersion="1.0.0.0"
   Id="774ddf19-c7f8-404b-af4b-bc8c0b3dddc0"
-  name="System.Linq" xmlns="http://schemas.microsoft.com/dsltools/ModelStore">
+  name="System" xmlns="http://schemas.microsoft.com/dsltools/ModelStore">
   <packagedElements>
     <packageHasNamedElement>
       <Interface
@@ -22,7 +22,7 @@
     <packageHasNamedElement>
       <Interface
         Id="cf9e5da3-7f6d-40f3-9205-ed8de649c20f"
-        name="IOrderedQueryable&lt;T&gt;"
+        name="IOrderedQueryable"
         isAbstract="false"
         isLeaf="false">
         <generalsInternal>
@@ -31,16 +31,36 @@
             isSubstitutable="false">
             <interfaceMoniker
               Id="b138ef54-4f0d-419c-985d-dc257cb5aea0"
-              LastKnownName="IQueryable&lt;T&gt;"
+              LastKnownName="IQueryable"
               LastKnownLocation="Package_2109.uml" />
           </generalization>
         </generalsInternal>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="baf81e8e-98d1-4426-a2bb-5e258f389021"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="ad539730-38f6-4769-8bd7-6f8d9ef3c3aa">
+                <ownedParameterableElement>
+                  <class
+                    Id="3ceb8d63-5a7d-460e-a26b-5964d1731c78"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </Interface>
     </packageHasNamedElement>
     <packageHasNamedElement>
       <Interface
         Id="b138ef54-4f0d-419c-985d-dc257cb5aea0"
-        name="IQueryable&lt;T&gt;"
+        name="IQueryable"
         isAbstract="false"
         isLeaf="false">
         <targetEnds>
@@ -83,7 +103,35 @@
             </relationshipOwnedElementsInternal>
           </association>
         </targetEnds>
+        <ownedRedefinableTemplateSignatureInternal>
+          <redefinableTemplateSignature
+            Id="32ea367e-7b9a-494e-947d-3fc583b20f6e"
+            parameters=""
+            isLeaf="false">
+            <ownedParameters>
+              <classifierTemplateParameter
+                Id="7f7f1645-c633-4be2-9547-f4b7978b12e2">
+                <ownedParameterableElement>
+                  <class
+                    Id="9d1c6a7b-65e0-48e1-b981-51a698001a23"
+                    name="T"
+                    isAbstract="false"
+                    isLeaf="false"
+                    isActiveClass="false" />
+                </ownedParameterableElement>
+              </classifierTemplateParameter>
+            </ownedParameters>
+          </redefinableTemplateSignature>
+        </ownedRedefinableTemplateSignatureInternal>
       </Interface>
+    </packageHasNamedElement>
+    <packageHasNamedElement>
+      <class
+        Id="24e72a17-8b27-4f90-aa5b-7912c97369d0"
+        name="Expression"
+        isAbstract="false"
+        isLeaf="false"
+        isActiveClass="false" />
     </packageHasNamedElement>
   </packagedElements>
 </package>

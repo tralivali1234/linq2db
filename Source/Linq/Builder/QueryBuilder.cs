@@ -158,7 +158,7 @@ namespace LinqToDB.Linq.Builder
 
 	class QueryBuilder<T> : QueryBuilder
 	{
-		public QueryBuilder(IDataContext dataContext, QueryNew<T> query)
+		public QueryBuilder(IDataContext dataContext, QueryNew query)
 			: base(dataContext, query)
 		{
 		}
@@ -196,9 +196,9 @@ namespace LinqToDB.Linq.Builder
 			return BuildQuery<T>(expr);
 		}
 
-		void BuildQuery(QueryExpression<T> expression)
+		void BuildQuery(QueryExpression expression)
 		{
-			SqlQuery sql = null;
+			SelectQuery sql = null;
 
 			for (var builder = expression.First; builder != null; builder = builder.Next)
 				sql = builder.BuildSql(this, sql);
@@ -219,7 +219,7 @@ namespace LinqToDB.Linq.Builder
 
 		public Expression BuildQueryExpression(QueryExpression<T> expression)
 		{
-			SqlQuery sql = null;
+			SelectQuery sql = null;
 
 			for (var builder = expression.First; builder != null; builder = builder.Next)
 				sql = builder.BuildSql(this, sql);

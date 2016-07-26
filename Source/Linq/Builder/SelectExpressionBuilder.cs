@@ -39,9 +39,12 @@ namespace LinqToDB.Linq.Builder
 			throw new NotImplementedException();
 		}
 
-		public override SqlQuery BuildSql<T>(QueryBuilder<T> builder, SqlQuery sqlQuery)
+		ProjectionSqlQueryBuilder _sqlQueryBuilder;
+
+		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
 		{
-			throw new NotImplementedException();
+			_sqlQueryBuilder = new ProjectionSqlQueryBuilder(builder, selectQuery);
+			return _sqlQueryBuilder.SelectQuery;
 		}
 	}
 }

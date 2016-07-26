@@ -26,8 +26,8 @@ namespace LinqToDB.Linq.Builder
 
 		Expression<Func<IDataReader,T>> BuildMapper<T>(QueryBuilder builder)
 		{
-			var expression  = _tableSqlQueryBuilder.BuildExpression();
-			var selectQuery = _tableSqlQueryBuilder.SelectQuery;
+			var expression  = _sqlQueryBuilder.BuildExpression();
+			var selectQuery = _sqlQueryBuilder.SelectQuery;
 
 			expression = builder.FinalizeQuery(selectQuery, expression);
 
@@ -44,12 +44,12 @@ namespace LinqToDB.Linq.Builder
 			builder.BuildQuery(BuildMapper<T>(builder));
 		}
 
-		TableSqlQueryBuilder _tableSqlQueryBuilder;
+		TableSqlQueryBuilder _sqlQueryBuilder;
 
-		public override SqlQuery BuildSql<T>(QueryBuilder<T> builder, SqlQuery sqlQuery)
+		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
 		{
-			_tableSqlQueryBuilder = new TableSqlQueryBuilder(builder, _originalType);
-			return _tableSqlQueryBuilder.SelectQuery;
+			_sqlQueryBuilder = new TableSqlQueryBuilder(builder, _originalType);
+			return _sqlQueryBuilder.SelectQuery;
 		}
 
 		#endregion
@@ -127,8 +127,6 @@ namespace LinqToDB.Linq.Builder
 			readonly EntityDescriptor      _entityDescriptor;
 			readonly List<FieldSqlBuilder> _fieldBuilders;
 
-			public readonly SelectQuery SelectQuery;
-
 			SelectQuery CreateSelectQuery()
 			{
 				var selectQuery = new SelectQuery();
@@ -140,7 +138,7 @@ namespace LinqToDB.Linq.Builder
 				if (_entityDescriptor.BaseDescriptor != null)
 				{
 					var predicate = SqlBuilder.BuildInheritanceCondition(
-						Builder.Query,
+						QueryBuilder.Query,
 						SelectQuery,
 						_entityDescriptor,
 						name => _sqlTable.Fields.Values.FirstOrDefault(f => f.Name == name));
@@ -155,22 +153,6 @@ namespace LinqToDB.Linq.Builder
 
 			ParameterExpression _variable;
 
-			internal QueryBuilder Builder
-			{
-				get
-				{
-					return Builder1;
-				}
-			}
-
-			internal QueryBuilder Builder1
-			{
-				get
-				{
-					return QueryBuilder;
-				}
-			}
-
 			public Expression BuildExpression()
 			{
 				if (_variable != null)
@@ -178,7 +160,7 @@ namespace LinqToDB.Linq.Builder
 
 				var expr = BuildExpressionInternal();
 
-				return _variable = Builder.BuildVariableExpression(expr);
+				return _variable = QueryBuilder.BuildVariableExpression(expr);
 			}
 
 			Expression BuildExpressionInternal()
@@ -206,7 +188,7 @@ namespace LinqToDB.Linq.Builder
 				else
 				{
 					var readDiscriminator = _fieldBuilders
-						.First(f => f.SqlField.Name == _entityDescriptor.InheritanceMapping[0].DiscriminatorName).GetReadExpression(Builder);
+						.First(f => f.SqlField.Name == _entityDescriptor.InheritanceMapping[0].DiscriminatorName).GetReadExpression(QueryBuilder);
 
 					expr = Expression.Convert(
 						Expression.Call(null,
@@ -225,7 +207,7 @@ namespace LinqToDB.Linq.Builder
 					if (mapping.Code == null)
 					{
 						testExpr = Expression.Call(
-							Builder.DataReaderLocalParameter,
+							QueryBuilder.DataReaderLocalParameter,
 							ReflectionHelper.DataReader.IsDBNull,
 							Expression.Constant(discriminatorField.GetFieldIndex()));
 					}
@@ -235,7 +217,7 @@ namespace LinqToDB.Linq.Builder
 
 						testExpr = Expression.Equal(
 							Expression.Constant(mapping.Code),
-							discriminatorField.GetReadExpression(Builder, codeType));
+							discriminatorField.GetReadExpression(QueryBuilder, codeType));
 					}
 
 					expr = Expression.Condition(
@@ -271,7 +253,7 @@ namespace LinqToDB.Linq.Builder
 						IsComplex      = column.MemberAccessor.IsComplex,
 						Name           = column.MemberName,
 						Storage        = column.Storage,
-						ReadExpression = field.GetReadExpression(Builder)
+						ReadExpression = field.GetReadExpression(QueryBuilder)
 					}
 				).ToList();
 
@@ -280,7 +262,7 @@ namespace LinqToDB.Linq.Builder
 
 			Expression BuildEntityExpression(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
 			{
-				var isRecord = Builder.MappingSchema.GetAttributes<Attribute>(typeAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
+				var isRecord = QueryBuilder.MappingSchema.GetAttributes<Attribute>(typeAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
 
 				return isRecord ?
 					BuildRecordConstructor (typeAccessor, columnInfo) :
@@ -289,7 +271,7 @@ namespace LinqToDB.Linq.Builder
 
 			Expression BuildComplexMemberExpression(TypeAccessor parentAccessor, Expression parentExpression, List<ColumnInfo> columnInfo)
 			{
-				var isRecord        = Builder.MappingSchema.GetAttributes<Attribute>(parentAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
+				var isRecord        = QueryBuilder.MappingSchema.GetAttributes<Attribute>(parentAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
 				var buildExpression = BuildEntityExpression(parentAccessor, columnInfo);
 
 				if (isRecord)
@@ -397,7 +379,7 @@ namespace LinqToDB.Linq.Builder
 				var members =
 				(
 					from member       in typeAccessor.Members
-					from dynamic attr in Builder.MappingSchema.GetAttributes<Attribute>(member.MemberInfo).Where(IsRecordAttribute).Take(1)
+					from dynamic attr in QueryBuilder.MappingSchema.GetAttributes<Attribute>(member.MemberInfo).Where(IsRecordAttribute).Take(1)
 					select new
 					{
 						member,
@@ -462,7 +444,7 @@ namespace LinqToDB.Linq.Builder
 					from e in j.DefaultIfEmpty()
 					select e != null ?
 						e.Expression :
-						Expression.Constant(p.p.DefaultValue ?? Builder.MappingSchema.GetDefaultValue(p.p.ParameterType), p.p.ParameterType)
+						Expression.Constant(p.p.DefaultValue ?? QueryBuilder.MappingSchema.GetDefaultValue(p.p.ParameterType), p.p.ParameterType)
 				).ToList();
 
 				var expr = Expression.New(ctor, parms);

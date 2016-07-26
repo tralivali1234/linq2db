@@ -2460,9 +2460,9 @@ namespace LinqToDB.SqlProvider
 				/* maybe it will be no harm to put "<=" here? */
 				precedence < parentPrecedence ||
 				(precedence == parentPrecedence && 
-					(parentPrecedence == Precedence.Subtraction    ||
-					 parentPrecedence == Precedence.Multiplicative ||
-					 parentPrecedence == Precedence.LogicalNegation));
+					(parentPrecedence == PrecedenceLevel.Subtraction    ||
+					 parentPrecedence == PrecedenceLevel.Multiplicative ||
+					 parentPrecedence == PrecedenceLevel.LogicalNegation));
 		}
 
 		protected string[] GetTempAliases(int n, string defaultAlias)

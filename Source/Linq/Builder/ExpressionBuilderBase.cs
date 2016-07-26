@@ -18,8 +18,8 @@ namespace LinqToDB.Linq.Builder
 		public IExpressionBuilder Next { get; set; }
 		public Type               Type => Expression.Type;
 
-		public abstract Expression BuildQueryExpression<T>(QueryBuilder<T> builder);
-		public abstract void       BuildQuery<T>          (QueryBuilder<T> builder);
-		public abstract SqlQuery   BuildSql<T>            (QueryBuilder<T> builder, SqlQuery sqlQuery);
+		public abstract Expression  BuildQueryExpression<T>(QueryBuilder<T> builder);
+		public abstract void        BuildQuery<T>          (QueryBuilder<T> builder);
+		public abstract SelectQuery BuildSql<T>            (QueryBuilder<T> builder, SelectQuery selectQuery);
 	}
 }

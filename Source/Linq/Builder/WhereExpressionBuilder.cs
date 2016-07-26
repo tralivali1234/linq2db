@@ -30,7 +30,7 @@ namespace LinqToDB.Linq.Builder
 			Prev.BuildQuery(builder);
 		}
 
-		public override SqlQuery BuildSql<T>(QueryBuilder<T> builder, SqlQuery sqlQuery)
+		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
 		{
 			var methodCall = (MethodCallExpression)Expression;
 			var condition  = (LambdaExpression)methodCall.Arguments[1].Unwrap();

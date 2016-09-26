@@ -18,8 +18,7 @@ namespace LinqToDB.Data
 
 		public void Dispose()
 		{
-			if (Reader != null)
-				Reader.Dispose();
+			Reader?.Dispose();
 		}
 
 		#region Query with object reader

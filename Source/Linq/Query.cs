@@ -1169,7 +1169,7 @@ namespace LinqToDB.Linq
 			if (queryContext == null)
 			{
 				closeQueryContext = true;
-				queryContext = new QueryContext(dataContextInfo, expr, ps);
+				queryContext      = new QueryContext(dataContextInfo, expr, ps);
 			}
 
 			var isFaulted = false;

@@ -155,11 +155,11 @@ namespace LinqToDB
 			[NotNull]                this IDataContext   dataContext,
 			[NotNull, InstantHandle] Expression<Func<T>> selector)
 		{
-			if (dataContext == null) throw new ArgumentNullException("dataContext");
-			if (selector    == null) throw new ArgumentNullException("selector");
+			if (dataContext == null) throw new ArgumentNullException(nameof(dataContext));
+			if (selector    == null) throw new ArgumentNullException(nameof(selector));
 
 //			var q = new Table<T>(dataContext, selector);
-			var q = new ExpressionQueryImplNew<T>(dataContext, selector);
+			var q = new ExpressionQueryImplNew<T>((IDataContextEx)dataContext, selector);
 
 			foreach (var item in q)
 				return item;

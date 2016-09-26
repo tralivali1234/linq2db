@@ -48,7 +48,7 @@ namespace LinqToDB.Linq
 
 	class TableQuery<T> : ExpressionQueryNew<T>, ITable<T>, ITable
 	{
-		public TableQuery(IDataContext dataContext)
+		public TableQuery(IDataContextEx dataContext)
 			: base(dataContext, null)
 		{
 		}

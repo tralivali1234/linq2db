@@ -14,14 +14,14 @@ namespace LinqToDB.Linq
 
 	abstract class ExpressionQueryNew<T> : IExpressionQuery<T>
 	{
-		protected ExpressionQueryNew(IDataContext dataContext, Expression expression)
+		protected ExpressionQueryNew(IDataContextEx dataContext, Expression expression)
 		{
 			_dataContext = dataContext;
 
 			Expression = expression ?? Expression.Constant(this);
 		}
 
-		readonly IDataContext _dataContext;
+		readonly IDataContextEx _dataContext;
 
 		public Expression     Expression  { get; set; }
 		public Type           ElementType => typeof(T);

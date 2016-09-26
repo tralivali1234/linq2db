@@ -5,7 +5,7 @@ using LinqToDB.Mapping;
 
 namespace Tests.Model
 {
-	public class FirsLastName
+	public class FirstLastName
 	{
 		public string FirstName { get; set; }
 		public string LastName;
@@ -13,7 +13,7 @@ namespace Tests.Model
 
 	public class FullName
 	{
-		public FirsLastName Name;
+		public FirstLastName Name;
 		[Nullable]
 		public string MiddleName;
 	}

@@ -41,6 +41,7 @@ namespace Tests
 
 			//Configuration.AvoidSpecificDataProviderAPI = true;
 			//Configuration.Linq.GenerateExpressionTest = true;
+			//Configuration.Linq.TraceMapperExpression = true;
 
 			var assemblyPath = typeof(TestBase).Assembly.CodeBase;
 

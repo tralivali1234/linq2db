@@ -5,9 +5,12 @@ using System.Configuration;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 
 using JetBrains.Annotations;
+
+using LinqToDB.Expressions;
 
 namespace LinqToDB.Data
 {
@@ -160,46 +163,107 @@ namespace LinqToDB.Data
 			set { _onTrace = value ?? OnTraceInternal; }
 		}
 
-		private Action<TraceInfo> _onTraceConnection = OnTrace;
-		[JetBrains.Annotations.CanBeNull]
-		public  Action<TraceInfo>  OnTraceConnection
-		{
-			get { return _onTraceConnection;  }
-			set { _onTraceConnection = value; }
-		}
+		[CanBeNull]
+		public  Action<TraceInfo>  OnTraceConnection { get; set; } = OnTrace;
 
 		static void OnTraceInternal(TraceInfo info)
 		{
-			if (info.BeforeExecute)
+			switch (info.TraceInfoStep)
 			{
-				WriteTraceLine(info.SqlText, TraceSwitch.DisplayName);
-			}
-			else if (info.TraceLevel == TraceLevel.Error)
-			{
-				var sb = new StringBuilder();
+				case TraceInfoStep.BeforeExecute:
+					WriteTraceLine(info.SqlText, TraceSwitch.DisplayName);
+					break;
 
-				for (var ex = info.Exception; ex != null; ex = ex.InnerException)
+				case TraceInfoStep.AfterExecute:
+					WriteTraceLine(
+						info.RecordsAffected != null
+							? $"Query Execution Time: {info.ExecutionTime}. Records Affected: {info.RecordsAffected}.\r\n"
+							: $"Query Execution Time: {info.ExecutionTime}\r\n",
+						TraceSwitch.DisplayName);
+					break;
+
+				case TraceInfoStep.Error:
+					{
+						var sb = new StringBuilder();
+
+						for (var ex = info.Exception; ex != null; ex = ex.InnerException)
+						{
+							sb
+								.AppendLine()
+								.AppendLine($"Exception: {ex.GetType()}")
+								.AppendLine($"Message  : {ex.Message}")
+								.AppendLine(ex.StackTrace)
+								;
+						}
+
+						WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+					
+					}
+
+					break;
+
+				case TraceInfoStep.MapperCreated:
+					{
+						var sb = new StringBuilder();
+
+						if (Configuration.Linq.TraceMapperExpression && info.MapperExpression != null)
+							sb.AppendLine(GetDebugView(info.MapperExpression));
+
+						WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+					}
+
+					break;
+
+				case TraceInfoStep.Completed:
+					{
+						var sb = new StringBuilder();
+
+						sb.Append($"Total Execution Time: {info.ExecutionTime}.");
+
+						if (info.RecordsAffected != null)
+							sb.Append($" Rows Count: {info.RecordsAffected}.");
+
+						sb.AppendLine();
+
+						WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+					}
+
+					break;
+			}
+		}
+
+		private static Func<Expression,string> _getDebugView;
+
+		/// <summary>
+		/// Gets the DebugView internal property value of provided expression.
+		/// </summary>
+		/// <param name="expression">Expression to get DebugView.</param>
+		/// <returns>DebugView value.</returns>
+		static string GetDebugView(Expression expression)
+		{
+			if (_getDebugView == null)
+			{
+				var p = Expression.Parameter(typeof(Expression));
+
+				try
 				{
-					sb
-						.AppendLine()
-						.AppendFormat("Exception: {0}", ex.GetType())
-						.AppendLine()
-						.AppendFormat("Message  : {0}", ex.Message)
-						.AppendLine()
-						.AppendLine(ex.StackTrace)
-						;
-				}
+					var l = Expression.Lambda<Func<Expression,string>>(
+						Expression.PropertyOrField(p, "DebugView"),
+						p);
 
-				WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
+					_getDebugView = l.Compile();
+				}
+				catch (ArgumentException)
+				{
+					var l = Expression.Lambda<Func<Expression,string>>(
+						Expression.Call(p, MemberHelper.MethodOf<Expression>(e => e.ToString())),
+						p);
+
+					_getDebugView = l.Compile();
+				}
 			}
-			else if (info.RecordsAffected != null)
-			{
-				WriteTraceLine("Execution time: {0}. Records affected: {1}.\r\n".Args(info.ExecutionTime, info.RecordsAffected), TraceSwitch.DisplayName);
-			}
-			else
-			{
-				WriteTraceLine("Execution time: {0}\r\n".Args(info.ExecutionTime), TraceSwitch.DisplayName);
-			}
+
+			return _getDebugView(expression);
 		}
 
 		private static TraceSwitch _traceSwitch;
@@ -594,9 +658,8 @@ namespace LinqToDB.Data
 
 			if (TraceSwitch.TraceInfo)
 			{
-				OnTraceConnection(new TraceInfo
+				OnTraceConnection(new TraceInfo(TraceInfoStep.BeforeExecute)
 				{
-					BeforeExecute  = true,
 					TraceLevel     = TraceLevel.Info,
 					DataConnection = this,
 					Command        = Command,
@@ -611,7 +674,7 @@ namespace LinqToDB.Data
 
 				if (TraceSwitch.TraceInfo)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.AfterExecute)
 					{
 						TraceLevel      = TraceLevel.Info,
 						DataConnection  = this,
@@ -627,7 +690,7 @@ namespace LinqToDB.Data
 			{
 				if (TraceSwitch.TraceError)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.Error)
 					{
 						TraceLevel     = TraceLevel.Error,
 						DataConnection = this,
@@ -651,9 +714,8 @@ namespace LinqToDB.Data
 
 			if (TraceSwitch.TraceInfo)
 			{
-				OnTraceConnection(new TraceInfo
+				OnTraceConnection(new TraceInfo(TraceInfoStep.BeforeExecute)
 				{
-					BeforeExecute  = true,
 					TraceLevel     = TraceLevel.Info,
 					DataConnection = this,
 					Command        = Command,
@@ -668,7 +730,7 @@ namespace LinqToDB.Data
 
 				if (TraceSwitch.TraceInfo)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.AfterExecute)
 					{
 						TraceLevel     = TraceLevel.Info,
 						DataConnection = this,
@@ -683,7 +745,7 @@ namespace LinqToDB.Data
 			{
 				if (TraceSwitch.TraceError)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.Error)
 					{
 						TraceLevel     = TraceLevel.Error,
 						DataConnection = this,
@@ -712,9 +774,8 @@ namespace LinqToDB.Data
 
 			if (TraceSwitch.TraceInfo)
 			{
-				OnTraceConnection(new TraceInfo
+				OnTraceConnection(new TraceInfo(TraceInfoStep.BeforeExecute)
 				{
-					BeforeExecute  = true,
 					TraceLevel     = TraceLevel.Info,
 					DataConnection = this,
 					Command        = Command,
@@ -729,7 +790,7 @@ namespace LinqToDB.Data
 
 				if (TraceSwitch.TraceInfo)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.AfterExecute)
 					{
 						TraceLevel     = TraceLevel.Info,
 						DataConnection = this,
@@ -744,7 +805,7 @@ namespace LinqToDB.Data
 			{
 				if (TraceSwitch.TraceError)
 				{
-					OnTraceConnection(new TraceInfo
+					OnTraceConnection(new TraceInfo(TraceInfoStep.Error)
 					{
 						TraceLevel     = TraceLevel.Error,
 						DataConnection = this,

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,7 +13,7 @@ namespace LinqToDB
 	using Mapping;
 	using SqlProvider;
 
-	public class DataContext : IDataContext
+	public class DataContext : IDataContextEx
 	{
 		public DataContext() : this(DataConnection.DefaultConfiguration)
 		{
@@ -30,8 +29,8 @@ namespace LinqToDB
 
 		public DataContext([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] string connectionString)
 		{
-			if (dataProvider     == null) throw new ArgumentNullException("dataProvider");
-			if (connectionString == null) throw new ArgumentNullException("connectionString");
+			if (dataProvider     == null) throw new ArgumentNullException(nameof(dataProvider));
+			if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
 
 			DataProvider     = dataProvider;
 			ConnectionString = connectionString;
@@ -178,11 +177,19 @@ namespace LinqToDB
 			public QueryContext(DataContext dataContext, QueryNew query, Expression expression)
 			{
 				_dataContext  = dataContext;
-				_queryContext = ((IDataContext)dataContext.GetDataConnection()).GetQueryContext(query, expression);
+				_queryContext = ((IDataContextEx)dataContext.GetDataConnection()).GetQueryContext(query, expression);
 			}
 
 			readonly DataContext   _dataContext;
 			readonly IQueryContextNew _queryContext;
+
+			public Expression MapperExpression
+			{
+				get { return _queryContext.MapperExpression;  }
+				set { _queryContext.MapperExpression = value; }
+			}
+
+			public int RowsCount { get; set; }
 
 			public void Dispose() { _dataContext.ReleaseQuery(); }
 
@@ -196,7 +203,7 @@ namespace LinqToDB
 			}
 		}
 
-		IQueryContextNew IDataContext.GetQueryContext(QueryNew query, Expression expression)
+		IQueryContextNew IDataContextEx.GetQueryContext(QueryNew query, Expression expression)
 		{
 			return new QueryContext(this, query, expression);
 		}

@@ -149,6 +149,18 @@ namespace LinqToDB.DataProvider
 
 		public virtual Expression GetReaderExpression(MappingSchema mappingSchema, IDataReader reader, int idx, Expression readerExpression, Type toType)
 		{
+			if (reader == null)
+			{
+				Expression exp;
+
+				if (FindExpression(new ReaderInfo { ToType = toType }, out exp))
+					return exp;
+
+				return Expression.Convert(
+					Expression.Call(readerExpression, _getValueMethodInfo, Expression.Constant(idx)),
+					toType);
+			}
+
 			var fieldType    = ((DbDataReader)reader).GetFieldType(idx);
 			var providerType = ((DbDataReader)reader).GetProviderSpecificFieldType(idx);
 			var typeName     = ((DbDataReader)reader).GetDataTypeName(idx);

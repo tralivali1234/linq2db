@@ -20,19 +20,19 @@ namespace LinqToDB
 		public static ITable<T> GetTable<T>(this IDataContext dataContext)
 			where T : class
 		{
-			return new TableQuery<T>(dataContext);
+			return new TableQuery<T>((IDataContextEx)dataContext);
 		}
 
 		[LinqTunnel]
 		public static ITable<T> GetTable<T>(
-			this IDataContext dataContext,
-			object instance,
-			[NotNull] MethodInfo methodInfo,
+			this IDataContext         dataContext,
+			object                    instance,
+			[NotNull] MethodInfo      methodInfo,
 			[NotNull] params object[] parameters)
 			where T : class
 		{
-			if (methodInfo == null) throw new ArgumentNullException("methodInfo");
-			if (parameters == null) throw new ArgumentNullException("parameters");
+			if (methodInfo == null) throw new ArgumentNullException(nameof(methodInfo));
+			if (parameters == null) throw new ArgumentNullException(nameof(parameters));
 
 			if (!typeof(ITable<>).IsSameOrParentOf(methodInfo.ReturnType))
 				throw new LinqException(

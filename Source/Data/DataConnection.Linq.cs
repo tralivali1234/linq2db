@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -16,7 +17,7 @@ namespace LinqToDB.Data
 	using SqlQuery;
 	using SqlProvider;
 
-	public partial class DataConnection : IDataContext
+	public partial class DataConnection : IDataContextEx
 	{
 		public ITable<T> GetTable<T>()
 			where T : class
@@ -174,8 +175,45 @@ namespace LinqToDB.Data
 			readonly QueryNew          _query;
 			readonly DataConnection _dataConnection;
 			readonly Expression     _expression;
+			readonly DateTime       _startedOn = DateTime.Now;
 
-			public void Dispose() {}
+			private Expression _mapperExpression;
+			public  Expression  MapperExpression
+			{
+				get { return _mapperExpression; }
+				set
+				{
+					_mapperExpression = value;
+
+					if (value != null && Common.Configuration.Linq.TraceMapperExpression &&
+						TraceSwitch.TraceInfo && _dataConnection.OnTraceConnection != null)
+					{
+						_dataConnection.OnTraceConnection(new TraceInfo(TraceInfoStep.MapperCreated)
+						{
+							TraceLevel       = TraceLevel.Info,
+							DataConnection   = _dataConnection,
+							MapperExpression = MapperExpression,
+						});
+					}
+				}
+			}
+
+			public int RowsCount { get; set; }
+
+			public void Dispose()
+			{
+				if (TraceSwitch.TraceInfo && _dataConnection.OnTraceConnection != null)
+				{
+					_dataConnection.OnTraceConnection(new TraceInfo(TraceInfoStep.Completed)
+					{
+						TraceLevel       = TraceLevel.Info,
+						DataConnection   = _dataConnection,
+						MapperExpression = MapperExpression,
+						ExecutionTime    = DateTime.Now - _startedOn,
+						RecordsAffected  = RowsCount,
+					});
+				}
+			}
 
 			void SetCommand()
 			{
@@ -212,7 +250,7 @@ namespace LinqToDB.Data
 			}
 		}
 
-		IQueryContextNew IDataContext.GetQueryContext(QueryNew query, Expression expression)
+		IQueryContextNew IDataContextEx.GetQueryContext(QueryNew query, Expression expression)
 		{
 			return new QueryContext(query, this, expression);
 		}

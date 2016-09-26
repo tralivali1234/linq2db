@@ -103,7 +103,7 @@ namespace LinqToDB.Expressions
 
 			// Add check null expression.
 			//
-			if (dataContext.IsDBNullAllowed(dataReader, idx) ?? true)
+			if (dataReader != null && (dataContext.IsDBNullAllowed(dataReader, idx) ?? true))
 			{
 				ex = Condition(
 					Call(dataReaderExpr, _isDBNullInfo, Constant(idx)),

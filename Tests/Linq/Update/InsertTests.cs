@@ -968,7 +968,7 @@ namespace Tests.xUpdate
 		[Test, Explicit("Fails"), DataContextSource]
 		public void Insert11(string context)
 		{
-			var p = new ComplexPerson { Name = new FullName { Name = new FirsLastName { FirstName = "fn", LastName = "ln" } }, Gender = Gender.Male };
+			var p = new ComplexPerson { Name = new FullName { Name = new FirstLastName { FirstName = "fn", LastName = "ln" } }, Gender = Gender.Male };
 
 			using (var db = GetDataContext(context))
 			{
@@ -1030,7 +1030,7 @@ namespace Tests.xUpdate
 						{
 							Name = new FullName
 							{
-								Name = new FirsLastName
+								Name = new FirstLastName
 								{
 									FirstName = "FirstName",
 									LastName  = "LastName"

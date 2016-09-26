@@ -8,18 +8,18 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using LinqToDB.Data;
-using LinqToDB.SqlQuery;
 
 namespace LinqToDB.ServiceModel
 {
+	using Data;
 	using Expressions;
 	using Extensions;
 	using Linq;
 	using Mapping;
 	using SqlProvider;
+	using SqlQuery;
 
-	public abstract class RemoteDataContextBase : IDataContext
+	public abstract class RemoteDataContextBase : IDataContextEx
 	{
 		public string Configuration { get; set; }
 
@@ -310,10 +310,12 @@ namespace LinqToDB.ServiceModel
 
 			ILinqService _client;
 
+			public Expression MapperExpression { get; set; }
+			public int        RowsCount        { get; set; }
+
 			public void Dispose()
 			{
-				if (_client != null)
-					((IDisposable)_client).Dispose();
+				((IDisposable)_client)?.Dispose();
 			}
 
 			public int ExecuteNonQuery()
@@ -380,7 +382,7 @@ namespace LinqToDB.ServiceModel
 			}
 		}
 
-		IQueryContextNew IDataContext.GetQueryContext(QueryNew query, Expression expression)
+		IQueryContextNew IDataContextEx.GetQueryContext(QueryNew query, Expression expression)
 		{
 			return new QueryContext(this, query, expression);
 		}

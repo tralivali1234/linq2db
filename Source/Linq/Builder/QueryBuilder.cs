@@ -96,6 +96,7 @@ namespace LinqToDB.Linq.Builder
 
 		protected abstract Expression CreateQueryExpression(IExpressionBuilder expressionBuilder);
 
+		// IT : # TramsformQuery
 		protected Expression TramsformQuery(Expression expression)
 		{
 			switch (expression.NodeType)
@@ -170,7 +171,7 @@ namespace LinqToDB.Linq.Builder
 			return new QueryExpression<T>(this, expressionBuilder);
 		}
 
-		public Func<IDataContext,Expression,IEnumerable<T>> BuildEnumerable()
+		public Func<IDataContextEx,Expression,IEnumerable<T>> BuildEnumerable()
 		{
 			var expr = Query.Expression.Transform(e => TramsformQuery(e));
 
@@ -183,7 +184,7 @@ namespace LinqToDB.Linq.Builder
 			return BuildQuery<IEnumerable<T>>(expr);
 		}
 
-		public Func<IDataContext,Expression,T> BuildElement()
+		public Func<IDataContextEx,Expression,T> BuildElement()
 		{
 			var expr = Query.Expression.Transform(e => TramsformQuery(e));
 
@@ -236,14 +237,7 @@ namespace LinqToDB.Linq.Builder
 
 		public Expression BuildQueryExpression(Expression<Func<IDataReader,T>> mapper)
 		{
-			var expr = Expression.Call(
-				Expression.Constant(Query),
-				MemberHelper.MethodOf(() => Query.ExecuteQuery(null, null, null)),
-				DataContextParameter,
-				ExpressionParameter,
-				mapper);
-
-			return expr;
+			return Query.BuildQueryExpression(mapper, DataContextParameter, ExpressionParameter);
 		}
 
 		#endregion

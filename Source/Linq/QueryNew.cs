@@ -16,7 +16,7 @@ namespace LinqToDB.Linq
 	using SqlProvider;
 	using SqlQuery;
 
-	public abstract class QueryNew
+	abstract class QueryNew
 	{
 		protected QueryNew(IDataContext dataContext, Expression expression)
 		{
@@ -83,9 +83,9 @@ namespace LinqToDB.Linq
 		{
 		}
 
-		public Func<IDataContext,Expression,T>                                GetElement;
-		public Func<IDataContext,Expression,IEnumerable<T>>                   GetIEnumerable;
-		public Func<IDataContext,Expression,Action<T>,CancellationToken,Task> GetForEachAsync;
+		public Func<IDataContextEx,Expression,T>                                GetElement;
+		public Func<IDataContextEx,Expression,IEnumerable<T>>                   GetIEnumerable;
+		public Func<IDataContextEx,Expression,Action<T>,CancellationToken,Task> GetForEachAsync;
 
 		QueryNew<T> _next;
 
@@ -183,28 +183,130 @@ namespace LinqToDB.Linq
 
 		#region Execute
 
-		internal IEnumerable<T> ExecuteQuery(IDataContext dataContext, Expression expression, Func<IDataReader,T> mapper)
+		IEnumerable<T> ExecuteQuery(
+			IDataContextEx dataContext,
+			Mapper         mapper,
+			Expression     expression)
 		{
+			Func<IDataReader,T> m = mapper.Map;
+
 			using (var ctx = dataContext.GetQueryContext(this, expression))
-			using (var dr = ctx.ExecuteReader())
-				while (dr.Read())
-					yield return mapper(dr);
+			{
+				mapper.QueryContext = ctx;
+
+				var count = 0;
+
+				using (var dr  = ctx.ExecuteReader())
+				{
+					while (dr.Read())
+					{
+						yield return m(dr);
+						count++;
+					}
+				}
+
+				ctx.RowsCount = count;
+			}
 		}
 
-		internal async Task ExecuteQueryAsync(
-			IDataContext dataContext, Expression expression, Func<IDataReader,T> mapper, Action<T> action, CancellationToken cancellationToken)
+		async Task ExecuteQueryAsync(
+			IDataContextEx    dataContext,
+			Mapper            mapper,
+			Expression        expression,
+			Action<T>         action,
+			CancellationToken cancellationToken)
 		{
+			Func<IDataReader,T> m = mapper.Map;
+
 			using (var ctx = dataContext.GetQueryContext(this, expression))
-			using (var dr = await ctx.ExecuteReaderAsync(cancellationToken))
-				await dr.QueryForEachAsync(mapper, action, cancellationToken);
+			{
+				mapper.QueryContext = ctx;
+				using (var dr  = await ctx.ExecuteReaderAsync(cancellationToken))
+					await dr.QueryForEachAsync(m, action, cancellationToken);
+			}
+		}
+
+		class Mapper
+		{
+			public Mapper(Expression<Func<IDataReader,T>> mapperExpression)
+			{
+				_expression = mapperExpression;
+			}
+
+			readonly Expression<Func<IDataReader,T>> _expression;
+
+			Expression<Func<IDataReader,T>> _mapperExpression;
+			Func<IDataReader,T> _mapper;
+			bool _isFaulted;
+
+			public IQueryContextNew QueryContext;
+
+			public T Map(IDataReader dataReader)
+			{
+				if (_mapper == null)
+				{
+					_mapperExpression = (Expression<Func<IDataReader,T>> )_expression.Transform(e =>
+					{
+						var ex = e as ConvertFromDataReaderExpression;
+						return ex?.Reduce(dataReader) ?? e;
+					});
+
+					QueryContext.MapperExpression = _mapperExpression;
+
+					_mapper = _mapperExpression.Compile();
+				}
+
+				try
+				{
+					return _mapper(dataReader);
+				}
+				catch (FormatException)
+				{
+					if (_isFaulted)
+						throw;
+
+					_isFaulted = true;
+
+					QueryContext.MapperExpression = _expression;
+
+					return (_mapper = _expression.Compile())(dataReader);
+				}
+				catch (InvalidCastException)
+				{
+					if (_isFaulted)
+						throw;
+
+					_isFaulted = true;
+
+					QueryContext.MapperExpression = _expression;
+
+					return (_mapper = _expression.Compile())(dataReader);
+				}
+			}
 		}
 
 		public void BuildQuery(Expression<Func<IDataReader,T>> mapper)
 		{
-			var l = mapper.Compile();
+			var m = new Mapper(mapper);
 
-			GetIEnumerable  = (ctx, expr)                => ExecuteQuery     (ctx, expr, l);
-			GetForEachAsync = (ctx, expr, action, token) => ExecuteQueryAsync(ctx, expr, l, action, token);
+			GetIEnumerable  = (ctx, expr)                => ExecuteQuery     (ctx, m, expr);
+			GetForEachAsync = (ctx, expr, action, token) => ExecuteQueryAsync(ctx, m, expr, action, token);
+		}
+
+		public Expression BuildQueryExpression(
+			Expression<Func<IDataReader,T>> mapper,
+			ParameterExpression dataContextParameter,
+			ParameterExpression expressionParameter)
+		{
+			var expr = Expression.Call(
+				Expression.Constant(this),
+				MemberHelper.MethodOf(() => ExecuteQuery(null, null, null)),
+				dataContextParameter,
+				Expression.Constant(new Mapper(mapper)),
+				expressionParameter,
+				mapper);
+
+			return expr;
 		}
 
 		#endregion

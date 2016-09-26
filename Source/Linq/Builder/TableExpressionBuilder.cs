@@ -247,7 +247,8 @@ namespace LinqToDB.Linq.Builder
 				var columnInfo =
 				(
 					from column in descriptor.Columns
-					join field  in _fieldBuilders on column.MemberAccessor.Name equals field.SqlField.ColumnDescriptor.MemberAccessor.Name
+					join field  in _fieldBuilders
+						on column.MemberAccessor.Name equals field.SqlField.ColumnDescriptor.MemberAccessor.Name
 					select new ColumnInfo
 					{
 						IsComplex      = column.MemberAccessor.IsComplex,

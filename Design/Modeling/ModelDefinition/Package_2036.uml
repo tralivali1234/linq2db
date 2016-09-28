@@ -489,9 +489,9 @@
             targetEndRoleName=""
             isLeaf="false"
             isAbstract="false">
-            <interfaceMoniker
-              Id="65a6c961-c06f-4f48-87ed-506dadff7081"
-              LastKnownName="IExpressionBuilder"
+            <classMoniker
+              Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
+              LastKnownName="ExpressionBuilder"
               LastKnownLocation="Package_2036.uml" />
             <relationshipOwnedElementsInternal>
               <associationHasOwnedEnds>
@@ -585,7 +585,7 @@
     <packageHasNamedElement>
       <class
         Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
-        name="ExpressionBuilderBase"
+        name="ExpressionBuilder"
         isAbstract="true"
         isLeaf="false"
         isActiveClass="false">
@@ -600,7 +600,7 @@
           <dependency
             Id="de06d94d-8e3e-4f39-bfa9-532fdffa63b2">
             <classMoniker
-              Id="017c3041-2d85-438a-a60a-d60c231182f9"
+              Id="a07fca17-7cb1-41af-95cf-94eef3b96179"
               LastKnownName="QueryBuilder"
               LastKnownLocation="Package_2036.uml" />
           </dependency>
@@ -620,7 +620,7 @@
             isSubstitutable="false">
             <classMoniker
               Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
-              LastKnownName="ExpressionBuilderBase"
+              LastKnownName="ExpressionBuilder"
               LastKnownLocation="Package_2036.uml" />
           </generalization>
         </generalsInternal>
@@ -678,7 +678,7 @@
             isSubstitutable="false">
             <classMoniker
               Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
-              LastKnownName="ExpressionBuilderBase"
+              LastKnownName="ExpressionBuilder"
               LastKnownLocation="Package_2036.uml" />
           </generalization>
         </generalsInternal>
@@ -736,7 +736,7 @@
             isSubstitutable="false">
             <classMoniker
               Id="08c83d46-9133-4b78-b5e4-3ebba4256eff"
-              LastKnownName="ExpressionBuilderBase"
+              LastKnownName="ExpressionBuilder"
               LastKnownLocation="Package_2036.uml" />
           </generalization>
         </generalsInternal>

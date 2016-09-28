@@ -5,13 +5,13 @@ namespace LinqToDB.Linq.Builder
 {
 	abstract class QueryExpression : Expression
 	{
-		protected QueryExpression(IExpressionBuilder expressionBuilder)
+		protected QueryExpression(ExpressionBuilderNew expressionBuilder)
 		{
 			AddBuilder(First = expressionBuilder);
 		}
 
-		public readonly IExpressionBuilder First;
-		public          IExpressionBuilder Last;
+		public readonly ExpressionBuilderNew First;
+		public          ExpressionBuilderNew Last;
 
 		protected Type QueryType;
 
@@ -19,7 +19,7 @@ namespace LinqToDB.Linq.Builder
 		public override bool           CanReduce { get { return true;  } }
 		public override ExpressionType NodeType  { get { return ExpressionType.Extension; } }
 
-		public QueryExpression AddBuilder(IExpressionBuilder expressionBuilder)
+		public QueryExpression AddBuilder(ExpressionBuilderNew expressionBuilder)
 		{
 			for (var builder = expressionBuilder; builder != null; builder = builder.Next)
 			{
@@ -39,7 +39,7 @@ namespace LinqToDB.Linq.Builder
 
 	class QueryExpression<T> : QueryExpression
 	{
-		public QueryExpression(QueryBuilder<T> queryBuilder, IExpressionBuilder expressionBuilder)
+		public QueryExpression(QueryBuilder<T> queryBuilder, ExpressionBuilderNew expressionBuilder)
 			: base(expressionBuilder)
 		{
 			_queryBuilder = queryBuilder;

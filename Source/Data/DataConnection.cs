@@ -6,20 +6,17 @@ using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Text;
 using System.Threading;
 
 using JetBrains.Annotations;
 
-using LinqToDB.Expressions;
-
 namespace LinqToDB.Data
 {
-	using System.Text;
-
 	using Common;
 	using Configuration;
 	using DataProvider;
-
+	using Expressions;
 	using Mapping;
 
 	public partial class DataConnection : ICloneable
@@ -48,13 +45,13 @@ namespace LinqToDB.Data
 
 		public DataConnection([JetBrains.Annotations.NotNull] string providerName, [JetBrains.Annotations.NotNull] string connectionString)
 		{
-			if (providerName     == null) throw new ArgumentNullException("providerName");
-			if (connectionString == null) throw new ArgumentNullException("connectionString");
+			if (providerName     == null) throw new ArgumentNullException(nameof(providerName));
+			if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
 
 			IDataProvider dataProvider;
 
 			if (!_dataProviders.TryGetValue(providerName, out dataProvider))
-				throw new LinqToDBException("DataProvider '{0}' not found.".Args(providerName));
+				throw new LinqToDBException($"DataProvider '{providerName}' not found.");
 
 			InitConfig();
 
@@ -65,8 +62,8 @@ namespace LinqToDB.Data
 
 		public DataConnection([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] string connectionString)
 		{
-			if (dataProvider     == null) throw new ArgumentNullException("dataProvider");
-			if (connectionString == null) throw new ArgumentNullException("connectionString");
+			if (dataProvider     == null) throw new ArgumentNullException(nameof(dataProvider));
+			if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
 
 			InitConfig();
 
@@ -77,14 +74,13 @@ namespace LinqToDB.Data
 
 		public DataConnection([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] IDbConnection connection)
 		{
-			if (dataProvider == null) throw new ArgumentNullException("dataProvider");
-			if (connection   == null) throw new ArgumentNullException("connection");
+			if (dataProvider == null) throw new ArgumentNullException(nameof(dataProvider));
+			if (connection   == null) throw new ArgumentNullException(nameof(connection));
 			
 			InitConfig();
 
 			if (!Configuration.AvoidSpecificDataProviderAPI && !dataProvider.IsCompatibleConnection(connection))
-				throw new LinqToDBException(
-					"DataProvider '{0}' and connection '{1}' are not compatible.".Args(dataProvider, connection));
+				throw new LinqToDBException($"DataProvider '{dataProvider}' and connection '{connection}' are not compatible.");
 
 			DataProvider   = dataProvider;
 			_mappingSchema = DataProvider.MappingSchema;
@@ -93,14 +89,13 @@ namespace LinqToDB.Data
 
 		public DataConnection([JetBrains.Annotations.NotNull] IDataProvider dataProvider, [JetBrains.Annotations.NotNull] IDbTransaction transaction)
 		{
-			if (dataProvider == null) throw new ArgumentNullException("dataProvider");
-			if (transaction  == null) throw new ArgumentNullException("transaction");
+			if (dataProvider == null) throw new ArgumentNullException(nameof(dataProvider));
+			if (transaction  == null) throw new ArgumentNullException(nameof(transaction));
 			
 			InitConfig();
 
 			if (!Configuration.AvoidSpecificDataProviderAPI && !dataProvider.IsCompatibleConnection(transaction.Connection))
-				throw new LinqToDBException(
-					"DataProvider '{0}' and connection '{1}' are not compatible.".Args(dataProvider, transaction.Connection));
+				throw new LinqToDBException($"DataProvider '{dataProvider}' and connection '{transaction.Connection}' are not compatible.");
 
 			DataProvider      = dataProvider;
 			_mappingSchema    = DataProvider.MappingSchema;
@@ -113,9 +108,9 @@ namespace LinqToDB.Data
 
 		#region Public Properties
 
-		public string        ConfigurationString { get; private set; }
-		public IDataProvider DataProvider        { get; private set; }
-		public string        ConnectionString    { get; private set; }
+		public string        ConfigurationString { get; }
+		public IDataProvider DataProvider        { get; }
+		public string        ConnectionString    { get; }
 
 		static readonly ConcurrentDictionary<string,int> _configurationIDs;
 		static int _maxID;
@@ -207,7 +202,7 @@ namespace LinqToDB.Data
 						var sb = new StringBuilder();
 
 						if (Configuration.Linq.TraceMapperExpression && info.MapperExpression != null)
-							sb.AppendLine(GetDebugView(info.MapperExpression));
+							sb.AppendLine(info.MapperExpression.GetDebugView());
 
 						WriteTraceLine(sb.ToString(), TraceSwitch.DisplayName);
 					}
@@ -230,40 +225,6 @@ namespace LinqToDB.Data
 
 					break;
 			}
-		}
-
-		private static Func<Expression,string> _getDebugView;
-
-		/// <summary>
-		/// Gets the DebugView internal property value of provided expression.
-		/// </summary>
-		/// <param name="expression">Expression to get DebugView.</param>
-		/// <returns>DebugView value.</returns>
-		static string GetDebugView(Expression expression)
-		{
-			if (_getDebugView == null)
-			{
-				var p = Expression.Parameter(typeof(Expression));
-
-				try
-				{
-					var l = Expression.Lambda<Func<Expression,string>>(
-						Expression.PropertyOrField(p, "DebugView"),
-						p);
-
-					_getDebugView = l.Compile();
-				}
-				catch (ArgumentException)
-				{
-					var l = Expression.Lambda<Func<Expression,string>>(
-						Expression.Call(p, MemberHelper.MethodOf<Expression>(e => e.ToString())),
-						p);
-
-					_getDebugView = l.Compile();
-				}
-			}
-
-			return _getDebugView(expression);
 		}
 
 		private static TraceSwitch _traceSwitch;
@@ -293,7 +254,7 @@ namespace LinqToDB.Data
 
 		#region Configuration
 
-		static IDataProvider FindProvider(string configuration, IEnumerable<KeyValuePair<string,IDataProvider>> ps, IDataProvider defp)
+		static IDataProvider FindProvider(string configuration, ICollection<KeyValuePair<string,IDataProvider>> ps, IDataProvider defp)
 		{
 			foreach (var p in ps.OrderByDescending(kv => kv.Key.Length))
 				if (configuration == p.Key || configuration.StartsWith(p.Key + '.'))
@@ -391,18 +352,18 @@ namespace LinqToDB.Data
 
 		public static void AddDataProvider([JetBrains.Annotations.NotNull] string providerName, [JetBrains.Annotations.NotNull] IDataProvider dataProvider)
 		{
-			if (providerName == null) throw new ArgumentNullException("providerName");
-			if (dataProvider == null) throw new ArgumentNullException("dataProvider");
+			if (providerName == null) throw new ArgumentNullException(nameof(providerName));
+			if (dataProvider == null) throw new ArgumentNullException(nameof(dataProvider));
 
 			if (string.IsNullOrEmpty(dataProvider.Name))
-				throw new ArgumentException("dataProvider.Name cannot be empty.", "dataProvider");
+				throw new ArgumentException("dataProvider.Name cannot be empty.", nameof(dataProvider));
 
 			_dataProviders[providerName] = dataProvider;
 		}
 
 		public static void AddDataProvider([JetBrains.Annotations.NotNull] IDataProvider dataProvider)
 		{
-			if (dataProvider == null) throw new ArgumentNullException("dataProvider");
+			if (dataProvider == null) throw new ArgumentNullException(nameof(dataProvider));
 
 			AddDataProvider(dataProvider.Name, dataProvider);
 		}
@@ -437,7 +398,7 @@ namespace LinqToDB.Data
 			public  IDataProvider  DataProvider
 			{
 				get { return _dataProvider ?? (_dataProvider = GetDataProvider(_connectionStringSettings)); }
-				set { _dataProvider = value; }
+				private set { _dataProvider = value; }
 			}
 
 			static IDataProvider GetDataProvider(ConnectionStringSettings css)
@@ -485,7 +446,7 @@ namespace LinqToDB.Data
 			if (_configurations.TryGetValue(configurationString ?? DefaultConfiguration, out ci))
 				return ci;
 
-			throw new LinqToDBException("Configuration '{0}' is not defined.".Args(configurationString));
+			throw new LinqToDBException($"Configuration '{configurationString}' is not defined.");
 		}
 
 		public static void SetConnectionStrings(System.Configuration.Configuration config)
@@ -509,8 +470,8 @@ namespace LinqToDB.Data
 			[JetBrains.Annotations.NotNull] string connectionString,
 			IDataProvider dataProvider = null)
 		{
-			if (configuration    == null) throw new ArgumentNullException("configuration");
-			if (connectionString == null) throw new ArgumentNullException("connectionString");
+			if (configuration    == null) throw new ArgumentNullException(nameof(configuration));
+			if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
 
 			_configurations[configuration] = new ConfigurationInfo(
 				connectionString,
@@ -521,8 +482,8 @@ namespace LinqToDB.Data
 			[JetBrains.Annotations.NotNull] string configuration,
 			[JetBrains.Annotations.NotNull] string connectionString)
 		{
-			if (configuration    == null) throw new ArgumentNullException("configuration");
-			if (connectionString == null) throw new ArgumentNullException("connectionString");
+			if (configuration    == null) throw new ArgumentNullException(nameof(configuration));
+			if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
 
 			InitConfig();
 
@@ -539,7 +500,7 @@ namespace LinqToDB.Data
 			if (_configurations.TryGetValue(configurationString, out ci))
 				return ci.ConnectionString;
 
-			throw new LinqToDBException("Configuration '{0}' is not defined.".Args(configurationString));
+			throw new LinqToDBException($"Configuration '{configurationString}' is not defined.");
 		}
 
 		#endregion
@@ -834,8 +795,7 @@ namespace LinqToDB.Data
 		{
 			// If transaction is open, we dispose it, it will rollback all changes.
 			//
-			if (Transaction != null)
-				Transaction.Dispose();
+			Transaction?.Dispose();
 
 			// Create new transaction object.
 			//
@@ -855,8 +815,7 @@ namespace LinqToDB.Data
 		{
 			// If transaction is open, we dispose it, it will rollback all changes.
 			//
-			if (Transaction != null)
-				Transaction.Dispose();
+			Transaction?.Dispose();
 
 			// Create new transaction object.
 			//
@@ -906,24 +865,15 @@ namespace LinqToDB.Data
 
 		private MappingSchema _mappingSchema;
 
-		public  MappingSchema  MappingSchema
-		{
-			get { return _mappingSchema; }
-		}
+		public  MappingSchema  MappingSchema => _mappingSchema;
 
 		public bool InlineParameters { get; set; }
 
 		private List<string> _queryHints;
-		public  List<string>  QueryHints
-		{
-			get { return _queryHints ?? (_queryHints = new List<string>()); }
-		}
+		public  List<string>  QueryHints => _queryHints ?? (_queryHints = new List<string>());
 
 		private List<string> _nextQueryHints;
-		public  List<string>  NextQueryHints
-		{
-			get { return _nextQueryHints ?? (_nextQueryHints = new List<string>()); }
-		}
+		public  List<string>  NextQueryHints => _nextQueryHints ?? (_nextQueryHints = new List<string>());
 
 		public DataConnection AddMappingSchema(MappingSchema mappingSchema)
 		{

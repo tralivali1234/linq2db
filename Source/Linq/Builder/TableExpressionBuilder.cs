@@ -12,44 +12,51 @@ namespace LinqToDB.Linq.Builder
 	using Reflection;
 	using SqlQuery;
 
-	class TableExpressionBuilder : ExpressionBuilderBase
+	class TableExpressionBuilder : ExpressionBuilderNew
 	{
-		public TableExpressionBuilder(Expression expression)
-			: base(expression)
+		public TableExpressionBuilder(QueryBuilder queryBuilder, Expression expression)
+			: base(queryBuilder, expression)
 		{
-			_originalType = expression.Type.GetGenericArgumentsEx()[0];
+			_type             = expression.Type.GetGenericArgumentsEx()[0];
+			_entityDescriptor = queryBuilder.MappingSchema.GetEntityDescriptor(_type);
+			_sqlTable         = new SqlTable(queryBuilder.MappingSchema, (_entityDescriptor.BaseDescriptor ?? _entityDescriptor).ObjectType);
 		}
 
-		readonly Type _originalType;
+		readonly Type                  _type;
+		readonly SqlTable              _sqlTable;
+		readonly EntityDescriptor      _entityDescriptor;
+		readonly List<FieldSqlBuilder> _fieldBuilders = new List<FieldSqlBuilder>();
+
+		SelectQuery _selectQuery;
 
 		#region BuildQuery
 
-		Expression<Func<IDataReader,T>> BuildMapper<T>(QueryBuilder builder)
+		Expression<Func<IDataReader,T>> BuildMapper<T>()
 		{
-			var expression  = _sqlQueryBuilder.BuildExpression();
-			var selectQuery = _sqlQueryBuilder.SelectQuery;
+			var expression = BuildExpression();
 
-			expression = builder.FinalizeQuery(selectQuery, expression);
+			expression = QueryBuilder.FinalizeQuery(_selectQuery, expression);
 
 			return Expression.Lambda<Func<IDataReader,T>>(expression, QueryBuilder.DataReaderParameter);
 		}
 
-		public override Expression BuildQueryExpression<T>(QueryBuilder<T> builder)
+		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
 		{
-			return builder.BuildQueryExpression(BuildMapper<T>(builder));
+			_selectQuery = CreateSelectQuery(selectQuery);
+
+			_fieldBuilders.AddRange(_sqlTable.Fields.Values.Select(f => new FieldSqlBuilder(_selectQuery, f)));
+
+			return _selectQuery;
 		}
 
 		public override void BuildQuery<T>(QueryBuilder<T> builder)
 		{
-			builder.BuildQuery(BuildMapper<T>(builder));
+			builder.BuildQuery(BuildMapper<T>());
 		}
 
-		TableSqlQueryBuilder _sqlQueryBuilder;
-
-		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
+		public override Expression BuildQueryExpression<T>(QueryBuilder<T> builder)
 		{
-			_sqlQueryBuilder = new TableSqlQueryBuilder(builder, _originalType);
-			return _sqlQueryBuilder.SelectQuery;
+			return builder.BuildQueryExpression(BuildMapper<T>());
 		}
 
 		#endregion
@@ -108,209 +115,155 @@ namespace LinqToDB.Linq.Builder
 
 		#endregion
 
-		#region TableSqlQueryBuilder
-
-		class TableSqlQueryBuilder : SqlQueryBuilder
+		SelectQuery CreateSelectQuery(SelectQuery selectQuery)
 		{
-			public TableSqlQueryBuilder(QueryBuilder queryBuilder, Type type)
-				: base(queryBuilder)
+			if (selectQuery == null)
+				selectQuery = new SelectQuery();
+
+			selectQuery.From.Table(_sqlTable);
+
+			// Build Inheritance Condition.
+			//
+			if (_entityDescriptor.BaseDescriptor != null)
 			{
-				_type             = type;
-				_entityDescriptor = queryBuilder.MappingSchema.GetEntityDescriptor(_type);
-				_sqlTable         = new SqlTable(queryBuilder.MappingSchema, (_entityDescriptor.BaseDescriptor ?? _entityDescriptor).ObjectType);
-				SelectQuery       = CreateSelectQuery();
-				_fieldBuilders    = _sqlTable.Fields.Values.Select(f => new FieldSqlBuilder(SelectQuery, f)).ToList();
+				var predicate = SqlBuilder.BuildInheritanceCondition(
+					QueryBuilder.Query,
+					_selectQuery,
+					_entityDescriptor,
+					name => _sqlTable.Fields.Values.FirstOrDefault(f => f.Name == name));
+
+				selectQuery.Where.SearchCondition.Conditions.Add(new SelectQuery.Condition(false, predicate));
 			}
 
-			readonly Type                  _type;
-			readonly SqlTable              _sqlTable;
-			readonly EntityDescriptor      _entityDescriptor;
-			readonly List<FieldSqlBuilder> _fieldBuilders;
+			return selectQuery;
+		}
 
-			SelectQuery CreateSelectQuery()
+		#region BuildExpression
+
+		ParameterExpression _variable;
+
+		public Expression BuildExpression()
+		{
+			if (_variable != null)
+				return _variable;
+
+			var expr = _entityDescriptor.InheritanceMapping.Count != 0 ?
+				BuildInheritanceExpression() :
+				BuildEntityExpression(_entityDescriptor);
+
+			return _variable = QueryBuilder.BuildVariableExpression(expr);
+		}
+
+		static object DefaultInheritanceMappingException(object value, Type type)
+		{
+			throw new LinqException($"Inheritance mapping is not defined for discriminator value '{value}' in the '{type}' hierarchy.");
+		}
+
+		Expression BuildInheritanceExpression()
+		{
+			Expression expr;
+
+			var defaultMapping = _entityDescriptor.InheritanceMapping.SingleOrDefault(m => m.IsDefault);
+
+			if (defaultMapping != null)
 			{
-				var selectQuery = new SelectQuery();
+				expr = Expression.Convert(BuildEntityExpression(defaultMapping.EntityDescriptor), _type);
+			}
+			else
+			{
+				var readDiscriminator = _fieldBuilders
+					.First(f => f.SqlField.Name == _entityDescriptor.InheritanceMapping[0].DiscriminatorName).GetReadExpression(QueryBuilder);
 
-				selectQuery.From.Table(_sqlTable);
+				expr = Expression.Convert(
+					Expression.Call(null,
+						MemberHelper.MethodOf(() => DefaultInheritanceMappingException(null, null)),
+						Expression.Convert(readDiscriminator, typeof(object)),
+						Expression.Constant(_type)),
+					_type);
+			}
 
-				// Build Inheritance Condition.
-				//
-				if (_entityDescriptor.BaseDescriptor != null)
+			foreach (var mapping in _entityDescriptor.InheritanceMapping.Where(m => m != defaultMapping))
+			{
+				var discriminatorField = _fieldBuilders.First(f => f.SqlField.Name == mapping.DiscriminatorName);
+
+				Expression testExpr;
+
+				if (mapping.Code == null)
 				{
-					var predicate = SqlBuilder.BuildInheritanceCondition(
-						QueryBuilder.Query,
-						SelectQuery,
-						_entityDescriptor,
-						name => _sqlTable.Fields.Values.FirstOrDefault(f => f.Name == name));
-
-					selectQuery.Where.SearchCondition.Conditions.Add(new SelectQuery.Condition(false, predicate));
-				}
-
-				return selectQuery;
-			}
-
-			#region BuildExpression
-
-			ParameterExpression _variable;
-
-			public Expression BuildExpression()
-			{
-				if (_variable != null)
-					return _variable;
-
-				var expr = BuildExpressionInternal();
-
-				return _variable = QueryBuilder.BuildVariableExpression(expr);
-			}
-
-			Expression BuildExpressionInternal()
-			{
-				return _entityDescriptor.InheritanceMapping.Count != 0 ?
-					BuildInheritanceExpression() :
-					BuildEntityExpression(_entityDescriptor);
-			}
-
-			static object DefaultInheritanceMappingException(object value, Type type)
-			{
-				throw new LinqException($"Inheritance mapping is not defined for discriminator value '{value}' in the '{type}' hierarchy.");
-			}
-
-			Expression BuildInheritanceExpression()
-			{
-				Expression expr;
-
-				var defaultMapping = _entityDescriptor.InheritanceMapping.SingleOrDefault(m => m.IsDefault);
-
-				if (defaultMapping != null)
-				{
-					expr = Expression.Convert(BuildEntityExpression(defaultMapping.EntityDescriptor), _type);
+					testExpr = Expression.Call(
+						QueryBuilder.DataReaderLocalParameter,
+						ReflectionHelper.DataReader.IsDBNull,
+						Expression.Constant(discriminatorField.GetFieldIndex()));
 				}
 				else
 				{
-					var readDiscriminator = _fieldBuilders
-						.First(f => f.SqlField.Name == _entityDescriptor.InheritanceMapping[0].DiscriminatorName).GetReadExpression(QueryBuilder);
+					var codeType = mapping.Code.GetType();
 
-					expr = Expression.Convert(
-						Expression.Call(null,
-							MemberHelper.MethodOf(() => DefaultInheritanceMappingException(null, null)),
-							Expression.Convert(readDiscriminator, typeof(object)),
-							Expression.Constant(_type)),
-						_type);
+					testExpr = Expression.Equal(
+						Expression.Constant(mapping.Code),
+						discriminatorField.GetReadExpression(QueryBuilder, codeType));
 				}
 
-				foreach (var mapping in _entityDescriptor.InheritanceMapping.Where(m => m != defaultMapping))
+				expr = Expression.Condition(
+					testExpr,
+					Expression.Convert(BuildEntityExpression(mapping.EntityDescriptor), _type),
+					expr);
+			}
+
+			return expr;
+		}
+
+		static bool IsRecordAttribute(Attribute attr)
+		{
+			return attr.GetType().FullName == "Microsoft.FSharp.Core.CompilationMappingAttribute";
+		}
+
+		class ColumnInfo
+		{
+			public bool       IsComplex;
+			public string     Name;
+			public string     Storage;
+			public Expression ReadExpression;
+		}
+
+		Expression BuildEntityExpression(EntityDescriptor descriptor)
+		{
+			var columnInfo =
+			(
+				from column in descriptor.Columns
+				join field  in _fieldBuilders
+					on column.MemberAccessor.Name equals field.SqlField.ColumnDescriptor.MemberAccessor.Name
+				select new ColumnInfo
 				{
-					var discriminatorField = _fieldBuilders.First(f => f.SqlField.Name == mapping.DiscriminatorName);
-
-					Expression testExpr;
-
-					if (mapping.Code == null)
-					{
-						testExpr = Expression.Call(
-							QueryBuilder.DataReaderLocalParameter,
-							ReflectionHelper.DataReader.IsDBNull,
-							Expression.Constant(discriminatorField.GetFieldIndex()));
-					}
-					else
-					{
-						var codeType = mapping.Code.GetType();
-
-						testExpr = Expression.Equal(
-							Expression.Constant(mapping.Code),
-							discriminatorField.GetReadExpression(QueryBuilder, codeType));
-					}
-
-					expr = Expression.Condition(
-						testExpr,
-						Expression.Convert(BuildEntityExpression(mapping.EntityDescriptor), _type),
-						expr);
+					IsComplex      = column.MemberAccessor.IsComplex,
+					Name           = column.MemberName,
+					Storage        = column.Storage,
+					ReadExpression = field.GetReadExpression(QueryBuilder)
 				}
+			).ToList();
 
-				return expr;
-			}
+			return BuildEntityExpression(descriptor.TypeAccessor, columnInfo);
+		}
 
-			static bool IsRecordAttribute(Attribute attr)
-			{
-				return attr.GetType().FullName == "Microsoft.FSharp.Core.CompilationMappingAttribute";
-			}
+		Expression BuildEntityExpression(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
+		{
+			var isRecord = QueryBuilder.MappingSchema.GetAttributes<Attribute>(typeAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
 
-			class ColumnInfo
-			{
-				public bool       IsComplex;
-				public string     Name;
-				public string     Storage;
-				public Expression ReadExpression;
-			}
+			return isRecord ?
+				BuildRecordConstructor (typeAccessor, columnInfo) :
+				BuildDefaultConstructor(typeAccessor, columnInfo);
+		}
 
-			Expression BuildEntityExpression(EntityDescriptor descriptor)
-			{
-				var columnInfo =
-				(
-					from column in descriptor.Columns
-					join field  in _fieldBuilders
-						on column.MemberAccessor.Name equals field.SqlField.ColumnDescriptor.MemberAccessor.Name
-					select new ColumnInfo
-					{
-						IsComplex      = column.MemberAccessor.IsComplex,
-						Name           = column.MemberName,
-						Storage        = column.Storage,
-						ReadExpression = field.GetReadExpression(QueryBuilder)
-					}
-				).ToList();
+		Expression BuildComplexMemberExpression(TypeAccessor parentAccessor, Expression parentExpression, List<ColumnInfo> columnInfo)
+		{
+			var isRecord        = QueryBuilder.MappingSchema.GetAttributes<Attribute>(parentAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
+			var buildExpression = BuildEntityExpression(parentAccessor, columnInfo);
 
-				return BuildEntityExpression(descriptor.TypeAccessor, columnInfo);
-			}
-
-			Expression BuildEntityExpression(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
-			{
-				var isRecord = QueryBuilder.MappingSchema.GetAttributes<Attribute>(typeAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
-
-				return isRecord ?
-					BuildRecordConstructor (typeAccessor, columnInfo) :
-					BuildDefaultConstructor(typeAccessor, columnInfo);
-			}
-
-			Expression BuildComplexMemberExpression(TypeAccessor parentAccessor, Expression parentExpression, List<ColumnInfo> columnInfo)
-			{
-				var isRecord        = QueryBuilder.MappingSchema.GetAttributes<Attribute>(parentAccessor.Type).FirstOrDefault(IsRecordAttribute) != null;
-				var buildExpression = BuildEntityExpression(parentAccessor, columnInfo);
-
-				if (isRecord)
-					return Expression.Assign(parentExpression, buildExpression);
-
-				if (parentAccessor.Type.IsClassEx() || parentAccessor.Type.IsNullable())
-				{
-					var vars  = new List<ParameterExpression>();
-					var exprs = new List<Expression>();
-					var obj   = parentExpression as ParameterExpression;
-
-					if (obj == null)
-					{
-						obj = Expression.Variable(parentExpression.Type);
-						vars. Add(obj);
-						exprs.Add(Expression.Assign(obj, parentExpression));
-					}
-
-					exprs.AddRange(columnInfo
-						.Where (c => !c.IsComplex)
-						.Select(c => Expression.Assign(Expression.PropertyOrField(obj, c.Name), c.ReadExpression)));
-
-					exprs.Add(BuildComplexMembers(parentAccessor, obj, columnInfo));
-
-					return Expression.IfThenElse(
-						Expression.Equal (parentExpression, Expression.Constant(null)),
-						Expression.Assign(parentExpression, buildExpression),
-						Expression.Block(vars, exprs));
-				}
-
+			if (isRecord)
 				return Expression.Assign(parentExpression, buildExpression);
-			}
 
-			Expression BuildComplexMembers(TypeAccessor parentAccessor, Expression parentExpression, List<ColumnInfo> columnInfo)
+			if (parentAccessor.Type.IsClassEx() || parentAccessor.Type.IsNullable())
 			{
-				if (!columnInfo.Any(c => c.IsComplex))
-					return parentExpression;
-
 				var vars  = new List<ParameterExpression>();
 				var exprs = new List<Expression>();
 				var obj   = parentExpression as ParameterExpression;
@@ -322,138 +275,166 @@ namespace LinqToDB.Linq.Builder
 					exprs.Add(Expression.Assign(obj, parentExpression));
 				}
 
-				var complexMembers =
-				(
-					from c in columnInfo
-					where c.IsComplex
-					group c by c.Name.Substring(0, c.Name.IndexOf('.')) into gr
-					join ma in parentAccessor.Members on gr.Key equals ma.Name
-					select new
-					{
-						memberAccessor = ma,
-						columns        = gr.ToList()
-					}
-				).ToList();
+				exprs.AddRange(columnInfo
+					.Where (c => !c.IsComplex)
+					.Select(c => Expression.Assign(Expression.PropertyOrField(obj, c.Name), c.ReadExpression)));
 
-				foreach (var complexMember in complexMembers)
+				exprs.Add(BuildComplexMembers(parentAccessor, obj, columnInfo));
+
+				return Expression.IfThenElse(
+					Expression.Equal (parentExpression, Expression.Constant(null)),
+					Expression.Assign(parentExpression, buildExpression),
+					Expression.Block(vars, exprs));
+			}
+
+			return Expression.Assign(parentExpression, buildExpression);
+		}
+
+		Expression BuildComplexMembers(TypeAccessor parentAccessor, Expression parentExpression, List<ColumnInfo> columnInfo)
+		{
+			if (!columnInfo.Any(c => c.IsComplex))
+				return parentExpression;
+
+			var vars  = new List<ParameterExpression>();
+			var exprs = new List<Expression>();
+			var obj   = parentExpression as ParameterExpression;
+
+			if (obj == null)
+			{
+				obj = Expression.Variable(parentExpression.Type);
+				vars. Add(obj);
+				exprs.Add(Expression.Assign(obj, parentExpression));
+			}
+
+			var complexMembers =
+			(
+				from c in columnInfo
+				where c.IsComplex
+				group c by c.Name.Substring(0, c.Name.IndexOf('.')) into gr
+				join ma in parentAccessor.Members on gr.Key equals ma.Name
+				select new
 				{
-					var columns = complexMember.columns.Select(c =>
-					{
-						var name = c.Name.Substring(complexMember.memberAccessor.Name.Length + 1);
-						return new ColumnInfo
-						{
-							IsComplex      = name.IndexOf('.') >= 0,
-							Name           = name,
-							Storage        = c.Storage,
-							ReadExpression = c.ReadExpression,
-						};
-					}).ToList();
-
-					var memberExpression   = Expression.MakeMemberAccess(obj, complexMember.memberAccessor.MemberInfo);
-					var memberTypeAccessor = TypeAccessor.GetAccessor(complexMember.memberAccessor.Type);
-
-					exprs.Add(BuildComplexMemberExpression(memberTypeAccessor, memberExpression, columns));
+					memberAccessor = ma,
+					columns        = gr.ToList()
 				}
+			).ToList();
 
-				exprs.Add(obj);
-
-				return Expression.Block(vars, exprs);
-			}
-
-			Expression BuildDefaultConstructor(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
+			foreach (var complexMember in complexMembers)
 			{
-				Expression expr = Expression.MemberInit(
-					Expression.New(typeAccessor.Type),
-					columnInfo
-						.Where (c => !c.IsComplex)
-						.Select(c => (MemberBinding)Expression.Bind(
-							Expression.PropertyOrField(
-								Expression.Constant(null, typeAccessor.Type),
-								c.Storage ?? c.Name).Member,
-							c.ReadExpression)));
-
-				return BuildComplexMembers(typeAccessor, expr, columnInfo);
-			}
-
-			Expression BuildRecordConstructor(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
-			{
-				var members =
-				(
-					from member       in typeAccessor.Members
-					from dynamic attr in QueryBuilder.MappingSchema.GetAttributes<Attribute>(member.MemberInfo).Where(IsRecordAttribute).Take(1)
-					select new
+				var columns = complexMember.columns.Select(c =>
+				{
+					var name = c.Name.Substring(complexMember.memberAccessor.Name.Length + 1);
+					return new ColumnInfo
 					{
-						member,
-						attr.SequenceNumber,
-					}
-				).ToList();
-
-				var complexMembers =
-					from c in columnInfo
-					where c.IsComplex
-					let name = c.Name.Substring(0, c.Name.IndexOf('.'))
-					group c by name into gr
-					select new
-					{
-						name    = gr.Key,
-						columns = gr.ToList()
+						IsComplex      = name.IndexOf('.') >= 0,
+						Name           = name,
+						Storage        = c.Storage,
+						ReadExpression = c.ReadExpression,
 					};
+				}).ToList();
 
-				var exprs =
-				(
-					from m in members
-					join c in
-						from c in columnInfo
-						where !c.IsComplex
-						select c
-					on m.member.Name equals c.Name
-					select new
-					{
-						m.SequenceNumber,
-						Expression = c.ReadExpression,
-					}
-				)
-				.Union
-				(
-					from m in members
-					join c in complexMembers
-					on m.member.Name equals c.name
-					select new
-					{
-						m.SequenceNumber,
-						Expression = BuildEntityExpression(
-							TypeAccessor.GetAccessor(m.member.Type),
-							(
-								from ci in c.columns
-								let name = ci.Name.Substring(c.name.Length + 1)
-								select new ColumnInfo
-								{
-									IsComplex      = name.IndexOf('.') >= 0,
-									Name           = name,
-									Storage        = ci.Storage,
-									ReadExpression = ci.ReadExpression,
-								}
-							).ToList()),
-					}
-				);
+				var memberExpression   = Expression.MakeMemberAccess(obj, complexMember.memberAccessor.MemberInfo);
+				var memberTypeAccessor = TypeAccessor.GetAccessor(complexMember.memberAccessor.Type);
 
-				var ctor  = typeAccessor.Type.GetConstructorsEx().Single();
-				var parms =
-				(
-					from p in ctor.GetParameters().Select((p,i) => new { p, i })
-					join e in exprs on p.i equals e.SequenceNumber into j
-					from e in j.DefaultIfEmpty()
-					select e != null ?
-						e.Expression :
-						Expression.Constant(p.p.DefaultValue ?? QueryBuilder.MappingSchema.GetDefaultValue(p.p.ParameterType), p.p.ParameterType)
-				).ToList();
-
-				var expr = Expression.New(ctor, parms);
-
-				return expr;
+				exprs.Add(BuildComplexMemberExpression(memberTypeAccessor, memberExpression, columns));
 			}
 
-			#endregion
+			exprs.Add(obj);
+
+			return Expression.Block(vars, exprs);
+		}
+
+		Expression BuildDefaultConstructor(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
+		{
+			Expression expr = Expression.MemberInit(
+				Expression.New(typeAccessor.Type),
+				columnInfo
+					.Where (c => !c.IsComplex)
+					.Select(c => (MemberBinding)Expression.Bind(
+						Expression.PropertyOrField(
+							Expression.Constant(null, typeAccessor.Type),
+							c.Storage ?? c.Name).Member,
+						c.ReadExpression)));
+
+			return BuildComplexMembers(typeAccessor, expr, columnInfo);
+		}
+
+		Expression BuildRecordConstructor(TypeAccessor typeAccessor, List<ColumnInfo> columnInfo)
+		{
+			var members =
+			(
+				from member       in typeAccessor.Members
+				from dynamic attr in QueryBuilder.MappingSchema.GetAttributes<Attribute>(member.MemberInfo).Where(IsRecordAttribute).Take(1)
+				select new
+				{
+					member,
+					attr.SequenceNumber,
+				}
+			).ToList();
+
+			var complexMembers =
+				from c in columnInfo
+				where c.IsComplex
+				let name = c.Name.Substring(0, c.Name.IndexOf('.'))
+				group c by name into gr
+				select new
+				{
+					name    = gr.Key,
+					columns = gr.ToList()
+				};
+
+			var exprs =
+			(
+				from m in members
+				join c in
+					from c in columnInfo
+					where !c.IsComplex
+					select c
+				on m.member.Name equals c.Name
+				select new
+				{
+					m.SequenceNumber,
+					Expression = c.ReadExpression,
+				}
+			)
+			.Union
+			(
+				from m in members
+				join c in complexMembers
+				on m.member.Name equals c.name
+				select new
+				{
+					m.SequenceNumber,
+					Expression = BuildEntityExpression(
+						TypeAccessor.GetAccessor(m.member.Type),
+						(
+							from ci in c.columns
+							let name = ci.Name.Substring(c.name.Length + 1)
+							select new ColumnInfo
+							{
+								IsComplex      = name.IndexOf('.') >= 0,
+								Name           = name,
+								Storage        = ci.Storage,
+								ReadExpression = ci.ReadExpression,
+							}
+						).ToList()),
+				}
+			);
+
+			var ctor  = typeAccessor.Type.GetConstructorsEx().Single();
+			var parms =
+			(
+				from p in ctor.GetParameters().Select((p,i) => new { p, i })
+				join e in exprs on p.i equals e.SequenceNumber into j
+				from e in j.DefaultIfEmpty()
+				select e != null ?
+					e.Expression :
+					Expression.Constant(p.p.DefaultValue ?? QueryBuilder.MappingSchema.GetDefaultValue(p.p.ParameterType), p.p.ParameterType)
+			).ToList();
+
+			var expr = Expression.New(ctor, parms);
+
+			return expr;
 		}
 
 		#endregion

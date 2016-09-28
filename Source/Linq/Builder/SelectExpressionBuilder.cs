@@ -1,37 +1,37 @@
 using System;
 using System.Linq.Expressions;
 
+using LinqToDB.Expressions;
+
 namespace LinqToDB.Linq.Builder
 {
 	using SqlQuery;
 
-	class SelectExpressionBuilder : ExpressionBuilderBase
+	class SelectExpressionBuilder : ExpressionBuilderNew
 	{
-		public static QueryExpression Translate(QueryExpression qe, MethodCallExpression expression)
+		public static QueryExpression Translate(QueryBuilder builder, QueryExpression qe, MethodCallExpression expression)
 		{
-			if (expression.Arguments.Count == 2)
-			{
-				var expr = expression.Arguments[1];
+			if (expression.Arguments.Count != 2)
+				throw new LinqToDBException($"Can't process expression:\r\n{expression.GetDebugView()}");
 
-				while (expr.NodeType == ExpressionType.Quote)
-					expr = ((UnaryExpression)expr).Operand;
+			var l = (LambdaExpression)expression.Arguments[1].Unwrap();
 
-				var l = (LambdaExpression)expr;
+			if (l.Parameters.Count == 1 && l.Body == l.Parameters[0])
+				return qe;
 
-				if (l.Parameters.Count == 1 && l.Body == l.Parameters[0])
-					return qe;
-			}
-
-			return qe.AddBuilder(new SelectExpressionBuilder(expression));
+			return qe.AddBuilder(new SelectExpressionBuilder(builder, expression));
 		}
 
-		SelectExpressionBuilder(Expression expression) : base(expression)
+		SelectExpressionBuilder(QueryBuilder queryBuilder, Expression expression)
+			: base(queryBuilder, expression)
 		{
 		}
 
-		public override Expression BuildQueryExpression<T>(QueryBuilder<T> builder)
+		SelectQuery _selectQuery;
+
+		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
 		{
-			throw new NotImplementedException();
+			return _selectQuery = selectQuery;
 		}
 
 		public override void BuildQuery<T>(QueryBuilder<T> builder)
@@ -39,12 +39,9 @@ namespace LinqToDB.Linq.Builder
 			throw new NotImplementedException();
 		}
 
-		ProjectionSqlQueryBuilder _sqlQueryBuilder;
-
-		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
+		public override Expression BuildQueryExpression<T>(QueryBuilder<T> builder)
 		{
-			_sqlQueryBuilder = new ProjectionSqlQueryBuilder(builder, selectQuery);
-			return _sqlQueryBuilder.SelectQuery;
+			throw new NotImplementedException();
 		}
 	}
 }

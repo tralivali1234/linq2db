@@ -31,7 +31,7 @@ namespace LinqToDB.Linq.Builder
 		public readonly IDataContext  DataContext;
 		public readonly MappingSchema MappingSchema;
 
-		public readonly Dictionary<ParameterExpression,IExpressionBuilder> Builders = new Dictionary<ParameterExpression,IExpressionBuilder>();
+		public readonly Dictionary<ParameterExpression,ExpressionBuilderNew> Builders = new Dictionary<ParameterExpression,ExpressionBuilderNew>();
 
 		#endregion
 
@@ -94,7 +94,7 @@ namespace LinqToDB.Linq.Builder
 
 		#region TransformQuery
 
-		protected abstract Expression CreateQueryExpression(IExpressionBuilder expressionBuilder);
+		protected abstract Expression CreateQueryExpression(ExpressionBuilderNew expressionBuilder);
 
 		// IT : # TramsformQuery
 		protected Expression TramsformQuery(Expression expression)
@@ -105,14 +105,14 @@ namespace LinqToDB.Linq.Builder
 					{
 						var c = (ConstantExpression)expression;
 						if (c.Value is ITable)
-							return CreateQueryExpression(new TableExpressionBuilder(expression));
+							return CreateQueryExpression(new TableExpressionBuilder(this, expression));
 						break;
 					}
 
 				case ExpressionType.MemberAccess:
 					{
 						if (typeof(ITable).IsSameOrParentOf(expression.Type))
-							return CreateQueryExpression(new TableExpressionBuilder(expression));
+							return CreateQueryExpression(new TableExpressionBuilder(this, expression));
 						break;
 					}
 
@@ -122,7 +122,7 @@ namespace LinqToDB.Linq.Builder
 
 						if (call.Method.Name == "GetTable")
 							if (typeof(ITable).IsSameOrParentOf(expression.Type))
-								return CreateQueryExpression(new TableExpressionBuilder(expression));
+								return CreateQueryExpression(new TableExpressionBuilder(this, expression));
 
 						var attr = Query.MappingSchema.GetAttribute<Sql.TableFunctionAttribute>(call.Method, a => a.Configuration);
 
@@ -139,9 +139,9 @@ namespace LinqToDB.Linq.Builder
 								{
 									switch (call.Method.Name)
 									{
-										case "Select" : return SelectExpressionBuilder.Translate(qe, call);
+										case "Select" : return SelectExpressionBuilder.Translate(this, qe, call);
 										case "Where"  :
-										case "Having" : return WhereExpressionBuilder. Translate(qe, call);
+										case "Having" : return WhereExpressionBuilder. Translate(this, qe, call);
 									}
 								}
 							}
@@ -166,7 +166,7 @@ namespace LinqToDB.Linq.Builder
 
 		public new QueryNew<T> Query => (QueryNew<T>)base.Query;
 
-		protected override Expression CreateQueryExpression(IExpressionBuilder expressionBuilder)
+		protected override Expression CreateQueryExpression(ExpressionBuilderNew expressionBuilder)
 		{
 			return new QueryExpression<T>(this, expressionBuilder);
 		}
@@ -177,7 +177,7 @@ namespace LinqToDB.Linq.Builder
 
 			if (expr is QueryExpression<T>)
 			{
-				BuildQuery((QueryExpression<T>)expr);
+				BuildSql((QueryExpression<T>)expr);
 				return Query.GetIEnumerable;
 			}
 
@@ -190,14 +190,14 @@ namespace LinqToDB.Linq.Builder
 
 			if (expr is QueryExpression<T>)
 			{
-				BuildQuery((QueryExpression<T>)expr);
+				BuildSql((QueryExpression<T>)expr);
 				return Query.GetElement;
 			}
 
 			return BuildQuery<T>(expr);
 		}
 
-		void BuildQuery(QueryExpression expression)
+		void BuildSql(QueryExpression expression)
 		{
 			SelectQuery sql = null;
 

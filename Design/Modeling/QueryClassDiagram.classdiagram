@@ -213,19 +213,8 @@
             </class>
           </packageHasNamedElement>
           <packageHasNamedElement>
-            <class Id="9306d366-0707-4fcd-8993-0507e5538204" name="QueryBuilder" visibility="Private" isAbstract="false" isLeaf="false" isActiveClass="false">
-              <elementDefinition Id="017c3041-2d85-438a-a60a-d60c231182f9" />
-            </class>
-          </packageHasNamedElement>
-          <packageHasNamedElement>
             <class Id="18972e41-1e52-4f52-a1fc-33b6002c0500" name="QueryBuilder" visibility="Private" isAbstract="false" isLeaf="false" isActiveClass="false">
               <elementDefinition Id="a07fca17-7cb1-41af-95cf-94eef3b96179" />
-              <generalsInternal>
-                <generalization Id="80ebd018-6f2e-45f8-b145-8968a1ea281e" isSubstitutable="false">
-                  <classMoniker Id="9306d366-0707-4fcd-8993-0507e5538204" LastKnownName="QueryBuilder" />
-                  <elementDefinition Id="cc607c7c-245f-4e92-b871-8341e1980480" />
-                </generalization>
-              </generalsInternal>
               <targetEnds>
                 <association Id="ac8924ad-a945-4e58-a585-2e6440a9b392" isDerived="false" sourceEndRoleName="" targetEndRoleName="" isLeaf="false" isAbstract="false">
                   <classMoniker Id="ee496569-1cb6-4f5d-a433-8b388b108859" LastKnownName="QueryExpression" />
@@ -282,7 +271,7 @@
               </generalsInternal>
               <targetEnds>
                 <association Id="6360ef91-ee11-49c5-ba26-72d2453a74cb" isDerived="false" sourceEndRoleName="First/Last" targetEndRoleName="" isLeaf="false" isAbstract="false">
-                  <interfaceMoniker Id="b3eb4431-f2b3-4874-8408-47e1cb4edf33" LastKnownName="IExpressionBuilder" />
+                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilder" />
                   <relationshipOwnedElementsInternal>
                     <associationHasOwnedEnds>
                       <memberEnd Id="a8442c0d-9294-4e05-8b4e-f3a3df6fa56e" name="First/Last" isLeaf="false" isStatic="false" isReadOnly="false" isDerived="false" isDerivedUnion="false" aggregation="Shared" isComposite="false" isNavigableOwned="false">
@@ -337,20 +326,11 @@
             </class>
           </packageHasNamedElement>
           <packageHasNamedElement>
-            <Interface Id="b3eb4431-f2b3-4874-8408-47e1cb4edf33" name="IExpressionBuilder" isAbstract="false" isLeaf="false">
-              <elementDefinition Id="65a6c961-c06f-4f48-87ed-506dadff7081" />
-            </Interface>
-          </packageHasNamedElement>
-          <packageHasNamedElement>
-            <class Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" name="ExpressionBuilderBase" isAbstract="true" isLeaf="false" isActiveClass="false">
+            <class Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" name="ExpressionBuilder" isAbstract="true" isLeaf="false" isActiveClass="false">
               <elementDefinition Id="08c83d46-9133-4b78-b5e4-3ebba4256eff" />
               <suppliersInternal>
-                <interfaceRealization Id="00ad1053-e56a-41bb-94e3-0f5fa897d08b">
-                  <interfaceMoniker Id="b3eb4431-f2b3-4874-8408-47e1cb4edf33" LastKnownName="IExpressionBuilder" />
-                  <elementDefinition Id="ac31d040-5597-4e47-867b-899d37cda481" />
-                </interfaceRealization>
                 <dependency Id="3d85a2ee-70f2-41a3-b4e1-5df83eef170b">
-                  <classMoniker Id="9306d366-0707-4fcd-8993-0507e5538204" LastKnownName="QueryBuilder" />
+                  <classMoniker Id="18972e41-1e52-4f52-a1fc-33b6002c0500" LastKnownName="QueryBuilder" />
                   <elementDefinition Id="de06d94d-8e3e-4f39-bfa9-532fdffa63b2" />
                 </dependency>
               </suppliersInternal>
@@ -361,28 +341,10 @@
               <elementDefinition Id="c8be9755-55ea-4de3-95d1-ad470b5aa4ff" />
               <generalsInternal>
                 <generalization Id="fca81d59-7aa4-4b5a-94c3-b2b910f6c252" isSubstitutable="false">
-                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilderBase" />
+                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilder" />
                   <elementDefinition Id="f5d12fdc-6f67-4b26-aeda-fb7675edd217" />
                 </generalization>
               </generalsInternal>
-              <targetEnds>
-                <association Id="e58d1eec-fbca-48df-9832-e3667eed29da" isDerived="false" sourceEndRoleName="" targetEndRoleName="" isLeaf="false" isAbstract="false">
-                  <classMoniker Id="e34c2dc1-39ba-4cb4-b9c1-6a20ae07fc34" LastKnownName="TableSqlQueryBuilder" />
-                  <relationshipOwnedElementsInternal>
-                    <associationHasOwnedEnds>
-                      <memberEnd Id="d8e6047d-37fa-4ac9-b8ad-f1d65c7e4792" isLeaf="false" isStatic="false" isReadOnly="false" isDerived="false" isDerivedUnion="false" aggregation="Shared" isComposite="false" isNavigableOwned="false">
-                        <elementDefinition Id="3e2613d3-9a65-4efc-8067-375195e584c2" />
-                      </memberEnd>
-                    </associationHasOwnedEnds>
-                    <associationHasOwnedEnds>
-                      <memberEnd Id="402f9972-bc00-4165-a308-d2d145e79f79" isLeaf="false" isStatic="false" isReadOnly="false" isDerived="false" isDerivedUnion="false" aggregation="None" isComposite="false">
-                        <elementDefinition Id="2427d970-d9a5-49b4-97a0-1ae6853f6d8d" />
-                      </memberEnd>
-                    </associationHasOwnedEnds>
-                  </relationshipOwnedElementsInternal>
-                  <elementDefinition Id="d663f8b0-420d-4f27-b287-e9d34ae0c8a4" />
-                </association>
-              </targetEnds>
             </class>
           </packageHasNamedElement>
           <packageHasNamedElement>
@@ -390,28 +352,10 @@
               <elementDefinition Id="9456ba5f-9da1-492c-bf68-dacfd2bfb71b" />
               <generalsInternal>
                 <generalization Id="918f0391-3323-4aef-8121-8d3be5812d9b" isSubstitutable="false">
-                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilderBase" />
+                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilder" />
                   <elementDefinition Id="5996b2bb-9cdc-4095-a734-9e10081d33f2" />
                 </generalization>
               </generalsInternal>
-              <targetEnds>
-                <association Id="f9b3cef2-8a12-4671-9ce1-c182cf430a96" isDerived="false" sourceEndRoleName="" targetEndRoleName="" isLeaf="false" isAbstract="false">
-                  <classMoniker Id="b5e4f9a0-f809-4376-bddb-9f03e2ed0374" LastKnownName="ProjectionSqlQueryBuilder" />
-                  <relationshipOwnedElementsInternal>
-                    <associationHasOwnedEnds>
-                      <memberEnd Id="f16fe590-da1b-4ef9-95f5-7165c652451b" isLeaf="false" isStatic="false" isReadOnly="false" isDerived="false" isDerivedUnion="false" aggregation="Shared" isComposite="false" isNavigableOwned="false">
-                        <elementDefinition Id="1a65c98d-3427-491b-b328-5d4ec09c80a3" />
-                      </memberEnd>
-                    </associationHasOwnedEnds>
-                    <associationHasOwnedEnds>
-                      <memberEnd Id="80dbdc8f-20a7-4070-9cef-3b532cc7e08b" isLeaf="false" isStatic="false" isReadOnly="false" isDerived="false" isDerivedUnion="false" aggregation="None" isComposite="false">
-                        <elementDefinition Id="de5f58e2-c905-42dd-b87f-27e9768b4607" />
-                      </memberEnd>
-                    </associationHasOwnedEnds>
-                  </relationshipOwnedElementsInternal>
-                  <elementDefinition Id="c333ad8c-ea4f-4cb6-b4df-636954fc82a4" />
-                </association>
-              </targetEnds>
             </class>
           </packageHasNamedElement>
           <packageHasNamedElement>
@@ -419,7 +363,7 @@
               <elementDefinition Id="e77dd061-9068-479b-b33d-95caf6916330" />
               <generalsInternal>
                 <generalization Id="483859ac-e425-49be-a362-27abf4fd7051" isSubstitutable="false">
-                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilderBase" />
+                  <classMoniker Id="f70408c4-c7e9-4388-8b49-ef11b0ec4982" LastKnownName="ExpressionBuilder" />
                   <elementDefinition Id="03cf81ba-1f79-4ffb-aa37-6a62eae4eb66" />
                 </generalization>
               </generalsInternal>
@@ -434,39 +378,6 @@
                   <elementDefinition Id="fce18166-493b-4132-8b8a-aad134c7269e" />
                 </generalization>
               </generalsInternal>
-            </class>
-          </packageHasNamedElement>
-          <packageHasNamedElement>
-            <class Id="e34c2dc1-39ba-4cb4-b9c1-6a20ae07fc34" name="TableSqlQueryBuilder" isAbstract="false" isLeaf="false" isActiveClass="false">
-              <elementDefinition Id="6cbf16dd-d0d0-4b21-b5fe-33b9a4ed4454" />
-              <generalsInternal>
-                <generalization Id="4f30b295-afa7-47be-90a8-28d72ae81d42" isSubstitutable="false">
-                  <classMoniker Id="f35dfd85-c293-4ad6-b214-c1500bf02540" LastKnownName="SqlQueryBuilder" />
-                  <elementDefinition Id="616c4868-1a97-4484-a9f2-4db206e1a043" />
-                </generalization>
-              </generalsInternal>
-            </class>
-          </packageHasNamedElement>
-          <packageHasNamedElement>
-            <class Id="b5e4f9a0-f809-4376-bddb-9f03e2ed0374" name="ProjectionSqlQueryBuilder" isAbstract="false" isLeaf="false" isActiveClass="false">
-              <elementDefinition Id="c82fd557-df2c-4762-a7e7-c750a7d8db3c" />
-              <generalsInternal>
-                <generalization Id="0999ce4b-e9ec-4fc4-97ee-34ac99bc959d" isSubstitutable="false">
-                  <classMoniker Id="f35dfd85-c293-4ad6-b214-c1500bf02540" LastKnownName="SqlQueryBuilder" />
-                  <elementDefinition Id="4e3579d3-bd3c-49bb-89bd-7ef6cf743458" />
-                </generalization>
-              </generalsInternal>
-            </class>
-          </packageHasNamedElement>
-          <packageHasNamedElement>
-            <class Id="f35dfd85-c293-4ad6-b214-c1500bf02540" name="SqlQueryBuilder" isAbstract="false" isLeaf="false" isActiveClass="false">
-              <elementDefinition Id="a9f3dc44-c8c0-416d-97ec-f7f58c220260" />
-              <suppliersInternal>
-                <dependency Id="3c7b33e6-b8a3-4a82-9a4f-d61e8aac0a8c">
-                  <classMoniker Id="9306d366-0707-4fcd-8993-0507e5538204" LastKnownName="QueryBuilder" />
-                  <elementDefinition Id="e260dcf2-aefe-4b0d-b62a-6df56ba8153c" />
-                </dependency>
-              </suppliersInternal>
             </class>
           </packageHasNamedElement>
         </packagedElements>

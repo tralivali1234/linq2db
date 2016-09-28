@@ -178,16 +178,12 @@
     <Compile Include="Linq\Builder\ChangeTypeExpressionBuilder.cs" />
     <Compile Include="Linq\Builder\ContextParser.cs" />
     <Compile Include="Linq\Builder\DropBuilder.cs" />
-    <Compile Include="Linq\Builder\IExpressionBuilder.cs" />
-    <Compile Include="Linq\Builder\ProjectionSqlQueryBuilder.cs" />
     <Compile Include="Linq\Builder\QueryBuilder.cs" />
-    <Compile Include="Linq\Builder\ExpressionBuilderBase.cs" />
+    <Compile Include="Linq\Builder\ExpressionBuilderNew.cs" />
     <Compile Include="Linq\Builder\LoadWithBuilder.cs" />
-    <Compile Include="Linq\Builder\ProjectionBase.cs" />
     <Compile Include="Linq\Builder\QueryExpression.cs" />
     <Compile Include="Linq\Builder\SelectExpressionBuilder.cs" />
     <Compile Include="Linq\Builder\SqlBuilder.cs" />
-    <Compile Include="Linq\Builder\SqlQueryBuilder.cs" />
     <Compile Include="Linq\Builder\TableExpressionBuilder.cs" />
     <Compile Include="Linq\Builder\TableFunctionExpressionBuilder.cs" />
     <Compile Include="Linq\Builder\WhereExpressionBuilder.cs" />

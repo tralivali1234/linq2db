@@ -5,8 +5,8 @@ namespace LinqToDB.Linq.Builder
 {
 	class TableFunctionExpressionBuilder : TableExpressionBuilder
 	{
-		public TableFunctionExpressionBuilder(QueryBuilder builder, Expression expression)
-			: base(expression)
+		public TableFunctionExpressionBuilder(QueryBuilder queryBuilder, Expression expression)
+			: base(queryBuilder, expression)
 		{
 		}
 	}

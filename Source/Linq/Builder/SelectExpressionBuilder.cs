@@ -31,6 +31,10 @@ namespace LinqToDB.Linq.Builder
 
 		public override SelectQuery BuildSql<T>(QueryBuilder<T> builder, SelectQuery selectQuery)
 		{
+			var expressionInfo = new ExpressionInfo(this, (LambdaExpression)((MethodCallExpression)Expression).Arguments[1].Unwrap());
+
+			builder.TranslateExpression(expressionInfo);
+
 			return _selectQuery = selectQuery;
 		}
 

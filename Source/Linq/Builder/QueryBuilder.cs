@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Threading;
 
 namespace LinqToDB.Linq.Builder
@@ -113,6 +115,21 @@ namespace LinqToDB.Linq.Builder
 					{
 						if (typeof(ITable).IsSameOrParentOf(expression.Type))
 							return CreateQueryExpression(new TableExpressionBuilder(this, expression));
+
+						var me = (MemberExpression)expression;
+						var l  = ConvertMethodExpression(me.Member);
+
+						if (l != null)
+						{
+							var body = l.Body.Unwrap();
+							var ex   = body.Transform(wpi => wpi.NodeType == ExpressionType.Parameter ? me.Expression : wpi);
+
+							if (ex.Type != expression.Type)
+								ex = new ChangeTypeExpression(ex, expression.Type);
+
+							return TramsformQuery(ex);
+						}
+
 						break;
 					}
 
@@ -152,6 +169,74 @@ namespace LinqToDB.Linq.Builder
 			}
 
 			return expression;
+		}
+
+		LambdaExpression ConvertMethodExpression(MemberInfo mi)
+		{
+			var attr = MappingSchema.GetAttribute<ExpressionMethodAttribute>(mi, a => a.Configuration);
+
+			if (attr != null)
+			{
+				Expression expr;
+
+				if (mi is MethodInfo && ((MethodInfo)mi).IsGenericMethod)
+				{
+					var method = (MethodInfo)mi;
+					var args   = method.GetGenericArguments();
+					var names  = args.Select(t => (object)t.Name).ToArray();
+					var name   = attr.MethodName.Args(names);
+
+					expr = Expression.Call(
+						mi.DeclaringType,
+						name,
+						name != attr.MethodName ? Array<Type>.Empty : args);
+				}
+				else
+				{
+					expr = Expression.Call(mi.DeclaringType, attr.MethodName, Array<Type>.Empty);
+				}
+
+				var call = Expression.Lambda<Func<LambdaExpression>>(Expression.Convert(expr, typeof(LambdaExpression)));
+
+				return call.Compile()();
+			}
+
+			return null;
+		}
+
+		#endregion
+
+		#region TranslateExpression
+
+		public void TranslateExpression(ExpressionInfo expressionInfo)
+		{
+			expressionInfo.Expression.Visit(ex => TranslateExpression(expressionInfo, ex));
+		}
+
+		bool TranslateExpression(ExpressionInfo expressionInfo, Expression expression)
+		{
+			ExpressionItemInfo itemInfo;
+
+			if (expressionInfo.Items.TryGetValue(expression, out itemInfo))
+				return false;
+
+			switch (expression.NodeType)
+			{
+				case ExpressionType.MemberAccess:
+				{
+					break;
+				}
+
+				case ExpressionType.New :
+					expressionInfo.Items[expression] = new ExpressionItemInfo(expression) { Flags = ExpressionFlags.Object };
+					break;
+
+				default:
+					expressionInfo.Items[expression] = new ExpressionItemInfo(expression);
+					break;
+			}
+
+			return true;
 		}
 
 		#endregion

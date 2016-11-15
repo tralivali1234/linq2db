@@ -9,8 +9,8 @@ namespace LinqToDB.Linq.Builder
 	{
 		protected ExpressionBuilderNew(QueryBuilder queryBuilder, Expression expression)
 		{
-			QueryBuilder    = queryBuilder;
-			Expression = expression;
+			QueryBuilder = queryBuilder;
+			Expression   = expression;
 		}
 
 		public QueryBuilder QueryBuilder    { get; set; }

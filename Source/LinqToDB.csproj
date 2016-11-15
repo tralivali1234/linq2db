@@ -178,6 +178,9 @@
     <Compile Include="Linq\Builder\ChangeTypeExpressionBuilder.cs" />
     <Compile Include="Linq\Builder\ContextParser.cs" />
     <Compile Include="Linq\Builder\DropBuilder.cs" />
+    <Compile Include="Linq\Builder\ExpressionItemInfo.cs" />
+    <Compile Include="Linq\Builder\ExpressionInfo.cs" />
+    <Compile Include="Linq\Builder\ExpressionFlags.cs" />
     <Compile Include="Linq\Builder\QueryBuilder.cs" />
     <Compile Include="Linq\Builder\ExpressionBuilderNew.cs" />
     <Compile Include="Linq\Builder\LoadWithBuilder.cs" />

@@ -1,3 +1,4 @@
+﻿DROP PROCEDURE AddIssue792Record;             COMMIT;
 DROP PROCEDURE Person_SelectByKey;            COMMIT;
 DROP PROCEDURE Person_SelectAll;              COMMIT;
 DROP PROCEDURE Person_SelectByName;           COMMIT;
@@ -54,6 +55,30 @@ COMMIT;
 INSERT INTO  Dual (Dummy) VALUES ('X');
 COMMIT;
 
+DROP TABLE InheritanceParent;
+COMMIT;
+
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId INTEGER     NOT NULL PRIMARY KEY,
+	TypeDiscriminator   INTEGER,
+	Name                VARCHAR(50)
+);
+COMMIT;
+
+DROP TABLE InheritanceChild;
+COMMIT;
+
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  INTEGER     NOT NULL PRIMARY KEY,
+	InheritanceParentId INTEGER     NOT NULL,
+	TypeDiscriminator   INTEGER,
+	Name                VARCHAR(50)
+);
+COMMIT;
+
+
 -- Person Table
 
 CREATE TABLE Person
@@ -73,23 +98,28 @@ CREATE TRIGGER CREATE_PersonID FOR Person
 BEFORE INSERT POSITION 0
 AS BEGIN
 	NEW.PersonID = GEN_ID(PersonID, 1);
-END
+END;
 COMMIT;
 
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    'M');
 COMMIT;
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M');
 COMMIT;
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F');
+COMMIT;
+-- INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M');
+INSERT INTO Person (FirstName, LastName, Gender) VALUES (_utf8 x'4AC3BC7267656E', _utf8 x'4BC3B66E6967',     'M');
+COMMIT;
 
 -- Doctor Table Extension
 
 CREATE TABLE Doctor
 (
-	PersonID INTEGER     NOT NULL,
+	PersonID INTEGER     NOT NULL PRIMARY KEY,
 	Taxonomy VARCHAR(50) NOT NULL,
 		CONSTRAINT FK_Doctor_Person FOREIGN KEY (PersonID) REFERENCES Person (PersonID)
 			ON DELETE CASCADE
-)
+);
 COMMIT;
 
 INSERT INTO Doctor (PersonID, Taxonomy) VALUES (1, 'Psychiatry');
@@ -99,7 +129,7 @@ COMMIT;
 
 CREATE TABLE Patient
 (
-	PersonID  int           NOT NULL,
+	PersonID  int           NOT NULL PRIMARY KEY,
 	Diagnosis VARCHAR(256)  NOT NULL,
 	FOREIGN KEY (PersonID) REFERENCES Person (PersonID)
 			ON DELETE CASCADE
@@ -142,7 +172,7 @@ CREATE TABLE DataTypeTest
 	UInt32_         INTEGER,
 	UInt64_         NUMERIC(11),
 	Xml_            CHAR(1000)
-)
+);
 COMMIT;
 
 CREATE GENERATOR DataTypeID;
@@ -152,7 +182,7 @@ CREATE TRIGGER CREATE_DataTypeTest FOR DataTypeTest
 BEFORE INSERT POSITION 0
 AS BEGIN
 	NEW.DataTypeID = GEN_ID(DataTypeID, 1); 
-END
+END;
 COMMIT;
 
 INSERT INTO DataTypeTest
@@ -179,16 +209,16 @@ COMMIT;
 
 
 
-DROP TABLE Parent     COMMIT;
-DROP TABLE Child      COMMIT;
-DROP TABLE GrandChild COMMIT;
+DROP TABLE Parent;     COMMIT;
+DROP TABLE Child;      COMMIT;
+DROP TABLE GrandChild; COMMIT;
 
-CREATE TABLE Parent      (ParentID int, Value1 int)                    COMMIT;
-CREATE TABLE Child       (ParentID int, ChildID int)                   COMMIT;
-CREATE TABLE GrandChild  (ParentID int, ChildID int, GrandChildID int) COMMIT;
+CREATE TABLE Parent      (ParentID int, Value1 int);                    COMMIT;
+CREATE TABLE Child       (ParentID int, ChildID int);                   COMMIT;
+CREATE TABLE GrandChild  (ParentID int, ChildID int, GrandChildID int); COMMIT;
 
 
-DROP TABLE LinqDataTypes COMMIT;
+DROP TABLE LinqDataTypes; COMMIT;
 
 CREATE TABLE LinqDataTypes
 (
@@ -201,37 +231,38 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    blob,
 	SmallIntValue  smallint,
 	IntValue       int,
-	BigIntValue    bigint
-)
+	BigIntValue    bigint,
+	StringValue    VARCHAR(50)
+);
 COMMIT;
 
-DROP GENERATOR SequenceTestSeq COMMIT;
+DROP GENERATOR SequenceTestSeq; COMMIT;
 
-CREATE GENERATOR SequenceTestSeq
+CREATE GENERATOR SequenceTestSeq;
 COMMIT;
 
-DROP TABLE SequenceTest COMMIT;
+DROP TABLE SequenceTest; COMMIT;
 
 CREATE TABLE SequenceTest
 (
 	ID     int         NOT NULL PRIMARY KEY,
 	Value_ VARCHAR(50) NOT NULL
-)
+);
 COMMIT;
 
 
-DROP TRIGGER CREATE_ID
+DROP TRIGGER CREATE_ID;
 COMMIT;
 
-DROP GENERATOR TestIdentityID
+DROP GENERATOR TestIdentityID;
 COMMIT;
 
-DROP TABLE TestIdentity
+DROP TABLE TestIdentity;
 COMMIT;
 
 CREATE TABLE TestIdentity (
 	ID INTEGER NOT NULL PRIMARY KEY
-)
+);
 COMMIT;
 
 CREATE GENERATOR TestIdentityID;
@@ -241,18 +272,18 @@ CREATE TRIGGER CREATE_ID FOR TestIdentity
 BEFORE INSERT POSITION 0
 AS BEGIN
 	NEW.ID = GEN_ID(TestIdentityID, 1);
-END
+END;
 COMMIT;
 
 
 
-DROP TRIGGER AllTypes_ID
+DROP TRIGGER AllTypes_ID;
 COMMIT;
 
-DROP GENERATOR AllTypesID
+DROP GENERATOR AllTypesID;
 COMMIT;
 
-DROP TABLE AllTypes
+DROP TABLE AllTypes;
 COMMIT;
 
 CREATE TABLE AllTypes
@@ -269,13 +300,24 @@ CREATE TABLE AllTypes
 	timestampDataType        timestamp,
 
 	charDataType             char(1),
+	char20DataType           char(20),
 	varcharDataType          varchar(20),
 	textDataType             blob sub_type TEXT,
 	ncharDataType            char(20) character set UNICODE_FSS,
 	nvarcharDataType         varchar(20) character set UNICODE_FSS,
 
 	blobDataType             blob
-)
+);
+COMMIT;
+
+CREATE GENERATOR AllTypesID;
+COMMIT;
+
+CREATE TRIGGER AllTypes_ID FOR AllTypes
+BEFORE INSERT POSITION 0
+AS BEGIN
+	NEW.ID = GEN_ID(AllTypesID, 1);
+END;
 COMMIT;
 
 INSERT INTO AllTypes
@@ -297,9 +339,10 @@ VALUES
 	NULL,
 	NULL,
 	NULL,
+	NULL,
 
 	NULL
-)
+);
 COMMIT;
 
 INSERT INTO AllTypes
@@ -317,30 +360,20 @@ VALUES
 	Cast('2012-12-12 12:12:12' as timestamp),
 
 	'1',
+	'1',
 	'234',
 	'567',
 	'23233',
 	'3323',
 
 	'12345'
-)
-COMMIT;
-
-
-CREATE GENERATOR AllTypesID;
-COMMIT;
-
-CREATE TRIGGER AllTypes_ID FOR AllTypes
-BEFORE INSERT POSITION 0
-AS BEGIN
-	NEW.ID = GEN_ID(AllTypesID, 1);
-END
+);
 COMMIT;
 
 
 CREATE VIEW PersonView
 AS
-	SELECT * FROM Person
+	SELECT * FROM Person;
 COMMIT;
 
 
@@ -365,7 +398,7 @@ BEGIN
 		:MiddleName,
 		:Gender;
 	SUSPEND;
-END
+END;
 COMMIT;
 
 -- Person_SelectAll
@@ -389,7 +422,7 @@ BEGIN
 			:MiddleName,
 			:Gender
 	DO SUSPEND;
-END
+END;
 COMMIT;
 
 -- Person_SelectByName
@@ -419,7 +452,7 @@ BEGIN
 		:MiddleName,
 		:Gender 
 	DO SUSPEND;
-END
+END;
 COMMIT;
 
 -- Person_Insert
@@ -442,7 +475,7 @@ BEGIN
 	SELECT MAX(PersonID) FROM person
 		INTO :PersonID;
 	SUSPEND;
-END
+END;
 COMMIT;
 
 -- Person_Insert_OutputParameter
@@ -465,7 +498,7 @@ BEGIN
 	SELECT max(PersonID) FROM person
 	INTO :PersonID;
 	SUSPEND;
-END
+END;
 COMMIT;
 
 -- Person_Update
@@ -488,7 +521,7 @@ BEGIN
 		Gender     = :Gender
 	WHERE
 		PersonID = :PersonID;
-END
+END;
 COMMIT;
 
 -- Person_Delete
@@ -499,7 +532,7 @@ CREATE PROCEDURE Person_Delete(
 AS
 BEGIN
 	DELETE FROM Person WHERE PersonID = :PersonID;
-END
+END;
 COMMIT;
 
 -- Patient_SelectAll
@@ -535,7 +568,7 @@ BEGIN
 			:Gender,
 			:Diagnosis
 	DO SUSPEND;
-END
+END;
 COMMIT;
 
 -- Patient_SelectByName
@@ -569,7 +602,7 @@ BEGIN
 			:Gender,
 			:Diagnosis
 	DO SUSPEND;
-END
+END;
 COMMIT;
 
 
@@ -602,7 +635,7 @@ BEGIN
 	outputStr      = str;
 	inputOutputStr = str || in_inputOutputStr;
 	SUSPEND;
-END
+END;
 COMMIT;
 
 -- OutRefEnumTest
@@ -620,7 +653,7 @@ BEGIN
 	outputStr      = str;
 	inputOutputStr = str || in_inputOutputStr;
 	SUSPEND;
-END
+END;
 COMMIT;
 
 -- ExecuteScalarTest
@@ -635,7 +668,7 @@ BEGIN
 	intField = 12345;
 	stringField = '54321';
 	SUSPEND;
-END
+END;
 COMMIT;
 
 CREATE PROCEDURE Scalar_OutputParameter
@@ -648,7 +681,7 @@ BEGIN
 	outputInt = 12345;
 	outputString = '54321';
 	SUSPEND;
-END
+END;
 COMMIT;
 
 /*
@@ -661,10 +694,10 @@ AS
 BEGIN
 	Return_Value = 12345;
 	SUSPEND;
-END
+END;
 COMMIT;
 
-DROP TABLE "CamelCaseName"
+DROP TABLE "CamelCaseName";
 COMMIT;
 
 CREATE TABLE "CamelCaseName"
@@ -675,5 +708,73 @@ CREATE TABLE "CamelCaseName"
 	"NAME3"  VARCHAR(20),
 	"_NAME4" VARCHAR(20),
 	"NAME 5" VARCHAR(20)
-)
+);
+COMMIT;
+
+
+DROP TABLE TestMerge1;                            COMMIT;
+DROP TABLE TestMerge2;                            COMMIT;
+
+CREATE TABLE TestMerge1
+(
+	Id     INTEGER     NOT NULL PRIMARY KEY,
+	Field1 INTEGER,
+	Field2 INTEGER,
+	Field3 INTEGER,
+	Field4 INTEGER,
+	Field5 INTEGER,
+
+	FieldInt64      BIGINT,
+	FieldBoolean    CHAR(1),
+	FieldString     VARCHAR(20),
+	FieldNString    VARCHAR(20) CHARACTER SET UNICODE_FSS,
+	FieldChar       CHAR(1),
+	FieldNChar      CHAR(1) CHARACTER SET UNICODE_FSS,
+	FieldFloat      FLOAT,
+	FieldDouble     DOUBLE PRECISION,
+	FieldDateTime   TIMESTAMP,
+	FieldBinary     BLOB(20),
+	FieldGuid       CHAR(38),
+	FieldDecimal    DECIMAL(18, 10),
+	FieldDate       DATE,
+	FieldTime       TIMESTAMP,
+	FieldEnumString VARCHAR(20),
+	FieldEnumNumber INT
+);
+COMMIT;
+
+CREATE TABLE TestMerge2
+(
+	Id     INTEGER     NOT NULL PRIMARY KEY,
+	Field1 INTEGER,
+	Field2 INTEGER,
+	Field3 INTEGER,
+	Field4 INTEGER,
+	Field5 INTEGER,
+
+	FieldInt64      BIGINT,
+	FieldBoolean    CHAR(1),
+	FieldString     VARCHAR(20),
+	FieldNString    VARCHAR(20) CHARACTER SET UNICODE_FSS,
+	FieldChar       CHAR(1),
+	FieldNChar      CHAR(1) CHARACTER SET UNICODE_FSS,
+	FieldFloat      FLOAT,
+	FieldDouble     DOUBLE PRECISION,
+	FieldDateTime   TIMESTAMP,
+	FieldBinary     BLOB(20),
+	FieldGuid       CHAR(38),
+	FieldDecimal    DECIMAL(18, 10),
+	FieldDate       DATE,
+	FieldTime       TIMESTAMP,
+	FieldEnumString VARCHAR(20),
+	FieldEnumNumber INT
+);
+COMMIT;
+
+CREATE PROCEDURE AddIssue792Record
+AS
+BEGIN
+	INSERT INTO AllTypes(char20DataType) VALUES('issue792');
+	SUSPEND;
+END;
 COMMIT;

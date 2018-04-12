@@ -17,7 +17,7 @@ namespace Tests.Linq
 	[TestFixture]
 	public class CommonTests : TestBase
 	{
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2014)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void CheckNullTest(string context)
 		{
 			using (var db = GetDataContext(context))
@@ -557,10 +557,8 @@ namespace Tests.Linq
 
 		class User
 		{
-#pragma warning disable 0649
 			public string FirstName;
 			public int?   Status;
-#pragma warning restore 0649
 		}
 
 		// https://github.com/linq2db/linq2db/issues/191

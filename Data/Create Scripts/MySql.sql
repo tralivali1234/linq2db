@@ -1,7 +1,32 @@
-
+﻿
 DROP TABLE IF EXISTS Doctor
 GO
 DROP TABLE IF EXISTS Patient
+GO
+
+DROP TABLE IF EXISTS InheritanceParent
+GO
+CREATE TABLE InheritanceParent
+(
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                varchar(50)      NULL,
+
+	 CONSTRAINT PK_InheritanceParent PRIMARY KEY CLUSTERED (InheritanceParentId)
+)
+GO
+
+DROP TABLE IF EXISTS InheritanceChild
+GO
+CREATE TABLE InheritanceChild
+(
+	InheritanceChildId  int          NOT NULL,
+	InheritanceParentId int          NOT NULL,
+	TypeDiscriminator   int              NULL,
+	Name                varchar(50)      NULL,
+
+	 CONSTRAINT PK_InheritanceChild PRIMARY KEY CLUSTERED (InheritanceChildId)
+)
 GO
 
 -- Person Table
@@ -23,6 +48,13 @@ GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('John',   'Pupkin',    'M')
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 'M')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+GO
+
+CREATE OR REPLACE VIEW PersonView AS SELECT * FROM Person
 GO
 
 -- Doctor Table Extension
@@ -122,7 +154,8 @@ CREATE TABLE LinqDataTypes
 	BinaryValue    varbinary(5000) NULL,
 	SmallIntValue  smallint,
 	IntValue       int             NULL,
-	BigIntValue    bigint          NULL
+	BigIntValue    bigint          NULL,
+	StringValue    varchar(50)     NULL
 )
 GO
 
@@ -169,6 +202,7 @@ CREATE TABLE AllTypes
 	year4DataType       year(4)                      NULL,
 
 	charDataType        char(1)                      NULL,
+	char20DataType      char(20)                     NULL,
 	varcharDataType     varchar(20)                  NULL,
 	textDataType        text                         NULL,
 
@@ -316,4 +350,92 @@ AS
 	SELECT `Person`.`PersonID` AS `ID`
 	FROM `Person`
 	WHERE (`Person`.`Gender` = 'M')
+GO
+
+-- merge test tables
+DROP TABLE IF EXISTS TestMerge1
+GO
+DROP TABLE IF EXISTS TestMerge2
+GO
+CREATE TABLE TestMerge1
+(
+	Id       int          NOT NULL,
+	Field1   int              NULL,
+	Field2   int              NULL,
+	Field3   int              NULL,
+	Field4   int              NULL,
+	Field5   int              NULL,
+
+	FieldInt64      BIGINT            NULL,
+	FieldBoolean    BIT               NULL,
+	FieldString     VARCHAR(20)       NULL,
+	FieldNString    NVARCHAR(20)      NULL,
+	FieldChar       CHAR(1)           NULL,
+	FieldNChar      NCHAR(1)          NULL,
+	FieldFloat      FLOAT             NULL,
+	FieldDouble     DOUBLE            NULL,
+	FieldDateTime   DATETIME          NULL,
+	FieldBinary     VARBINARY(20)     NULL,
+	FieldGuid       CHAR(36)          NULL,
+	FieldDecimal    DECIMAL(24, 10)   NULL,
+	FieldDate       DATE              NULL,
+	FieldTime       TIME              NULL,
+	FieldEnumString VARCHAR(20)       NULL,
+	FieldEnumNumber INT               NULL,
+
+	CONSTRAINT PK_TestMerge1 PRIMARY KEY CLUSTERED (Id)
+)
+GO
+CREATE TABLE TestMerge2
+(
+	Id       int          NOT NULL,
+	Field1   int              NULL,
+	Field2   int              NULL,
+	Field3   int              NULL,
+	Field4   int              NULL,
+	Field5   int              NULL,
+
+	FieldInt64      BIGINT            NULL,
+	FieldBoolean    BIT               NULL,
+	FieldString     VARCHAR(20)       NULL,
+	FieldNString    NVARCHAR(20)      NULL,
+	FieldChar       CHAR(1)           NULL,
+	FieldNChar      NCHAR(1)          NULL,
+	FieldFloat      FLOAT             NULL,
+	FieldDouble     DOUBLE            NULL,
+	FieldDateTime   DATETIME          NULL,
+	FieldBinary     VARBINARY(20)     NULL,
+	FieldGuid       CHAR(36)          NULL,
+	FieldDecimal    DECIMAL(24, 10)   NULL,
+	FieldDate       DATE              NULL,
+	FieldTime       TIME              NULL,
+	FieldEnumString VARCHAR(20)       NULL,
+	FieldEnumNumber INT               NULL,
+
+	CONSTRAINT PK_TestMerge2 PRIMARY KEY CLUSTERED (Id)
+)
+GO
+DROP PROCEDURE IF EXISTS TestProcedure
+GO
+DROP FUNCTION IF EXISTS TestFunction
+GO
+CREATE PROCEDURE TestProcedure(IN param3 INT, INOUT param2 INT, OUT param1 INT)
+BEGIN
+	SELECT COUNT(*) INTO param2 FROM Person p WHERE p.PersonID <> param2;
+	SELECT COUNT(*) INTO param1 FROM Person p WHERE p.PersonID <> param3;
+	SELECT * FROM Person;
+END
+GO
+CREATE FUNCTION TestFunction(param INT)
+RETURNS VARCHAR(10)
+BEGIN
+	RETURN 'done';
+END
+GO
+DROP PROCEDURE IF EXISTS AddIssue792Record
+GO
+CREATE PROCEDURE AddIssue792Record()
+BEGIN
+	INSERT INTO AllTypes(char20DataType) VALUES('issue792');
+END
 GO

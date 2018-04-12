@@ -48,10 +48,8 @@ namespace Tests.Data
 
 		class QueryObject
 		{
-#pragma warning disable 0649
 			public int      Column1;
 			public DateTime Column2;
-#pragma warning restore 0649
 		}
 
 		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
@@ -151,10 +149,8 @@ namespace Tests.Data
 		[ScalarType(false)]
 		struct QueryStruct
 		{
-#pragma warning disable 0649
 			public int      Column1;
 			public DateTime Column2;
-#pragma warning restore 0649
 		}
 
 		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
@@ -198,24 +194,24 @@ namespace Tests.Data
 		{
 			var ms = new MappingSchema();
 
-			ms.SetConvertExpression<TwoValues,DataParameter>(tv => new DataParameter { Value = (long)tv.Value1 << 32 | tv.Value2 });
+			ms.SetConvertExpression<TwoValues,DataParameter>(tv => new DataParameter { Value = (long)tv.Value1 << 16 | tv.Value2 });
 
 			using (var conn = new DataConnection().AddMappingSchema(ms))
 			{
-				var n = conn.Execute<long>("SELECT @p", new { p = new TwoValues { Value1 = 1, Value2 = 2 }});
+				var n = conn.Execute<long>("SELECT @p", new { p = new TwoValues { Value1 = 1, Value2 = 2 } });
 
-				Assert.AreEqual(1L << 32 | 2, n);
+				Assert.AreEqual(1L << 16 | 2, n);
 			}
 		}
 
-		[Test]
-		public void TestDataParameterMapping2()
+		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
+		public void TestDataParameterMapping2(string context)
 		{
 			var ms = new MappingSchema();
 
 			ms.SetConvertExpression<TwoValues,DataParameter>(tv => new DataParameter { Value = (long)tv.Value1 << 32 | tv.Value2 });
 
-			using (var conn = new DataConnection().AddMappingSchema(ms))
+			using (var conn = (DataConnection)GetDataContext(context, ms))
 			{
 				var n = conn.Execute<long?>("SELECT @p", new { p = (TwoValues)null });
 
@@ -223,8 +219,8 @@ namespace Tests.Data
 			}
 		}
 
-		[Test]
-		public void TestDataParameterMapping3()
+		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
+		public void TestDataParameterMapping3(string context)
 		{
 			var ms = new MappingSchema();
 
@@ -236,7 +232,7 @@ namespace Tests.Data
 				},
 				false);
 
-			using (var conn = new DataConnection().AddMappingSchema(ms))
+			using (var conn = (DataConnection)GetDataContext(context, ms))
 			{
 				var n = conn.Execute<long?>("SELECT @p", new { p = (TwoValues)null });
 
@@ -244,7 +240,7 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, IncludeDataContextSourceAttribute("Northwind")]
+		[Test, IncludeDataContextSourceAttribute(TestProvName.Northwind)]
 		public void CacheTest(string context)
 		{
 			using (var dc= new DataConnection(context))

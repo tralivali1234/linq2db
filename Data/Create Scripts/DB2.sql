@@ -1,10 +1,33 @@
-DROP TABLE "Doctor"
+﻿DROP TABLE "Doctor"
 GO
 
 DROP TABLE "Patient"
 GO
 
 DROP TABLE "Person"
+GO
+
+DROP TABLE "InheritanceParent"
+GO
+
+CREATE TABLE "InheritanceParent"
+(
+	"InheritanceParentId" INTEGER       PRIMARY KEY NOT NULL,
+	"TypeDiscriminator"   INTEGER                       NULL,
+	"Name"                VARCHAR(50)                   NULL
+)
+GO
+
+DROP TABLE "InheritanceChild"
+GO
+
+CREATE TABLE "InheritanceChild"
+(
+	"InheritanceChildId"  INTEGER      PRIMARY KEY NOT NULL,
+	"InheritanceParentId" INTEGER                  NOT NULL,
+	"TypeDiscriminator"   INTEGER                      NULL,
+	"Name"                VARCHAR(50)                  NULL
+)
 GO
 
 CREATE TABLE "Person"
@@ -21,15 +44,19 @@ INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('John',   'Pupk
 GO
 INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Tester', 'Testerson', 'M')
 GO
+INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Jane',   'Doe',       'F')
+GO
+INSERT INTO "Person" ("FirstName", "LastName", "Gender") VALUES ('Jürgen', 'König',     'M')
+GO
 
 -- Doctor Table Extension
 
 CREATE TABLE "Doctor"
 (
-	"PersonID" INTEGER     NOT NULL,
+	"PersonID" INTEGER     PRIMARY KEY NOT NULL,
 	"Taxonomy" VARCHAR(50) NOT NULL,
-	FOREIGN KEY "FK_Doctor_Person" ("PersonID")
-	REFERENCES "Person"
+
+	FOREIGN KEY "FK_Doctor_Person" ("PersonID") REFERENCES "Person"
 )
 GO
 
@@ -66,8 +93,10 @@ GO
 
 CREATE TABLE "Patient"
 (
-	"PersonID"  INTEGER      NOT NULL,
-	"Diagnosis" VARCHAR(256) NOT NULL
+	"PersonID"  INTEGER      PRIMARY KEY NOT NULL,
+	"Diagnosis" VARCHAR(256) NOT NULL,
+
+	FOREIGN KEY "FK_Patient_Person" ("PersonID") REFERENCES "Person"
 )
 GO
 
@@ -98,13 +127,14 @@ CREATE TABLE "LinqDataTypes"
 	"ID"             int,
 	"MoneyValue"     decimal(10,4),
 	"DateTimeValue"  timestamp,
-	"DateTimeValue2" timestamp  NULL,
+	"DateTimeValue2" timestamp   NULL,
 	"BoolValue"      smallint,
 	"GuidValue"      char(16) for bit DATA,
-	"BinaryValue"    blob(5000) NULL,
+	"BinaryValue"    blob(5000)  NULL,
 	"SmallIntValue"  smallint,
-	"IntValue"       int        NULL,
-	"BigIntValue"    bigint     NULL
+	"IntValue"       int         NULL,
+	"BigIntValue"    bigint      NULL,
+	"StringValue"    VARCHAR(50) NULL
 )
 GO
 
@@ -133,6 +163,7 @@ CREATE TABLE AllTypes
 	doubleDataType           double                NULL,
 
 	charDataType             char(1)               NULL,
+	char20DataType           char(20)              NULL,
 	varcharDataType          varchar(20)           NULL,
 	clobDataType             clob                  NULL,
 	dbclobDataType           dbclob(100)           NULL,
@@ -221,5 +252,81 @@ BEGIN
 		SELECT * FROM "Person" WHERE "PersonID" = ID;
 
 	OPEN C1;
+END
+GO
+
+DROP TABLE "TestMerge1"
+GO
+DROP TABLE "TestMerge2"
+GO
+
+CREATE TABLE "TestMerge1"
+(
+	"Id"       INTEGER            PRIMARY KEY NOT NULL,
+	"Field1"   INTEGER                            NULL,
+	"Field2"   INTEGER                            NULL,
+	"Field3"   INTEGER                            NULL,
+	"Field4"   INTEGER                            NULL,
+	"Field5"   INTEGER                            NULL,
+
+	"FieldInt64"      BIGINT                      NULL,
+	"FieldBoolean"    SMALLINT                    NULL,
+	"FieldString"     VARCHAR(20)                 NULL,
+	"FieldNString"    NVARCHAR(20)                NULL,
+	"FieldChar"       CHAR(1)                     NULL,
+	"FieldNChar"      NCHAR(1)                    NULL,
+	"FieldFloat"      REAL                        NULL,
+	"FieldDouble"     DOUBLE                      NULL,
+	"FieldDateTime"   TIMESTAMP(3)                NULL,
+	"FieldBinary"     VARCHAR(20)  FOR BIT DATA       ,
+	"FieldGuid"       CHAR(16)     FOR BIT DATA       ,
+	"FieldDecimal"    DECIMAL(24, 10)             NULL,
+	"FieldDate"       DATE                        NULL,
+	"FieldTime"       TIME                        NULL,
+	"FieldEnumString" VARCHAR(20)                 NULL,
+	"FieldEnumNumber" INT                         NULL
+)
+GO
+CREATE TABLE "TestMerge2"
+(
+	"Id"       INTEGER            PRIMARY KEY NOT NULL,
+	"Field1"   INTEGER                            NULL,
+	"Field2"   INTEGER                            NULL,
+	"Field3"   INTEGER                            NULL,
+	"Field4"   INTEGER                            NULL,
+	"Field5"   INTEGER                            NULL,
+
+	"FieldInt64"      BIGINT                      NULL,
+	"FieldBoolean"    SMALLINT                    NULL,
+	"FieldString"     VARCHAR(20)                 NULL,
+	"FieldNString"    NVARCHAR(20)                NULL,
+	"FieldChar"       CHAR(1)                     NULL,
+	"FieldNChar"      NCHAR(1)                    NULL,
+	"FieldFloat"      REAL                        NULL,
+	"FieldDouble"     DOUBLE                      NULL,
+	"FieldDateTime"   TIMESTAMP(3)                NULL,
+	"FieldBinary"     VARCHAR(20)  FOR BIT DATA       ,
+	"FieldGuid"       CHAR(16)     FOR BIT DATA       ,
+	"FieldDecimal"    DECIMAL(24, 10)             NULL,
+	"FieldDate"       DATE                        NULL,
+	"FieldTime"       TIME                        NULL,
+	"FieldEnumString" VARCHAR(20)                 NULL,
+	"FieldEnumNumber" INT                         NULL
+)
+GO
+
+DROP TABLE "KeepIdentityTest"
+GO
+
+CREATE TABLE "KeepIdentityTest" (
+	"ID"    INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY NOT NULL,
+	"Value" INTEGER                                                  NULL
+)
+GO
+
+CREATE OR REPLACE Procedure AddIssue792Record()
+LANGUAGE SQL
+BEGIN
+	INSERT INTO AllTypes(char20DataType) VALUES('issue792');
 END
 GO

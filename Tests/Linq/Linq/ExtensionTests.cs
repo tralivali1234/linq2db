@@ -7,6 +7,7 @@ using NUnit.Framework;
 
 namespace Tests.Linq
 {
+	using LinqToDB.SqlQuery;
 	using Model;
 
 	[TestFixture]
@@ -18,33 +19,33 @@ namespace Tests.Linq
 			public int? Value1;
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void TableName(string context)
 		{
 			using (var db = GetDataContext(context))
 				db.GetTable<ParenTable>().TableName("Parent").ToList();
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void DatabaseName(string context)
 		{
 			using (var db = GetDataContext(context))
-				db.GetTable<Parent>().DatabaseName("TestData").ToList();
+				db.GetTable<Parent>().DatabaseName(TestUtils.GetDatabaseName(db)).ToList();
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008)]
-		public void OwnerName(string context)
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
+		public void SchemaName(string context)
 		{
 			using (var db = GetDataContext(context))
 				db.GetTable<Parent>().SchemaName("dbo").ToList();
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008)]
+		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
 		public void AllNames(string context)
 		{
 			using (var db = GetDataContext(context))
 				db.GetTable<ParenTable>()
-					.DatabaseName("TestData")
+					.DatabaseName(TestUtils.GetDatabaseName(db))
 					.SchemaName("dbo")
 					.TableName("Parent")
 					.ToList();

@@ -13,7 +13,6 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class ConverterInsertTests : TestBase
 	{
-#pragma warning disable 0649
 		[Table]
 		new class Person
 		{
@@ -49,7 +48,6 @@ namespace Tests.UserTests
 			[Column]   public string                    MiddleName;
 			[Column]   public string                    Gender;
 		}
-#pragma warning restore 0649
 
 		[Test, DataContextSource]
 		public void Test(string context)
@@ -79,7 +77,7 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, IncludeDataContextSource(true, ProviderName.SQLite)]
+		[Test, IncludeDataContextSource(true, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
 		public void TestFail(string context)
 		{
 			try

@@ -12,6 +12,7 @@ using System.Xml.Linq;
 using LinqToDB;
 using LinqToDB.Common;
 using LinqToDB.Data;
+using LinqToDB.DataProvider.PostgreSQL;
 using LinqToDB.Mapping;
 
 using NpgsqlTypes;
@@ -21,10 +22,13 @@ using NUnit.Framework.Interfaces;
 using NUnit.Framework.Internal;
 using NUnit.Framework.Internal.Builders;
 
-using Tests.Model;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace Tests.DataProvider
 {
+	using Model;
+
 	[TestFixture]
 	public class PostgreSQLTests : DataProviderTestBase
 	{
@@ -84,10 +88,10 @@ namespace Tests.DataProvider
 				Result = result;
 			}
 
-			public string                                            Name   { get; set; }
-			public int                                               ID     { get; set; }
+			public string                                             Name   { get; set; }
+			public int                                                ID     { get; set; }
 			public Func<string,PostgreSQLTests,DataConnection,object> Func   { get; set; }
-			public object                                            Result { get; set; }
+			public object                                             Result { get; set; }
 		}
 
 		class TestDataTypeAttribute : NUnitAttribute, ITestBuilder, IImplyFixture
@@ -101,7 +105,7 @@ namespace Tests.DataProvider
 
 			public IEnumerable<TestMethod> BuildFrom(IMethodInfo method, Test suite)
 			{
-				var tests = UserProviders.ContainsKey(_providerName) ?
+				var tests = UserProviders.Contains(_providerName) ?
 					new[]
 					{
 						new TypeTestData("bigintDataType", 0,   (n,t,c) => t.TestTypeEx<long?>             (c, n, DataType.Int64),   1000000),
@@ -186,10 +190,10 @@ namespace Tests.DataProvider
 
 					test.Properties.Set(PropertyNames.Category, _providerName);
 
-					if (!UserProviders.ContainsKey(_providerName))
+					if (!UserProviders.Contains(_providerName))
 					{
 						test.RunState = RunState.Ignored;
-						test.Properties.Set(PropertyNames.SkipReason, "Provider is disabled. See UserDataProviders.txt");
+						test.Properties.Set(PropertyNames.SkipReason, "Provider is disabled. See DataProviders.json");
 					}
 
 					yield return test;
@@ -202,7 +206,15 @@ namespace Tests.DataProvider
 		{
 			using (var conn = new DataConnection(context))
 			{
-				Assert.That(data.Func(typeName, this, conn), Is.EqualTo(data.Result));
+				var value = data.Func(typeName, this, conn);
+				if (data.Result is NpgsqlPoint)
+				{
+					Assert.IsTrue(object.Equals(value, data.Result));
+				}
+				else
+				{
+					Assert.AreEqual(value ,data.Result);
+				}
 			}
 		}
 
@@ -308,6 +320,41 @@ namespace Tests.DataProvider
 				Assert.That(conn.Execute<DateTime?>("SELECT Cast('2012-12-12' as date)"),                          Is.EqualTo(dateTime));
 				Assert.That(conn.Execute<DateTime> ("SELECT :p", DataParameter.Date("p", dateTime)),               Is.EqualTo(dateTime));
 				Assert.That(conn.Execute<DateTime?>("SELECT :p", new DataParameter("p", dateTime, DataType.Date)), Is.EqualTo(dateTime));
+			}
+		}
+
+		/// <summary>
+		/// Ensure we can pass data as Json parameter type and get
+		/// same value back out equivalent in value
+		/// </summary>
+		[Test, IncludeDataContextSource(CurrentProvider)]
+		public void TestJson(string context)
+		{
+			using (var conn = new DataConnection(context))
+			{
+				var testJson = "{\"name\":\"bob\", \"age\":10}";
+
+				Assert.That(conn.Execute<string>("SELECT :p", new DataParameter("p", testJson, DataType.Json)), Is.EqualTo(testJson));
+			}
+		}
+
+		/// <summary>
+		/// Ensure we can pass data as binary json and have things handled
+		/// with values coming back as being equivalent in value
+		/// </summary>
+		[Test, IncludeDataContextSource(CurrentProvider)]
+		public void TestJsonb(string context)
+		{
+			var json = new { name = "bob", age = 10 };
+			using (var conn = new DataConnection(context))
+			{
+				//properties come back out in potentially diff order as its being
+				//converted between a binary json format and the string representation
+				var raw = conn.Execute<string>("SELECT :p", new DataParameter("p", JsonConvert.SerializeObject(json), DataType.BinaryJson));
+				var obj = JObject.Parse(raw);
+
+				Assert.That(obj.Value<string>("name"), Is.EqualTo(json.name));
+				Assert.That(obj.Value<int>("age"),     Is.EqualTo(json.age));
 			}
 		}
 
@@ -659,5 +706,52 @@ namespace Tests.DataProvider
 				Assert.That(list[0].cdni_cd_cod_numero_item1, Is.EqualTo("1"));
 			}
 		}
+
+		public class CreateTableTestClass
+		{
+			public DateTimeOffset TimeOffset;
+			public Guid           Guid;
+		}
+
+		[Test, IncludeDataContextSource(CurrentProvider)]
+		public void CreateTableTest(string context)
+		{
+			using (var db = GetDataContext(context))
+			using (new LocalTable<CreateTableTestClass>(db))
+			{
+				var e = new CreateTableTestClass
+				{
+					Guid = Guid.NewGuid(),
+					TimeOffset = new DateTimeOffset(2017, 06, 17, 16, 40, 33, 0, TimeSpan.FromHours(-3))
+				};
+				db.Insert(e);
+
+				var e2 = db.GetTable<CreateTableTestClass>()
+					.FirstOrDefault(_ => _.Guid == e.Guid);
+
+				Assert.IsNotNull(e2);
+				Assert.AreEqual(e.Guid,       e2.Guid);
+				Assert.AreEqual(e.TimeOffset, e2.TimeOffset);
+			}
+		}
+
+#if !NPGSQL226
+		[Test, IncludeDataContextSource(CurrentProvider)]
+		public void NpgsqlDateTimeTest(string context)
+		{
+			PostgreSQLTools.GetDataProvider().CreateConnection(DataConnection.GetConnectionString(context));
+
+			var d  = new NpgsqlDateTime(DateTime.Today);
+			var o  = new DateTimeOffset(DateTime.Today);
+			var c1 = PostgreSQLTools.GetDataProvider().MappingSchema.GetConvertExpression<NpgsqlDateTime, DateTimeOffset>();
+			var c2 = PostgreSQLTools.GetDataProvider().MappingSchema.GetConvertExpression<NpgsqlDateTime, DateTimeOffset?>();
+
+			Assert.IsNotNull(c1);
+			Assert.IsNotNull(c2);
+
+			Assert.AreEqual(o, c1.Compile()(d));
+			Assert.AreEqual(o, c2.Compile()(d).Value);
+		}
+#endif
 	}
 }

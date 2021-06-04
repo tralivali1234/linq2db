@@ -24,22 +24,12 @@ namespace LinqToDB.SqlQuery
 			SearchCondition = new SqlSearchCondition();
 		}
 
-		internal SqlWhereClause(
-			SelectQuery selectQuery,
-			SqlWhereClause clone,
-			Dictionary<ICloneableElement,ICloneableElement> objectTree,
-			Predicate<ICloneableElement> doClone)
-			: base(selectQuery)
-		{
-			SearchCondition = (SqlSearchCondition)clone.SearchCondition.Clone(objectTree, doClone);
-		}
-
 		internal SqlWhereClause(SqlSearchCondition searchCondition) : base(null)
 		{
 			SearchCondition = searchCondition;
 		}
 
-		public SqlSearchCondition SearchCondition { get; private set; }
+		public SqlSearchCondition SearchCondition { get; internal set; }
 
 		public bool IsEmpty => SearchCondition.Conditions.Count == 0;
 
@@ -61,9 +51,9 @@ namespace LinqToDB.SqlQuery
 
 		#region ISqlExpressionWalkable Members
 
-		ISqlExpression ISqlExpressionWalkable.Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> action)
+		ISqlExpression? ISqlExpressionWalkable.Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 		{
-			SearchCondition = (SqlSearchCondition)((ISqlExpressionWalkable)SearchCondition).Walk(skipColumns, action);
+			SearchCondition = (SqlSearchCondition)((ISqlExpressionWalkable)SearchCondition).Walk(options, func)!;
 			return null;
 		}
 

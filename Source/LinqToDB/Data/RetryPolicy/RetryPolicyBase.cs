@@ -8,8 +8,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using JetBrains.Annotations;
-
 namespace LinqToDB.Data.RetryPolicy
 {
 	using Common;
@@ -161,10 +159,13 @@ namespace LinqToDB.Data.RetryPolicy
 		public async Task ExecuteAsync(Func<CancellationToken, Task> operation, CancellationToken cancellationToken = new CancellationToken())
 		{
 			if (Suspended)
-				await operation(cancellationToken);
+			{
+				await operation(cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext);
+				return;
+			}
 
 			OnFirstExecution();
-			await ExecuteImplementationAsync(async ct => { await operation(ct); return 0; }, cancellationToken);
+			await ExecuteImplementationAsync(async ct => { await operation(ct).ConfigureAwait(Configuration.ContinueOnCapturedContext); return 0; }, cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext);
 		}
 
 		async Task<TResult> ExecuteImplementationAsync<TResult>(
@@ -181,7 +182,7 @@ namespace LinqToDB.Data.RetryPolicy
 				try
 				{
 					Suspended = true;
-					var result = await operation(cancellationToken);
+					var result = await operation(cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext);
 					Suspended = false;
 					return result;
 				}
@@ -201,7 +202,7 @@ namespace LinqToDB.Data.RetryPolicy
 					OnRetry();
 				}
 
-				await TaskEx.Delay(delay.Value, cancellationToken);
+				await TaskEx.Delay(delay.Value, cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext);
 			}
 		}
 
@@ -227,7 +228,7 @@ namespace LinqToDB.Data.RetryPolicy
 		///     Returns the delay indicating how long to wait for before the next execution attempt if the operation should be retried;
 		///     <c>null</c> otherwise
 		/// </returns>
-		protected virtual TimeSpan? GetNextDelay([NotNull] Exception lastException)
+		protected virtual TimeSpan? GetNextDelay(Exception lastException)
 		{
 			var currentRetryCount = ExceptionsEncountered.Count - 1;
 
@@ -254,6 +255,6 @@ namespace LinqToDB.Data.RetryPolicy
 		/// <returns>
 		///     <c>true</c> if the specified exception is considered as transient, otherwise <c>false</c>.
 		/// </returns>
-		protected abstract bool ShouldRetryOn([NotNull] Exception exception);
+		protected abstract bool ShouldRetryOn(Exception exception);
 	}
 }

@@ -1,24 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 namespace LinqToDB.DataProvider.SQLite
 {
 	using SqlQuery;
 	using SqlProvider;
+	using Mapping;
 
 	public class SQLiteSqlBuilder : BasicSqlBuilder
 	{
-		public SQLiteSqlBuilder(ISqlOptimizer sqlOptimizer, SqlProviderFlags sqlProviderFlags, ValueToSqlConverter valueToSqlConverter)
-			: base(sqlOptimizer, sqlProviderFlags, valueToSqlConverter)
+		public SQLiteSqlBuilder(
+			MappingSchema    mappingSchema,
+			ISqlOptimizer    sqlOptimizer,
+			SqlProviderFlags sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
 		{
 		}
 
 		public override int CommandCount(SqlStatement statement)
 		{
 			if (statement is SqlTruncateTableStatement trun)
-				return trun.ResetIdentity && trun.Table.Fields.Values.Any(f => f.IsIdentity) ? 2 : 1;
+				return trun.ResetIdentity && trun.Table!.IdentityFields.Count > 0 ? 2 : 1;
 			return statement.NeedsIdentity() ? 2 : 1;
 		}
 
@@ -28,7 +31,7 @@ namespace LinqToDB.DataProvider.SQLite
 			{
 				StringBuilder
 					.Append("UPDATE SQLITE_SEQUENCE SET SEQ=0 WHERE NAME='")
-					.Append(trun.Table.PhysicalName)
+					.Append(trun.Table!.PhysicalName)
 					.AppendLine("'")
 					;
 			}
@@ -40,7 +43,7 @@ namespace LinqToDB.DataProvider.SQLite
 
 		protected override ISqlBuilder CreateSqlBuilder()
 		{
-			return new SQLiteSqlBuilder(SqlOptimizer, SqlProviderFlags, ValueToSqlConverter);
+			return new SQLiteSqlBuilder(MappingSchema, SqlOptimizer, SqlProviderFlags);
 		}
 
 		protected override string LimitFormat(SelectQuery selectQuery)
@@ -53,69 +56,51 @@ namespace LinqToDB.DataProvider.SQLite
 			return "OFFSET {0}";
 		}
 
-		public override bool IsNestedJoinSupported { get { return false; } }
+		public override bool IsNestedJoinSupported => false;
 
-		protected override void BuildFromClause(SqlStatement statement, SelectQuery selectQuery)
-		{
-			if (!statement.IsUpdate())
-				base.BuildFromClause(statement, selectQuery);
-		}
-
-		public override object Convert(object value, ConvertType convertType)
+		public override StringBuilder Convert(StringBuilder sb, string value, ConvertType convertType)
 		{
 			switch (convertType)
 			{
 				case ConvertType.NameToQueryParameter:
 				case ConvertType.NameToCommandParameter:
 				case ConvertType.NameToSprocParameter:
-					return "@" + value;
+					return sb.Append('@').Append(value);
 
 				case ConvertType.NameToQueryField:
 				case ConvertType.NameToQueryFieldAlias:
 				case ConvertType.NameToQueryTableAlias:
-					{
-						var name = value.ToString();
+					if (value.Length > 0 && value[0] == '[')
+						return sb.Append(value);
 
-						if (name.Length > 0 && name[0] == '[')
-							return value;
-					}
-
-					return "[" + value + "]";
+					return sb.Append('[').Append(value).Append(']');
 
 				case ConvertType.NameToDatabase:
 				case ConvertType.NameToSchema:
 				case ConvertType.NameToQueryTable:
-					if (value != null)
-					{
-						var name = value.ToString();
+					if (value.Length > 0 && value[0] == '[')
+						return sb.Append(value);
 
-						if (name.Length > 0 && name[0] == '[')
-							return value;
+					if (value.IndexOf('.') > 0)
+						value = string.Join("].[", value.Split('.'));
 
-						if (name.IndexOf('.') > 0)
-							value = string.Join("].[", name.Split('.'));
-
-						return "[" + value + "]";
-					}
-
-					break;
+					return sb.Append('[').Append(value).Append(']');
 
 				case ConvertType.SprocParameterToName:
-					{
-						var name = (string)value;
-						return name.Length > 0 && name[0] == '@'? name.Substring(1): name;
-					}
+					return value.Length > 0 && value[0] == '@'
+						? sb.Append(value.Substring(1))
+						: sb.Append(value);
 			}
 
-			return value;
+			return sb.Append(value);
 		}
 
-		protected override void BuildDataType(SqlDataType type, bool createDbType)
+		protected override void BuildDataTypeFromDataType(SqlDataType type, bool forCreateTable)
 		{
-			switch (type.DataType)
+			switch (type.Type.DataType)
 			{
-				case DataType.Int32 : StringBuilder.Append("INTEGER");               break;
-				default             : base.BuildDataType(type, createDbType);        break;
+				case DataType.Int32 : StringBuilder.Append("INTEGER");                      break;
+				default             : base.BuildDataTypeFromDataType(type, forCreateTable); break;
 			}
 		}
 
@@ -126,7 +111,7 @@ namespace LinqToDB.DataProvider.SQLite
 
 		protected override void BuildCreateTablePrimaryKey(SqlCreateTableStatement createTable, string pkName, IEnumerable<string> fieldNames)
 		{
-			if (createTable.Table.Fields.Values.Any(f => f.IsIdentity))
+			if (createTable.Table!.IdentityFields.Count > 0)
 			{
 				while (StringBuilder[StringBuilder.Length - 1] != ',')
 					StringBuilder.Length--;
@@ -134,61 +119,70 @@ namespace LinqToDB.DataProvider.SQLite
 			}
 			else
 			{
-			AppendIndent();
+				AppendIndent();
 				StringBuilder.Append("CONSTRAINT ").Append(pkName).Append(" PRIMARY KEY (");
-				StringBuilder.Append(fieldNames.Aggregate((f1,f2) => f1 + ", " + f2));
-				StringBuilder.Append(")");
+			StringBuilder.Append(string.Join(InlineComma, fieldNames));
+				StringBuilder.Append(')');
 			}
 		}
 
-		protected override void BuildPredicate(ISqlPredicate predicate)
-		{
-			var exprExpr = predicate as SqlPredicate.ExprExpr;
-
-			if (exprExpr != null)
-			{
-				var leftType  = exprExpr.Expr1.SystemType;
-				var rightType = exprExpr.Expr2.SystemType;
-
-				if ((IsDateTime(leftType) || IsDateTime(rightType)) &&
-					!(exprExpr.Expr1 is IValueContainer && ((IValueContainer)exprExpr.Expr1).Value == null ||
-					  exprExpr.Expr2 is IValueContainer && ((IValueContainer)exprExpr.Expr2).Value == null))
-				{
-					if (leftType != null && !(exprExpr.Expr1 is SqlFunction && ((SqlFunction)exprExpr.Expr1).Name == "$Convert$"))
-					{
-						var l = new SqlFunction(leftType, "$Convert$", SqlDataType.GetDataType(leftType),
-							SqlDataType.GetDataType(leftType), exprExpr.Expr1);
-						exprExpr.Expr1 = l;
-					}
-
-					if (rightType != null && !(exprExpr.Expr2 is SqlFunction && ((SqlFunction)exprExpr.Expr2).Name == "$Convert$"))
-					{
-						var r = new SqlFunction(rightType, "$Convert$", SqlDataType.GetDataType(rightType),
-							SqlDataType.GetDataType(rightType), exprExpr.Expr2);
-						exprExpr.Expr2 = r;
-					}
-				}
-			}
-
-			base.BuildPredicate(predicate);
-		}
-
-		public override StringBuilder BuildTableName(StringBuilder sb, string database, string schema, string table)
+		public override StringBuilder BuildTableName(StringBuilder sb, string? server, string? database, string? schema, string table, TableOptions tableOptions)
 		{
 			if (database != null && database.Length == 0) database = null;
 
 			if (database != null)
-				sb.Append(database).Append(".");
+				sb.Append(database).Append('.');
 
 			return sb.Append(table);
 		}
 
-		private static bool IsDateTime(Type type)
+		protected override void BuildDropTableStatement(SqlDropTableStatement dropTable)
 		{
-			return    type == typeof(DateTime)
-				   || type == typeof(DateTimeOffset)
-				   || type == typeof(DateTime?)
-				   || type == typeof(DateTimeOffset?);
+			BuildDropTableStatementIfExists(dropTable);
+		}
+
+		protected override void BuildMergeStatement(SqlMergeStatement merge)
+		{
+			throw new LinqToDBException($"{Name} provider doesn't support SQL MERGE statement");
+		}
+
+		protected override void BuildCreateTableCommand(SqlTable table)
+		{
+			string command;
+
+			if (table.TableOptions.IsTemporaryOptionSet())
+			{
+				switch (table.TableOptions & TableOptions.IsTemporaryOptionSet)
+				{
+					case TableOptions.IsTemporary                                                                              :
+					case TableOptions.IsTemporary |                                          TableOptions.IsLocalTemporaryData :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure                                     :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData :
+					case                                                                     TableOptions.IsLocalTemporaryData :
+					case                            TableOptions.IsLocalTemporaryStructure                                     :
+					case                            TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData :
+						command = "CREATE TEMPORARY TABLE ";
+						break;
+					case var value :
+						throw new InvalidOperationException($"Incompatible table options '{value}'");
+				}
+			}
+			else
+			{
+				command = "CREATE TABLE ";
+			}
+
+			StringBuilder.Append(command);
+
+			if (table.TableOptions.HasCreateIfNotExists())
+				StringBuilder.Append("IF NOT EXISTS ");
+		}
+
+		protected override void BuildIsDistinctPredicate(SqlPredicate.IsDistinct expr)
+		{
+			BuildExpression(GetPrecedence(expr), expr.Expr1);
+			StringBuilder.Append(expr.IsNot ? " IS " : " IS NOT ");
+			BuildExpression(GetPrecedence(expr), expr.Expr2);
 		}
 	}
 }

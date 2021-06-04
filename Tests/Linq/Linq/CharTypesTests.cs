@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 using LinqToDB.Mapping;
@@ -12,72 +11,66 @@ namespace Tests.Linq
 	public class CharTypesTests : TestBase
 	{
 		[Table("ALLTYPES", Configuration = ProviderName.DB2)]
-		[Table("alltypes", Configuration = ProviderName.PostgreSQL)]
 		[Table("AllTypes")]
 		public class StringTestTable
 		{
 			[Column("ID")]
-			[Column("id", Configuration = ProviderName.PostgreSQL)]
 			public int Id;
 
 			[Column("char20DataType")]
-			[Column(Configuration = ProviderName.SqlCe,      IsColumn = false)]
-			[Column(Configuration = ProviderName.DB2,        IsColumn = false)]
-			[Column(Configuration = ProviderName.PostgreSQL, IsColumn = false)]
-			[Column(Configuration = ProviderName.MySql,      IsColumn = false)]
-			[Column(Configuration = TestProvName.MySql57,    IsColumn = false)]
-			[Column(Configuration = TestProvName.MariaDB,    IsColumn = false)]
-			public string String;
+			[Column(Configuration = ProviderName.SqlCe,			 IsColumn = false)]
+			[Column(Configuration = ProviderName.DB2,			 IsColumn = false)]
+			[Column(Configuration = ProviderName.PostgreSQL,	 IsColumn = false)]
+			[Column(Configuration = ProviderName.MySql,			 IsColumn = false)]
+			[Column(Configuration = ProviderName.MySqlConnector, IsColumn = false)]
+			[Column(Configuration = TestProvName.MySql55,        IsColumn = false)]
+			[Column(Configuration = TestProvName.MariaDB,        IsColumn = false)]
+			public string? String;
 
 			[Column("ncharDataType")]
 			[Column("nchar20DataType", Configuration = ProviderName.SapHana)]
 			[Column("CHAR20DATATYPE" , Configuration = ProviderName.DB2)]
-			[Column("char20datatype" , Configuration = ProviderName.PostgreSQL)]
+			[Column("char20DataType" , Configuration = ProviderName.PostgreSQL)]
 			[Column("char20DataType" , Configuration = ProviderName.MySql)]
-			[Column("char20DataType" , Configuration = TestProvName.MySql57)]
+			[Column("char20DataType" , Configuration = ProviderName.MySqlConnector)]
+			[Column("char20DataType" , Configuration = TestProvName.MySql55)]
 			[Column("char20DataType" , Configuration = TestProvName.MariaDB)]
 			[Column(                   Configuration = ProviderName.Firebird, IsColumn = false)]
-			public string NString;
-
-			[Column("bitDataType", Configuration = ProviderName.Sybase)]
-			public bool ThisIsSYBASE;
+			public string? NString;
 		}
 
 		[Table("ALLTYPES", Configuration = ProviderName.DB2)]
-		[Table("alltypes", Configuration = ProviderName.PostgreSQL)]
 		[Table("AllTypes")]
 		public class CharTestTable
 		{
 			[Column("ID")]
-			[Column("id", Configuration = ProviderName.PostgreSQL)]
 			public int Id;
 
 			[Column("char20DataType")]
-			[Column(Configuration = ProviderName.SqlCe,      IsColumn = false)]
-			[Column(Configuration = ProviderName.DB2,        IsColumn = false)]
-			[Column(Configuration = ProviderName.PostgreSQL, IsColumn = false)]
-			[Column(Configuration = ProviderName.MySql,      IsColumn = false)]
-			[Column(Configuration = TestProvName.MySql57,    IsColumn = false)]
-			[Column(Configuration = TestProvName.MariaDB,    IsColumn = false)]
+			[Column(Configuration = ProviderName.SqlCe,			 IsColumn = false)]
+			[Column(Configuration = ProviderName.DB2,			 IsColumn = false)]
+			[Column(Configuration = ProviderName.PostgreSQL,	 IsColumn = false)]
+			[Column(Configuration = ProviderName.MySql,			 IsColumn = false)]
+			[Column(Configuration = ProviderName.MySqlConnector, IsColumn = false)]
+			[Column(Configuration = TestProvName.MySql55,		 IsColumn = false)]
+			[Column(Configuration = TestProvName.MariaDB,		 IsColumn = false)]
 			public char? Char;
 
 			[Column("ncharDataType"  , DataType = DataType.NChar)]
 			[Column("nchar20DataType", DataType = DataType.NChar, Configuration = ProviderName.SapHana)]
 			[Column("CHAR20DATATYPE" , DataType = DataType.NChar, Configuration = ProviderName.DB2)]
-			[Column("char20datatype" , DataType = DataType.NChar, Configuration = ProviderName.PostgreSQL)]
+			[Column("char20DataType" , DataType = DataType.NChar, Configuration = ProviderName.PostgreSQL)]
 			[Column("char20DataType" , DataType = DataType.NChar, Configuration = ProviderName.MySql)]
-			[Column("char20DataType" , DataType = DataType.NChar, Configuration = TestProvName.MySql57)]
+			[Column("char20DataType" , DataType = DataType.NChar, Configuration = ProviderName.MySqlConnector)]
+			[Column("char20DataType" , DataType = DataType.NChar, Configuration = TestProvName.MySql55)]
 			[Column("char20DataType" , DataType = DataType.NChar, Configuration = TestProvName.MariaDB)]
 			[Column(                   Configuration = ProviderName.Firebird, IsColumn = false)]
 			public char? NChar;
-
-			[Column("bitDataType", Configuration = ProviderName.Sybase)]
-			public bool ThisIsSYBASE;
 		}
 
 		// most of ending characters here trimmed by default by .net string TrimX methods
 		// unicode test cases not used for String
-		private static StringTestTable[] StringTestData = new[]
+		static readonly StringTestTable[] StringTestData =
 		{
 			new StringTestTable() { String = "test01",      NString = "test01"        },
 			new StringTestTable() { String = "test02  ",    NString = "test02  "      },
@@ -103,9 +96,10 @@ namespace Tests.Linq
 			new StringTestTable()
 		};
 
-		// TODO: MySql57 disabled due to encoding issues on CI
-		[Test, DataContextSource(false, TestProvName.MySql57, ProviderName.Informix)]
-		public void StringTrimming(string context)
+		// need to configure sybase docker image to use utf8 character set
+		[ActiveIssue(Configuration = TestProvName.AllSybase)]
+		[Test]
+		public void StringTrimming([DataSources(TestProvName.AllInformix)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -122,14 +116,8 @@ namespace Tests.Linq
 						if (!SkipChar(context))
 							query = query.Value(_ => _.String, record.String);
 
-						if (   context == ProviderName.Firebird
-							|| context == ProviderName.Firebird + ".LinqService"
-							|| context == TestProvName.Firebird3
-							|| context == TestProvName.Firebird3 + ".LinqService")
+						if (context.Contains("Firebird"))
 							query = db.GetTable<StringTestTable>().Value(_ => _.String, record.String);
-
-						if (context == ProviderName.Sybase || context == ProviderName.Sybase + ".LinqService")
-							query = query.Value(_ => _.ThisIsSYBASE, true);
 
 						query.Insert();
 					}
@@ -141,21 +129,20 @@ namespace Tests.Linq
 					for (var i = 0; i < records.Length; i++)
 					{
 						if (!SkipChar(context))
-							Assert.AreEqual(testData[i].String?.TrimEnd(' '), records[i].String);
+						{
+							if (context.Contains("Sybase"))
+								Assert.AreEqual(testData[i].String?.TrimEnd(' ')?.TrimEnd('\0'), records[i].String);
+							else
+								Assert.AreEqual(testData[i].String?.TrimEnd(' '), records[i].String);
+						}
 
-						if (   context == ProviderName.Sybase
-							|| context == ProviderName.Sybase + ".LinqService")
-							// this kind of replacement is allowed in unicode, but dunno why it is done for sybase
-							Assert.AreEqual(
-								testData[i].NString?.TrimEnd(' ')
-									.Replace('\u2000', '\u2002')
-									.Replace('\u2001', '\u2003'),
-								records[i].NString);
-						else if (context != ProviderName.Firebird
-							  && context != ProviderName.Firebird + ".LinqService"
-							  && context != TestProvName.Firebird3
-							  && context != TestProvName.Firebird3 + ".LinqService")
-							Assert.AreEqual(testData[i].NString?.TrimEnd(' '), records[i].NString);
+						if (!context.Contains("Firebird"))
+						{
+							if (context.Contains("Sybase"))
+								Assert.AreEqual(testData[i].NString?.TrimEnd(' ')?.TrimEnd('\0'), records[i].NString);
+							else
+								Assert.AreEqual(testData[i].NString?.TrimEnd(' '), records[i].NString);
+						}
 					}
 
 				}
@@ -166,68 +153,54 @@ namespace Tests.Linq
 			}
 		}
 
-		private static CharTestTable[] GetCharData(string context)
+		private CharTestTable[] GetCharData([DataSources] string context)
 		{
+			var provider = GetProviderName(context, out var _);
+
 			// filter out null-character test cases for servers/providers without support
-			if (   context == ProviderName.PostgreSQL
-				|| context == ProviderName.PostgreSQL + ".LinqService"
-				|| context == ProviderName.DB2
-				|| context == ProviderName.DB2        + ".LinqService"
-				|| context == ProviderName.SqlCe
-				|| context == ProviderName.SqlCe      + ".LinqService"
-				|| context == ProviderName.SapHana
-				|| context == ProviderName.SapHana    + ".LinqService")
+			if (   context.Contains(ProviderName.PostgreSQL)
+				|| provider == ProviderName.DB2
+				|| provider == ProviderName.SqlCe
+				|| context.Contains(ProviderName.SapHana))
 				return CharTestData.Where(_ => _.NChar != '\0').ToArray();
 
 			// I wonder why
-			if (   context == ProviderName.Firebird
-				|| context == ProviderName.Firebird + ".LinqService"
-				|| context == TestProvName.Firebird3
-				|| context == TestProvName.Firebird3 + ".LinqService")
+			if (context.Contains(ProviderName.Firebird))
 				return CharTestData.Where(_ => _.NChar != '\xA0').ToArray();
 
 			// also strange
-			if (   context == ProviderName.Informix
-				|| context == ProviderName.Informix + ".LinqService")
+			if (context.Contains(TestProvName.AllInformix))
 				return CharTestData.Where(_ => _.NChar != '\0' && (_.NChar ?? 0) < byte.MaxValue).ToArray();
 
 			return CharTestData;
 		}
 
-		private static StringTestTable[] GetStringData(string context)
+		private StringTestTable[] GetStringData([DataSources] string context)
 		{
+			var provider = GetProviderName(context, out var _);
+
 			// filter out null-character test cases for servers/providers without support
-			if (   context == ProviderName.PostgreSQL
-				|| context == ProviderName.PostgreSQL    + ".LinqService"
-				|| context == ProviderName.DB2
-				|| context == ProviderName.DB2           + ".LinqService"
-				|| context == ProviderName.SQLiteClassic
-				|| context == ProviderName.SQLiteClassic + ".LinqService"
-				|| context == ProviderName.SQLiteMS
-				|| context == ProviderName.SQLiteMS      + ".LinqService"
-				|| context == ProviderName.SqlCe
-				|| context == ProviderName.SqlCe         + ".LinqService"
-				|| context == ProviderName.SapHana
-				|| context == ProviderName.SapHana       + ".LinqService")
+			if (context.Contains(ProviderName.PostgreSQL)
+				|| provider == ProviderName.DB2
+				|| context  == ProviderName.DB2           + ".LinqService"
+				|| context.Contains("SQLite")
+				|| provider == ProviderName.SqlCe
+				|| context.Contains(ProviderName.SapHana))
 				return StringTestData.Where(_ => !(_.NString ?? string.Empty).Contains("\0")).ToArray();
 
 			// I wonder why
-			if (   context == ProviderName.Firebird
-				|| context == ProviderName.Firebird  + ".LinqService"
-				|| context == TestProvName.Firebird3
-				|| context == TestProvName.Firebird3 + ".LinqService")
+			if (context.Contains(ProviderName.Firebird))
 				return StringTestData.Where(_ => !(_.NString ?? string.Empty).Contains("\xA0")).ToArray();
 
 			// also strange
-			if (   context == ProviderName.Informix
-				|| context == ProviderName.Informix + ".LinqService")
+			if (context.Contains(TestProvName.AllInformix))
 				return StringTestData.Where(_ => !(_.NString ?? string.Empty).Contains("\0")
 					&& !(_.NString ?? string.Empty).Any(c => (int)c > byte.MaxValue)).ToArray();
 
 			return StringTestData;
 		}
 
-		private static CharTestTable[] CharTestData = new[]
+		static readonly CharTestTable[] CharTestData =
 		{
 			new CharTestTable() { Char = ' ',    NChar = ' '      },
 			new CharTestTable() { Char = '\x09', NChar = '\x09'   },
@@ -252,9 +225,12 @@ namespace Tests.Linq
 			new CharTestTable()
 		};
 
-		// TODO: MySql57 disabled due to encoding issues on CI
-		[Test, DataContextSource(false, TestProvName.MySql57, ProviderName.Informix)]
-		public void CharTrimming(string context)
+		// need to configure sybase docker image to use utf8 character set
+#if AZURE
+		[ActiveIssue(Configuration = TestProvName.AllSybase)]
+#endif
+		[Test]
+		public void CharTrimming([DataSources(TestProvName.AllInformix)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -270,14 +246,8 @@ namespace Tests.Linq
 						if (!SkipChar(context))
 							query = query.Value(_ => _.Char, record.Char);
 
-						if (   context == ProviderName.Firebird
-							|| context == ProviderName.Firebird + ".LinqService"
-							|| context == TestProvName.Firebird3
-							|| context == TestProvName.Firebird3 + ".LinqService")
+						if (context.Contains(ProviderName.Firebird))
 							query = db.GetTable<CharTestTable>().Value(_ => _.Char, record.Char);
-
-						if (context == ProviderName.Sybase || context == ProviderName.Sybase + ".LinqService")
-							query = query.Value(_ => _.ThisIsSYBASE, true);
 
 						query.Insert();
 					}
@@ -288,9 +258,9 @@ namespace Tests.Linq
 
 					for (var i = 0; i < records.Length; i++)
 					{
-						if (context == ProviderName.SapHana || context == ProviderName.SapHana + ".LinqService")
+						if (context.StartsWith(ProviderName.SapHana))
 						{
-							// for some reason, SAP returns \0 for space character
+							// SAP or provider trims space and we return default value, which is \0 for char
 							// or we insert it incorrectly?
 							if (testData[i].Char == ' ')
 								Assert.AreEqual('\0', records[i].Char);
@@ -306,28 +276,30 @@ namespace Tests.Linq
 						}
 
 						if (!SkipChar(context))
-							Assert.AreEqual(testData[i].Char, records[i].Char);
+						{
+							if (context.Contains("Sybase"))
+								Assert.AreEqual(testData[i].Char == '\0' ? ' ' : testData[i].Char, records[i].Char);
+							else
+								Assert.AreEqual(testData[i].Char, records[i].Char);
+						}
 
-						if (   context == ProviderName.Sybase
-							|| context == ProviderName.Sybase + ".LinqService")
-							// this kind of replacement is allowed in unicode, but dunno why it is done for sybase
-							Assert.AreEqual(
-								testData[i].NChar == '\u2000' || testData[i].NChar == '\u2001'
-									? (char)(testData[i].NChar + 2) : testData[i].NChar,
-								records[i].NChar);
-						else if (context == ProviderName.MySql
+						if (context == ProviderName.MySql
 							  || context == ProviderName.MySql + ".LinqService"
-							  || context == TestProvName.MySql57
-							  || context == TestProvName.MySql57 + ".LinqService"
+							  || context == ProviderName.MySqlConnector
+							  || context == ProviderName.MySqlConnector + ".LinqService"
+							  || context == TestProvName.MySql55
+							  || context == TestProvName.MySql55 + ".LinqService"
 							  || context == TestProvName.MariaDB
 							  || context == TestProvName.MariaDB + ".LinqService")
 							// for some reason mysql doesn't insert space
 							Assert.AreEqual(testData[i].NChar == ' ' ? '\0' : testData[i].NChar, records[i].NChar);
-						else if (context != ProviderName.Firebird
-							  && context != ProviderName.Firebird + ".LinqService"
-							  && context != TestProvName.Firebird3
-							  && context != TestProvName.Firebird3 + ".LinqService")
-							Assert.AreEqual(testData[i].NChar, records[i].NChar);
+						else if (!context.Contains(ProviderName.Firebird))
+						{
+							if (context.Contains("Sybase"))
+								Assert.AreEqual(testData[i].NChar == '\0' ? ' ' : testData[i].NChar, records[i].NChar);
+							else
+								Assert.AreEqual(testData[i].NChar, records[i].NChar);
+						}
 					}
 				}
 				finally
@@ -337,18 +309,19 @@ namespace Tests.Linq
 			}
 		}
 
-		private static bool SkipChar(string context)
+		private static bool SkipChar([DataSources] string context)
 		{
 			return context == ProviderName.SqlCe
 				|| context == ProviderName.SqlCe      + ".LinqService"
 				|| context == ProviderName.DB2
 				|| context == ProviderName.DB2        + ".LinqService"
-				|| context == ProviderName.PostgreSQL
-				|| context == ProviderName.PostgreSQL + ".LinqService"
+				|| context.Contains(ProviderName.PostgreSQL)
 				|| context == ProviderName.MySql
-				|| context == ProviderName.MySql      + ".LinqService"
-				|| context == TestProvName.MySql57
-				|| context == TestProvName.MySql57    + ".LinqService"
+				|| context == ProviderName.MySql + ".LinqService"
+				|| context == ProviderName.MySqlConnector
+				|| context == ProviderName.MySqlConnector + ".LinqService"
+				|| context == TestProvName.MySql55
+				|| context == TestProvName.MySql55 + ".LinqService"
 				|| context == TestProvName.MariaDB
 				|| context == TestProvName.MariaDB    + ".LinqService";
 		}

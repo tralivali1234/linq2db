@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,7 +12,7 @@ namespace LinqToDB.Data
 	/// Contains extension methods for <see cref="DataConnection"/> class.
 	/// </summary>
 	[PublicAPI]
-	public static class DataConnectionExtensions
+	public static partial class DataConnectionExtensions
 	{
 		#region SetCommand
 
@@ -69,7 +67,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Database command wrapper.</returns>
-		public static CommandInfo SetCommand(this DataConnection dataConnection, string commandText, object parameters)
+		public static CommandInfo SetCommand(this DataConnection dataConnection, string commandText, object? parameters)
 		{
 			return new CommandInfo(dataConnection, commandText, parameters);
 		}
@@ -97,12 +95,88 @@ namespace LinqToDB.Data
 		/// <typeparam name="T">Result record type.</typeparam>
 		/// <param name="connection">Database connection.</param>
 		/// <param name="objectReader">Record mapping function from data reader.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Returns collection of query result records.</returns>
 		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, params DataParameter[] parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryProc(objectReader);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values, mapped using provided mapping function.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="objectReader">Record mapping function from data reader.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, Func<IDataReader, T> objectReader, string sql, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync(objectReader);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values, mapped using provided mapping function.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="objectReader">Record mapping function from data reader.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, Func<IDataReader, T> objectReader, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync(objectReader, cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values, mapped using provided mapping function.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="objectReader">Record mapping function from data reader.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object? parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProc(objectReader);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values, mapped using provided mapping function.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="objectReader">Record mapping function from data reader.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, Func<IDataReader, T> objectReader, string sql, object? parameters, CancellationToken cancellationToken = default)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync(objectReader, cancellationToken);
 		}
 
 		/// <summary>
@@ -137,7 +211,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns collection of query result records.</returns>
-		public static IEnumerable<T> Query<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object parameters)
+		public static IEnumerable<T> Query<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).Query(objectReader);
 		}
@@ -276,7 +350,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with list of query result records.</returns>
-		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object parameters)
+		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToListAsync(objectReader);
 		}
@@ -300,7 +374,7 @@ namespace LinqToDB.Data
 		/// </param>
 		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
 		/// <returns>Returns task with list of query result records.</returns>
-		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object parameters, CancellationToken cancellationToken)
+		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object? parameters, CancellationToken cancellationToken)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToListAsync(objectReader, cancellationToken);
 		}
@@ -323,7 +397,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with array of query result records.</returns>
-		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object parameters)
+		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToArrayAsync(objectReader);
 		}
@@ -347,7 +421,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with array of query result records.</returns>
-		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, Func<IDataReader,T> objectReader, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToArrayAsync(objectReader, cancellationToken);
 		}
@@ -382,16 +456,525 @@ namespace LinqToDB.Data
 		}
 
 		/// <summary>
+		/// Executes command and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns result.</returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static T QueryMultiple<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryMultiple<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryMultipleAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryMultipleAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryMultipleAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryMultipleAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values of specified type.
 		/// </summary>
 		/// <typeparam name="T">Result record type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Returns collection of query result records.</returns>
 		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryProc<T>();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, string sql, object? parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProc<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, string sql, object? parameters, CancellationToken cancellationToken = default)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryProcMultipleAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultipleAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryProcMultipleAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultipleAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// Sets result values for output and reference parameters to corresponding parameters in <paramref name="parameters"/>.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryProcMultipleAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultipleAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command asynchronously using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>
+		///     A task that represents the asynchronous operation.
+		///     The task result contains object with multiply result sets.
+		/// </returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static Task<T> QueryProcMultipleAsync<T>(this DataConnection connection, string sql, object? parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultipleAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// Sets result values for output and reference parameters to corresponding parameters in <paramref name="parameters"/>.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns result.</returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static T QueryProcMultiple<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultiple<T>();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns a result containing multiple result sets.
+		/// </summary>
+		/// <typeparam name="T">Result set type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Returns result.</returns>
+		/// <example>
+		/// Example of <typeparamref name="T"/> definition with <see cref="Mapping.ResultSetIndexAttribute"/>.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   [ResultSetIndex(0)] public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   [ResultSetIndex(1)] public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   [ResultSetIndex(2)] public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   [ResultSetIndex(3)] public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// Example of <typeparamref name="T"/> definition without attributes.
+		/// <code>
+		/// class MultipleResult
+		/// {
+		///	   public IEnumerable&lt;Person&gt;  AllPersons   { get; set; }
+		///	   public IList&lt;Doctor&gt;        AllDoctors   { get; set; }
+		///	   public IEnumerable&lt;Patient&gt; AllPatients  { get; set; }
+		///	   public Patient              FirstPatient { get; set; }
+		/// }
+		/// </code>
+		/// </example>
+		/// <remarks>
+		///		- type <typeparamref name="T"/> should have default constructor.<para/>
+		///		- if at least one property or field has <see cref="Mapping.ResultSetIndexAttribute"/>,
+		///		then properties that are not marked with <see cref="Mapping.ResultSetIndexAttribute"/> will be ignored.<para/>
+		///		- if there is missing index in properties that are marked with <see cref="Mapping.ResultSetIndexAttribute"/>, then result set under missing index will be ignored.<para/>
+		///		- if there is no <see cref="Mapping.ResultSetIndexAttribute"/>, then all non readonly fields or properties with setter will read from multiple result set. Order is based on their appearance in class.
+		/// </remarks>
+		public static T QueryProcMultiple<T>(this DataConnection connection, string sql, object? parameters)
+			where T : class
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcMultiple<T>();
 		}
 
 		/// <summary>
@@ -424,7 +1007,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns collection of query result records.</returns>
-		public static IEnumerable<T> Query<T>(this DataConnection connection, string sql, object parameters)
+		public static IEnumerable<T> Query<T>(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).Query<T>();
 		}
@@ -608,7 +1191,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with list of query result records.</returns>
-		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, string sql, object parameters)
+		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToListAsync<T>();
 		}
@@ -631,7 +1214,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with list of query result records.</returns>
-		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToListAsync<T>(cancellationToken);
 		}
@@ -653,7 +1236,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with array of query result records.</returns>
-		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, string sql, object parameters)
+		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToArrayAsync<T>();
 		}
@@ -676,7 +1259,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with array of query result records.</returns>
-		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToArrayAsync<T>(cancellationToken);
 		}
@@ -684,6 +1267,7 @@ namespace LinqToDB.Data
 		#endregion
 
 		#region Query with template
+
 		/// <summary>
 		/// Executes command and returns results as collection of values of specified type.
 		/// </summary>
@@ -716,9 +1300,99 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns collection of query result records.</returns>
-		public static IEnumerable<T> Query<T>(this DataConnection connection, T template, string sql, object parameters)
+		public static IEnumerable<T> Query<T>(this DataConnection connection, T template, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).Query(template);
+		}
+
+		/// <summary>
+		/// Executes stored procedure and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="template">This value used only for <typeparamref name="T"/> parameter type inference, which makes this method usable with anonymous types.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, T template, string sql, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProc(template);
+		}
+
+		/// <summary>
+		/// Executes stored procedure asynchronously and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="template">This value used only for <typeparamref name="T"/> parameter type inference, which makes this method usable with anonymous types.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, T template, string sql, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync(template);
+		}
+
+		/// <summary>
+		/// Executes stored procedure asynchronously and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="template">This value used only for <typeparamref name="T"/> parameter type inference, which makes this method usable with anonymous types.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, T template, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync(template, cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes stored procedure and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="template">This value used only for <typeparamref name="T"/> parameter type inference, which makes this method usable with anonymous types.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static IEnumerable<T> QueryProc<T>(this DataConnection connection, T template, string sql, object? parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProc(template);
+		}
+
+		/// <summary>
+		/// Executes stored procedure asynchronously and returns results as collection of values of specified type.
+		/// </summary>
+		/// <typeparam name="T">Result record type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="template">This value used only for <typeparamref name="T"/> parameter type inference, which makes this method usable with anonymous types.</param>
+		/// <param name="sql">Command text.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Returns collection of query result records.</returns>
+		public static Task<IEnumerable<T>> QueryProcAsync<T>(this DataConnection connection, T template, string sql, object? parameters, CancellationToken cancellationToken = default)
+		{
+			return new CommandInfo(connection, sql, parameters).QueryProcAsync(template, cancellationToken);
 		}
 
 		#endregion
@@ -801,7 +1475,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with list of query result records.</returns>
-		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, T template, string sql, object parameters)
+		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, T template, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToListAsync<T>();
 		}
@@ -825,7 +1499,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with list of query result records.</returns>
-		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, T template, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<List<T>> QueryToListAsync<T>(this DataConnection connection, T template, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToListAsync<T>(cancellationToken);
 		}
@@ -848,7 +1522,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with array of query result records.</returns>
-		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, T template, string sql, object parameters)
+		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, T template, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToArrayAsync<T>();
 		}
@@ -872,7 +1546,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Returns task with array of query result records.</returns>
-		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, T template, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<T[]> QueryToArrayAsync<T>(this DataConnection connection, T template, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).QueryToArrayAsync<T>(cancellationToken);
 		}
@@ -906,12 +1580,34 @@ namespace LinqToDB.Data
 
 		/// <summary>
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns number of affected records.
+		/// Sets result values for output and reference parameters to corresponding parameters in <paramref name="parameters"/>.
 		/// </summary>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Number of records, affected by command execution.</returns>
 		public static int ExecuteProc(this DataConnection connection, string sql, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).ExecuteProc();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns number of affected records.
+		/// </summary>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Number of records, affected by command execution.</returns>
+		public static int ExecuteProc(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteProc();
 		}
@@ -932,7 +1628,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Number of records, affected by command execution.</returns>
-		public static int Execute(this DataConnection connection, string sql, object parameters)
+		public static int Execute(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).Execute();
 		}
@@ -1001,7 +1697,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Task with number of records, affected by command execution.</returns>
-		public static Task<int> ExecuteAsync(this DataConnection connection, string sql, object parameters)
+		public static Task<int> ExecuteAsync(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteAsync();
 		}
@@ -1023,16 +1719,17 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Task with number of records, affected by command execution.</returns>
-		public static Task<int> ExecuteAsync(this DataConnection connection, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<int> ExecuteAsync(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteAsync(cancellationToken);
 		}
 
 		/// <summary>
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns number of affected records.
+		/// Sets result values for output and reference parameters to corresponding parameters in <paramref name="parameters"/>.
 		/// </summary>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Task with number of records, affected by command execution.</returns>
 		public static Task<int> ExecuteProcAsync(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1044,11 +1741,54 @@ namespace LinqToDB.Data
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns number of affected records.
 		/// </summary>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Task with number of records, affected by command execution.</returns>
+		public static Task<int> ExecuteProcAsync(this DataConnection connection, string sql, object? parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).ExecuteProcAsync();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns number of affected records.
+		/// </summary>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Task with number of records, affected by command execution.</returns>
 		public static Task<int> ExecuteProcAsync(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).ExecuteProcAsync(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns number of affected records.
+		/// </summary>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Task with number of records, affected by command execution.</returns>
+		public static Task<int> ExecuteProcAsync(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteProcAsync(cancellationToken);
 		}
@@ -1112,17 +1852,18 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Resulting value.</returns>
-		public static T Execute<T>(this DataConnection connection, string sql, object parameters)
+		public static T Execute<T>(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).Execute<T>();
 		}
 
 		/// <summary>
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns single value.
+		/// Sets result values for output and reference parameters to corresponding parameters in <paramref name="parameters"/>.
 		/// </summary>
 		/// <typeparam name="T">Resulting value type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Resulting value.</returns>
 		public static T ExecuteProc<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1130,6 +1871,27 @@ namespace LinqToDB.Data
 			return new CommandInfo(connection, sql, parameters).ExecuteProc<T>();
 		}
 
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type and returns single value.
+		/// </summary>
+		/// <typeparam name="T">Resulting value type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Resulting value.</returns>
+		public static T ExecuteProc<T>(this DataConnection connection, string sql, object? parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).ExecuteProc<T>();
+		}
 		#endregion
 
 		#region Execute scalar async
@@ -1230,7 +1992,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Task with resulting value.</returns>
-		public static Task<T> ExecuteAsync<T>(this DataConnection connection, string sql, object parameters)
+		public static Task<T> ExecuteAsync<T>(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteAsync<T>();
 		}
@@ -1253,17 +2015,18 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Task with resulting value.</returns>
-		public static Task<T> ExecuteAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object parameters)
+		public static Task<T> ExecuteAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteAsync<T>(cancellationToken);
 		}
 
 		/// <summary>
 		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns single value.
+		/// Sets result values for output and reference parameters to corresponding parameters in <paramref name="parameters"/>.
 		/// </summary>
 		/// <typeparam name="T">Resulting value type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Task with resulting value.</returns>
 		public static Task<T> ExecuteProcAsync<T>(this DataConnection connection, string sql, params DataParameter[] parameters)
@@ -1276,11 +2039,56 @@ namespace LinqToDB.Data
 		/// </summary>
 		/// <typeparam name="T">Resulting value type.</typeparam>
 		/// <param name="connection">Database connection.</param>
-		/// <param name="sql">Command text.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Task with resulting value.</returns>
+		public static Task<T> ExecuteProcAsync<T>(this DataConnection connection, string sql, object? parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).ExecuteProcAsync<T>();
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns single value.
+		/// </summary>
+		/// <typeparam name="T">Resulting value type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
 		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
 		/// <param name="parameters">Command parameters.</param>
 		/// <returns>Resulting value.</returns>
 		public static Task<T> ExecuteProcAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, params DataParameter[] parameters)
+		{
+			return new CommandInfo(connection, sql, parameters).ExecuteProcAsync<T>(cancellationToken);
+		}
+
+		/// <summary>
+		/// Executes command using <see cref="CommandType.StoredProcedure"/> command type asynchronously and returns single value.
+		/// </summary>
+		/// <typeparam name="T">Resulting value type.</typeparam>
+		/// <param name="connection">Database connection.</param>
+		/// <param name="sql">Command text. This is caller's responsibility to properly escape procedure name.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <param name="parameters">Command parameters. Supported values:
+		/// <para> - <c>null</c> for command without parameters;</para>
+		/// <para> - single <see cref="DataParameter"/> instance;</para>
+		/// <para> - array of <see cref="DataParameter"/> parameters;</para>
+		/// <para> - mapping class entity.</para>
+		/// <para>Last case will convert all mapped columns to <see cref="DataParameter"/> instances using following logic:</para>
+		/// <para> - if column is of <see cref="DataParameter"/> type, column value will be used. If parameter name (<see cref="DataParameter.Name"/>) is not set, column name will be used;</para>
+		/// <para> - if converter from column type to <see cref="DataParameter"/> is defined in mapping schema, it will be used to create parameter with colum name passed to converter;</para>
+		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
+		/// </param>
+		/// <returns>Resulting value.</returns>
+		public static Task<T> ExecuteProcAsync<T>(this DataConnection connection, string sql, CancellationToken cancellationToken, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteProcAsync<T>(cancellationToken);
 		}
@@ -1340,7 +2148,7 @@ namespace LinqToDB.Data
 		/// <para> - otherwise column value will be converted to <see cref="DataParameter"/> using column name as parameter name and column value will be converted to parameter value using conversion, defined by mapping schema.</para>
 		/// </param>
 		/// <returns>Data reader object.</returns>
-		public static DataReader ExecuteReader(this DataConnection connection, string sql, object parameters)
+		public static DataReader ExecuteReader(this DataConnection connection, string sql, object? parameters)
 		{
 			return new CommandInfo(connection, sql, parameters).ExecuteReader();
 		}
@@ -1380,10 +2188,11 @@ namespace LinqToDB.Data
 		/// <param name="options">Operation options.</param>
 		/// <param name="source">Records to insert.</param>
 		/// <returns>Bulk insert operation status.</returns>
-		public static BulkCopyRowsCopied BulkCopy<T>([NotNull] this DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+		public static BulkCopyRowsCopied BulkCopy<T>(this DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+			where T : class
 		{
 			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
-			return dataConnection.DataProvider.BulkCopy(dataConnection, options, source);
+			return dataConnection.DataProvider.BulkCopy(dataConnection.GetTable<T>(), options, source);
 		}
 
 		/// <summary>
@@ -1394,12 +2203,13 @@ namespace LinqToDB.Data
 		/// <param name="maxBatchSize">Number of rows in each batch. At the end of each batch, the rows in the batch are sent to the server. </param>
 		/// <param name="source">Records to insert.</param>
 		/// <returns>Bulk insert operation status.</returns>
-		public static BulkCopyRowsCopied BulkCopy<T>([NotNull] this DataConnection dataConnection, int maxBatchSize, IEnumerable<T> source)
+		public static BulkCopyRowsCopied BulkCopy<T>(this DataConnection dataConnection, int maxBatchSize, IEnumerable<T> source)
+			where T : class
 		{
 			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
 
 			return dataConnection.DataProvider.BulkCopy(
-				dataConnection,
+				dataConnection.GetTable<T>(),
 				new BulkCopyOptions { MaxBatchSize = maxBatchSize },
 				source);
 		}
@@ -1411,40 +2221,35 @@ namespace LinqToDB.Data
 		/// <param name="dataConnection">Database connection.</param>
 		/// <param name="source">Records to insert.</param>
 		/// <returns>Bulk insert operation status.</returns>
-		public static BulkCopyRowsCopied BulkCopy<T>([NotNull] this DataConnection dataConnection, IEnumerable<T> source)
+		public static BulkCopyRowsCopied BulkCopy<T>(this DataConnection dataConnection, IEnumerable<T> source)
+			where T : class
 		{
 			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
 
 			return dataConnection.DataProvider.BulkCopy(
-				dataConnection,
+				dataConnection.GetTable<T>(),
 				new BulkCopyOptions(),
 				source);
 		}
 
 		/// <summary>
-		/// Performs bulk intert operation into table specified in <paramref name="options"/> parameter or into table, identified by <paramref name="table"/>.
+		/// Performs bulk insert operation into table specified in <paramref name="options"/> parameter or into table, identified by <paramref name="table"/>.
 		/// </summary>
 		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
 		/// <param name="table">Target table.</param>
 		/// <param name="options">Operation options.</param>
 		/// <param name="source">Records to insert.</param>
 		/// <returns>Bulk insert operation status.</returns>
-		public static BulkCopyRowsCopied BulkCopy<T>([NotNull] this ITable<T> table, BulkCopyOptions options, IEnumerable<T> source)
+		public static BulkCopyRowsCopied BulkCopy<T>(this ITable<T> table, BulkCopyOptions options, IEnumerable<T> source)
+			where T : notnull
 		{
 			if (table == null) throw new ArgumentNullException(nameof(table));
 
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			if (options.TableName    == null) options.TableName    = table.TableName;
-			if (options.DatabaseName == null) options.DatabaseName = table.DatabaseName;
-			if (options.SchemaName   == null) options.SchemaName   = table.SchemaName;
-
-			return dataConnection.DataProvider.BulkCopy(dataConnection, options, source);
+			return table.GetDataProvider().BulkCopy(table, options, source);
 		}
 
 		/// <summary>
-		/// Performs bulk intert operation into table, identified by <paramref name="table"/>.
+		/// Performs bulk insert operation into table, identified by <paramref name="table"/>.
 		/// </summary>
 		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
 		/// <param name="table">Target table.</param>
@@ -1452,567 +2257,269 @@ namespace LinqToDB.Data
 		/// <param name="source">Records to insert.</param>
 		/// <returns>Bulk insert operation status.</returns>
 		public static BulkCopyRowsCopied BulkCopy<T>(this ITable<T> table, int maxBatchSize, IEnumerable<T> source)
+			where T : notnull
 		{
 			if (table == null) throw new ArgumentNullException(nameof(table));
 
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.BulkCopy(
-				dataConnection,
-				new BulkCopyOptions
-				{
-					MaxBatchSize = maxBatchSize,
-					TableName    = table.TableName,
-					DatabaseName = table.DatabaseName,
-					SchemaName   = table.SchemaName,
-				},
-				source);
+			return table.GetDataProvider().BulkCopy(table, new BulkCopyOptions { MaxBatchSize = maxBatchSize, }, source);
 		}
 
 		/// <summary>
-		/// Performs bulk intert operation into table, identified by <paramref name="table"/>.
+		/// Performs bulk insert operation into table, identified by <paramref name="table"/>.
 		/// </summary>
 		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
 		/// <param name="table">Target table.</param>
 		/// <param name="source">Records to insert.</param>
 		/// <returns>Bulk insert operation status.</returns>
 		public static BulkCopyRowsCopied BulkCopy<T>(this ITable<T> table, IEnumerable<T> source)
+			where T : notnull
 		{
 			if (table == null) throw new ArgumentNullException(nameof(table));
 
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
+			return table.GetDataProvider().BulkCopy(table, new BulkCopyOptions(), source);
+		}
 
-			return dataConnection.DataProvider.BulkCopy(
-				dataConnection,
-				new BulkCopyOptions
-				{
-					TableName    = table.TableName,
-					DatabaseName = table.DatabaseName,
-					SchemaName   = table.SchemaName,
-				},
-				source);
+		
+
+		#endregion
+
+		#region BulkCopy IEnumerable async
+
+		/// <summary>
+		/// Asynchronously performs bulk insert operation.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="dataConnection">Database connection.</param>
+		/// <param name="options">Operation options.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source, CancellationToken cancellationToken = default)
+			where T : class
+		{
+			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			if (source         == null) throw new ArgumentNullException(nameof(source));
+
+			return dataConnection.DataProvider.BulkCopyAsync(dataConnection.GetTable<T>(), options, source, cancellationToken);
+		}
+
+		/// <summary>
+		/// Asynchronously performs bulk insert operation.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="dataConnection">Database connection.</param>
+		/// <param name="maxBatchSize">Number of rows in each batch. At the end of each batch, the rows in the batch are sent to the server. </param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this DataConnection dataConnection, int maxBatchSize, IEnumerable<T> source, CancellationToken cancellationToken = default)
+			where T : class
+		{
+			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			if (source         == null) throw new ArgumentNullException(nameof(source));
+
+			return dataConnection.DataProvider.BulkCopyAsync(
+				dataConnection.GetTable<T>(),
+				new BulkCopyOptions { MaxBatchSize = maxBatchSize },
+				source, 
+				cancellationToken);
+		}
+
+		/// <summary>
+		/// Asynchronously performs bulk insert operation.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="dataConnection">Database connection.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this DataConnection dataConnection, IEnumerable<T> source, CancellationToken cancellationToken = default)
+			where T : class
+		{
+			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			if (source         == null) throw new ArgumentNullException(nameof(source));
+
+			return dataConnection.DataProvider.BulkCopyAsync(
+				dataConnection.GetTable<T>(),
+				new BulkCopyOptions(),
+				source, 
+				cancellationToken);
+		}
+
+		/// <summary>
+		/// Asynchronously performs bulk insert operation into table specified in <paramref name="options"/> parameter or into table, identified by <paramref name="table"/>.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="table">Target table.</param>
+		/// <param name="options">Operation options.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this ITable<T> table, BulkCopyOptions options, IEnumerable<T> source, CancellationToken cancellationToken = default)
+			where T : notnull
+		{
+			if (table  == null) throw new ArgumentNullException(nameof(table));
+			if (source == null) throw new ArgumentNullException(nameof(source));
+
+			return table.GetDataProvider().BulkCopyAsync(table, options, source, cancellationToken);
+		}
+
+		/// <summary>
+		/// Asynchronously performs bulk insert operation into table, identified by <paramref name="table"/>.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="table">Target table.</param>
+		/// <param name="maxBatchSize">Number of rows in each batch. At the end of each batch, the rows in the batch are sent to the server. </param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this ITable<T> table, int maxBatchSize, IEnumerable<T> source, CancellationToken cancellationToken = default)
+			where T : notnull
+		{
+			if (table  == null) throw new ArgumentNullException(nameof(table));
+			if (source == null) throw new ArgumentNullException(nameof(source));
+
+			return table.GetDataProvider().BulkCopyAsync(table, new BulkCopyOptions { MaxBatchSize = maxBatchSize, }, source, cancellationToken);
+		}
+
+		/// <summary>
+		/// Asynchronously performs bulk insert operation into table, identified by <paramref name="table"/>.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="table">Target table.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this ITable<T> table, IEnumerable<T> source, CancellationToken cancellationToken = default)
+			where T : notnull
+		{
+			if (table  == null) throw new ArgumentNullException(nameof(table));
+			if (source == null) throw new ArgumentNullException(nameof(source));
+
+			return table.GetDataProvider().BulkCopyAsync(table, new BulkCopyOptions(), source, cancellationToken);
 		}
 
 		#endregion
 
-		#region Merge
+		#region BulkCopy IAsyncEnumerable async
+#if NATIVE_ASYNC
 
 		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
+		/// Asynchronously performs bulk insert operation.
 		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="source">Source data to merge into target table. All source data will be loaded from server for command generation.</param>
-		/// <param name="predicate">Filter, applied both to source and delete operation. Required.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this DataConnection      dataConnection,
-			IQueryable<T>            source,
-			Expression<Func<T,bool>> predicate,
-			string                   tableName    = null,
-			string                   databaseName = null,
-			string                   schemaName   = null
-		)
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="dataConnection">Database connection.</param>
+		/// <param name="options">Operation options.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this DataConnection dataConnection, BulkCopyOptions options, IAsyncEnumerable<T> source, CancellationToken cancellationToken = default)
 			where T : class
 		{
-			return dataConnection.DataProvider.Merge(dataConnection, predicate, true, source.Where(predicate), tableName, databaseName, schemaName);
+			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			if (source         == null) throw new ArgumentNullException(nameof(source));
+
+			return dataConnection.DataProvider.BulkCopyAsync(dataConnection.GetTable<T>(), options, source, cancellationToken);
 		}
 
 		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
+		/// Asynchronously performs bulk insert operation.
 		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="predicate">Filter, applied to delete operation. Optional.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this DataConnection      dataConnection,
-			Expression<Func<T,bool>> predicate,
-			IEnumerable<T>           source,
-			string                   tableName    = null,
-			string                   databaseName = null,
-			string                   schemaName   = null
-		)
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="dataConnection">Database connection.</param>
+		/// <param name="maxBatchSize">Number of rows in each batch. At the end of each batch, the rows in the batch are sent to the server. </param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this DataConnection dataConnection, int maxBatchSize, IAsyncEnumerable<T> source, CancellationToken cancellationToken = default)
 			where T : class
 		{
-			return dataConnection.DataProvider.Merge(dataConnection, predicate, true, source, tableName, databaseName, schemaName);
-		}
+			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			if (source         == null) throw new ArgumentNullException(nameof(source));
 
-		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source (optional).
-		/// If delete operation enabled by <paramref name="delete"/> parameter - method could be used only for with Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="delete">If true, merge command will include delete by source operation without condition.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this DataConnection dataConnection,
-			bool                delete,
-			IEnumerable<T>      source,
-			string              tableName    = null,
-			string              databaseName = null,
-			string              schemaName   = null
-		)
-			where T : class
-		{
-			return dataConnection.DataProvider.Merge(dataConnection, null, delete, source, tableName, databaseName, schemaName);
-		}
-
-		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this DataConnection dataConnection,
-			IEnumerable<T>      source,
-			string              tableName    = null,
-			string              databaseName = null,
-			string              schemaName   = null
-		)
-			where T : class
-		{
-			return dataConnection.DataProvider.Merge(dataConnection, null, false, source, tableName, databaseName, schemaName);
-		}
-
-		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="table">Target table.</param>
-		/// <param name="source">Source data to merge into target table. All source data will be loaded from server for command generation.</param>
-		/// <param name="predicate">Filter, applied both to source and delete operation. Required.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this ITable<T>           table,
-			IQueryable<T>            source,
-			Expression<Func<T,bool>> predicate,
-			string                   tableName    = null,
-			string                   databaseName = null,
-			string                   schemaName   = null
-		)
-			where T : class
-		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
-
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.Merge(dataConnection, predicate, true, source.Where(predicate),
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName);
-		}
-
-		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="table">Target table.</param>
-		/// <param name="predicate">Filter, applied to delete operation. Optional.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this ITable<T>           table,
-			Expression<Func<T,bool>> predicate,
-			IEnumerable<T>           source,
-			string                   tableName    = null,
-			string                   databaseName = null,
-			string                   schemaName   = null
-		)
-			where T : class
-		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
-
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.Merge(dataConnection, predicate, true, source,
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName);
-		}
-
-		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source (optional).
-		/// If delete operation enabled by <paramref name="delete"/> parameter - method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="table">Target table.</param>
-		/// <param name="delete">If true, merge command will include delete by source operation without condition.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this ITable<T> table,
-			bool           delete,
-			IEnumerable<T> source,
-			string         tableName    = null,
-			string         databaseName = null,
-			string         schemaName   = null
-		)
-			where T : class
-		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
-
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.Merge(dataConnection, null, delete, source,
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName);
-		}
-
-		/// <summary>
-		/// Executes following merge operations in specified order:
-		/// - Update
-		/// - Insert.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="table">Target table.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <returns>Returns number of affected target records.</returns>
-		public static int Merge<T>(
-			this ITable<T> table,
-			IEnumerable<T> source,
-			string         tableName    = null,
-			string         databaseName = null,
-			string         schemaName   = null
-		)
-			where T : class
-		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
-
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.Merge(dataConnection, null, false, source,
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName);
-		}
-
-		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="source">Source data to merge into target table. All source data will be loaded from server for command generation.</param>
-		/// <param name="predicate">Filter, applied both to source and delete operation. Required.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this DataConnection      dataConnection,
-			IQueryable<T>            source,
-			Expression<Func<T,bool>> predicate,
-			string                   tableName         = null,
-			string                   databaseName      = null,
-			string                   schemaName        = null,
-			CancellationToken        cancellationToken = default)
-			where T : class
-		{
-			return dataConnection.DataProvider.MergeAsync(
-				dataConnection, predicate, true, source.Where(predicate), tableName, databaseName, schemaName, cancellationToken);
-		}
-
-		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="predicate">Filter, applied to delete operation. Optional.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this DataConnection      dataConnection,
-			Expression<Func<T,bool>> predicate,
-			IEnumerable<T>           source,
-			string                   tableName         = null,
-			string                   databaseName      = null,
-			string                   schemaName        = null,
-			CancellationToken        cancellationToken = default)
-			where T : class
-		{
-			return dataConnection.DataProvider.MergeAsync(dataConnection, predicate, true, source, tableName, databaseName, schemaName, cancellationToken);
-		}
-
-		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source (optional).
-		/// If delete operation enabled by <paramref name="delete"/> parameter - method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="delete">If true, merge command will include delete by source operation without condition.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this DataConnection dataConnection,
-			bool                delete,
-			IEnumerable<T>      source,
-			string              tableName         = null,
-			string              databaseName      = null,
-			string              schemaName        = null,
-			CancellationToken   cancellationToken = default
-		)
-			where T : class
-		{
-			return dataConnection.DataProvider.MergeAsync(dataConnection, null, delete, source, tableName, databaseName, schemaName, cancellationToken);
-		}
-
-		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="dataConnection">Data connection instance.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this DataConnection dataConnection,
-			IEnumerable<T>      source,
-			string              tableName         = null,
-			string              databaseName      = null,
-			string              schemaName        = null,
-			CancellationToken   cancellationToken = default
-		)
-			where T : class
-		{
-			return dataConnection.DataProvider.MergeAsync(dataConnection, null, false, source, tableName, databaseName, schemaName, cancellationToken);
-		}
-
-		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
-		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="table">Target table.</param>
-		/// <param name="source">Source data to merge into target table. All source data will be loaded from server for command generation.</param>
-		/// <param name="predicate">Filter, applied both to source and delete operation. Required.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this ITable<T>           table,
-			IQueryable<T>            source,
-			Expression<Func<T,bool>> predicate,
-			string                   tableName         = null,
-			string                   databaseName      = null,
-			string                   schemaName        = null,
-			CancellationToken        cancellationToken = default
-		)
-			where T : class
-		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
-
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.MergeAsync(dataConnection, predicate, true, source.Where(predicate),
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName,
+			return dataConnection.DataProvider.BulkCopyAsync(
+				dataConnection.GetTable<T>(),
+				new BulkCopyOptions { MaxBatchSize = maxBatchSize },
+				source,
 				cancellationToken);
 		}
 
 		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source.
-		/// Method could be used only with SQL Server.
+		/// Asynchronously performs bulk insert operation.
 		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
-		/// <param name="table">Target table.</param>
-		/// <param name="predicate">Filter, applied to delete operation. Optional.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this ITable<T>           table,
-			Expression<Func<T,bool>> predicate,
-			IEnumerable<T>           source,
-			string                   tableName         = null,
-			string                   databaseName      = null,
-			string                   schemaName        = null,
-			CancellationToken        cancellationToken = default
-		)
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="dataConnection">Database connection.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this DataConnection dataConnection, IAsyncEnumerable<T> source, CancellationToken cancellationToken = default)
 			where T : class
 		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
+			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			if (source         == null) throw new ArgumentNullException(nameof(source));
 
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.MergeAsync(dataConnection, predicate, true, source,
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName,
+			return dataConnection.DataProvider.BulkCopyAsync(
+				dataConnection.GetTable<T>(),
+				new BulkCopyOptions(),
+				source,
 				cancellationToken);
 		}
 
 		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert
-		/// - Delete By Source (optional).
-		/// If delete operation enabled by <paramref name="delete"/> parameter - method could be used only with SQL Server.
+		/// Asynchronously performs bulk insert operation into table specified in <paramref name="options"/> parameter or into table, identified by <paramref name="table"/>.
 		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
 		/// <param name="table">Target table.</param>
-		/// <param name="delete">If true, merge command will include delete by source operation without condition.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this ITable<T>    table,
-			bool              delete,
-			IEnumerable<T>    source,
-			string            tableName         = null,
-			string            databaseName      = null,
-			string            schemaName        = null,
-			CancellationToken cancellationToken = default
-		)
-			where T : class
+		/// <param name="options">Operation options.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this ITable<T> table, BulkCopyOptions options, IAsyncEnumerable<T> source, CancellationToken cancellationToken = default)
+		where T: notnull
 		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
+			if (table  == null) throw new ArgumentNullException(nameof(table));
+			if (source == null) throw new ArgumentNullException(nameof(source));
 
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.MergeAsync(dataConnection, null, delete, source,
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName,
-				cancellationToken);
+			return table.GetDataProvider().BulkCopyAsync(table, options, source, cancellationToken);
 		}
 
 		/// <summary>
-		/// Executes following merge operations asynchronously in specified order:
-		/// - Update
-		/// - Insert.
+		/// Asynchronously performs bulk insert operation into table, identified by <paramref name="table"/>.
 		/// </summary>
-		/// <typeparam name="T">Target table mapping class.</typeparam>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
 		/// <param name="table">Target table.</param>
-		/// <param name="source">Source data to merge into target table.</param>
-		/// <param name="tableName">Optional target table name.</param>
-		/// <param name="databaseName">Optional target table's database name.</param>
-		/// <param name="schemaName">Optional target table's schema name.</param>
-		/// <param name="cancellationToken">Optional asynchronous operation cancellation token.</param>
-		/// <returns>Task with number of affected target records.</returns>
-		public static Task<int> MergeAsync<T>(
-			this ITable<T>    table,
-			IEnumerable<T>    source,
-			string            tableName         = null,
-			string            databaseName      = null,
-			string            schemaName        = null,
-			CancellationToken cancellationToken = default)
-			where T : class
+		/// <param name="maxBatchSize">Number of rows in each batch. At the end of each batch, the rows in the batch are sent to the server. </param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this ITable<T> table, int maxBatchSize, IAsyncEnumerable<T> source, CancellationToken cancellationToken = default)
+		where T: notnull
 		{
-			if (table == null) throw new ArgumentNullException(nameof(table));
+			if (table  == null) throw new ArgumentNullException(nameof(table));
+			if (source == null) throw new ArgumentNullException(nameof(source));
 
-			if (!(table.DataContext is DataConnection dataConnection))
-				throw new ArgumentException("DataContext must be of DataConnection type.");
-
-			return dataConnection.DataProvider.MergeAsync(dataConnection, null, false, source,
-				tableName    ?? table.TableName,
-				databaseName ?? table.DatabaseName,
-				schemaName   ?? table.SchemaName,
-				cancellationToken);
+			return table.GetDataProvider().BulkCopyAsync(table, new BulkCopyOptions { MaxBatchSize = maxBatchSize, }, source, cancellationToken);
 		}
 
+		/// <summary>
+		/// Asynchronously performs bulk insert operation into table, identified by <paramref name="table"/>.
+		/// </summary>
+		/// <typeparam name="T">Mapping type of inserted record.</typeparam>
+		/// <param name="table">Target table.</param>
+		/// <param name="source">Records to insert.</param>
+		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
+		/// <returns>Task with bulk insert operation status.</returns>
+		public static Task<BulkCopyRowsCopied> BulkCopyAsync<T>(this ITable<T> table, IAsyncEnumerable<T> source, CancellationToken cancellationToken = default)
+		where T: notnull
+		{
+			if (table  == null) throw new ArgumentNullException(nameof(table));
+			if (source == null) throw new ArgumentNullException(nameof(source));
+
+			return table.GetDataProvider().BulkCopyAsync(table, new BulkCopyOptions(), source, cancellationToken);
+		}
+
+#endif
 		#endregion
+
 	}
 }

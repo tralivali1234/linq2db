@@ -1,11 +1,43 @@
-using System;
+﻿using System;
 
 using JetBrains.Annotations;
 
 namespace LinqToDB.Common
 {
+	using System.Data;
+	using System.Linq.Expressions;
+	using System.Threading.Tasks;
 	using Data;
 	using Data.RetryPolicy;
+	using LinqToDB.Linq;
+
+	/// <summary>
+	/// Contains LINQ expression compilation options.
+	/// </summary>
+	public static class Compilation
+	{
+		private static Func<LambdaExpression, Delegate?>? _compiler;
+
+		/// <summary>
+		/// Sets LINQ expression compilation method.
+		/// </summary>
+		/// <param name="compiler">Method to use for expression compilation or <c>null</c> to reset compilation logic to defaults.</param>
+		public static void SetExpressionCompiler(Func<LambdaExpression, Delegate?>? compiler)
+		{
+			_compiler = compiler;
+		}
+
+		internal static TDelegate CompileExpression<TDelegate>(this Expression<TDelegate> expression)
+			where TDelegate : Delegate
+		{
+			return ((TDelegate?)_compiler?.Invoke(expression)) ?? expression.Compile();
+		}
+
+		internal static Delegate CompileExpression(this LambdaExpression expression)
+		{
+			return _compiler?.Invoke(expression) ?? expression.Compile();
+		}
+	}
 
 	/// <summary>
 	/// Contains global linq2db settings.
@@ -27,15 +59,58 @@ namespace LinqToDB.Common
 		public static bool UseEnumValueNameForStringColumns = true;
 
 		/// <summary>
-		/// If <c>true</c> - data providers will try to use standard ADO.NET interfaces instead of provider-specific functionality when possible. This option could be usefull if you need to intercept
-		/// database calls using tools such as <a href="https://github.com/MiniProfiler/dotnet">MiniProfiler</a>.
+		/// Defines value to pass to <see cref="Task.ConfigureAwait(bool)"/> method for all linq2db internal await operations.
+		/// Default value: <c>true</c>.
+		/// </summary>
+		public static bool ContinueOnCapturedContext = true;
+
+		/// <summary>
+		/// Enables mapping expression to be compatible with <see cref="CommandBehavior.SequentialAccess"/> behavior.
+		/// Note that it doesn't switch linq2db to use <see cref="CommandBehavior.SequentialAccess"/> behavior for
+		/// queries, so this optimization could be used for <see cref="CommandBehavior.Default"/> too.
 		/// Default value: <c>false</c>.
 		/// </summary>
-		public static bool AvoidSpecificDataProviderAPI;
+		public static bool OptimizeForSequentialAccess;
+		
+		/// <summary>
+		/// Determines the length after which logging of binary data in SQL will be truncated.
+		/// This is to avoid Out-Of-Memory exceptions when getting SqlText from <see cref="TraceInfo"/>
+		/// or <see cref="IExpressionQuery"/> for logging or other purposes.
+		/// </summary>
+		/// <remarks>
+		/// This value defaults to 100.
+		/// Use a value of -1 to disable and always log full binary.
+		/// Set to 0 to truncate all binary data.
+		/// </remarks>
+		public static int MaxBinaryParameterLengthLogging { get; set; } = 100;
+
+		/// <summary>
+		/// Determines the length after which logging of string data in SQL will be truncated.
+		/// This is to avoid Out-Of-Memory exceptions when getting SqlText from <see cref="TraceInfo"/>
+		/// or <see cref="IExpressionQuery"/> for logging or other purposes.
+		/// </summary>
+		/// <remarks>
+		/// This value defaults to 200.
+		/// Use a value of -1 to disable and always log full string.
+		/// Set to 0 to truncate all string data.
+		/// </remarks>
+		public static int MaxStringParameterLengthLogging { get; set; } = 200;
 
 		public static class Data
 		{
+			/// <summary>
+			/// Enables throwing of <see cref="ObjectDisposedException"/> when access disposed <see cref="DataConnection"/> instance.
+			/// Default value: <c>true</c>.
+			/// </summary>
 			public static bool ThrowOnDisposed = true;
+
+			/// <summary>
+			/// Controls behavior of bulk copy timeout if <see cref="BulkCopyOptions.BulkCopyTimeout"/> is not provided.
+			/// - if <c>true</c> - the current timeout on the <see cref="DataConnection"/> is used
+			/// - if <c>false</c> - command timeout is infinite.
+			/// Default value: <c>false</c>.
+			/// </summary>
+			public static bool BulkCopyUseConnectionCommandTimeout;
 		}
 
 		/// <summary>
@@ -55,7 +130,7 @@ namespace LinqToDB.Common
 			/// <summary>
 			/// Controls behavior of linq2db when there is no updateable fields in Update query:
 			/// - if <c>true</c> - query not executed and Update operation returns 0 as number of affected records;
-			/// - if <c>false</c> - <see cref="LinqToDB.Linq.LinqException"/> will be thrown.
+			/// - if <c>false</c> - <see cref="LinqException"/> will be thrown.
 			/// Default value: <c>false</c>.
 			/// </summary>
 			public static bool IgnoreEmptyUpdate;
@@ -63,15 +138,16 @@ namespace LinqToDB.Common
 			/// <summary>
 			/// Controls behavior of linq2db when multiple queries required to load requested data:
 			/// - if <c>true</c> - multiple queries allowed;
-			/// - if <c>false</c> - <see cref="LinqToDB.Linq.LinqException"/> will be thrown.
-			/// This option required, if you want to select related collections, e.g. using <see cref="LinqExtensions.LoadWith{T}(ITable{T}, System.Linq.Expressions.Expression{Func{T, object}})"/> method.
+			/// - if <c>false</c> - <see cref="LinqException"/> will be thrown.
+			/// This option required, if you want to select related collections, e.g. using <see cref="LinqExtensions.LoadWith{TEntity,TProperty}(System.Linq.IQueryable{TEntity},System.Linq.Expressions.Expression{System.Func{TEntity,TProperty}})"/> method.
 			/// Default value: <c>false</c>.
 			/// </summary>
+			[Obsolete("AllowMultipleQuery flag has no effect and will be removed in future.")]
 			public static bool AllowMultipleQuery;
 
 			/// <summary>
 			/// Enables generation of test class for each LINQ query, executed while this option is enabled.
-			/// This option could be usefull for issue reporting, when you need to provide reproduceable case.
+			/// This option could be useful for issue reporting, when you need to provide reproducible case.
 			/// Test file will be placed to <c>linq2db</c> subfolder of temp folder and exact file path will be logged
 			/// to data connection tracing infrastructure.
 			/// See <see cref="DataConnection.TraceSwitch"/> for more details.
@@ -89,7 +165,7 @@ namespace LinqToDB.Common
 			/// <summary>
 			/// Controls behavior, when LINQ query chain contains multiple <see cref="System.Linq.Queryable.OrderBy{TSource, TKey}(System.Linq.IQueryable{TSource}, System.Linq.Expressions.Expression{Func{TSource, TKey}})"/> or <see cref="System.Linq.Queryable.OrderByDescending{TSource, TKey}(System.Linq.IQueryable{TSource}, System.Linq.Expressions.Expression{Func{TSource, TKey}})"/> calls:
 			/// - if <c>true</c> - non-first OrderBy* call will be treated as ThenBy* call;
-			/// - if <c>false</c> - OrdredBy* call will discard sort specifications, added by previous OrderBy* and ThenBy* calls.
+			/// - if <c>false</c> - OrderBy* call will discard sort specifications, added by previous OrderBy* and ThenBy* calls.
 			/// Default value: <c>false</c>.
 			/// </summary>
 			public static bool DoNotClearOrderBys;
@@ -105,7 +181,7 @@ namespace LinqToDB.Common
 			public static bool OptimizeJoins = true;
 
 			/// <summary>
-			/// If set to true nullable fields would be checked for IS NULL in Equal/NotEqual comparasions.
+			/// If set to true nullable fields would be checked for IS NULL in Equal/NotEqual comparisons.
 			/// This affects: Equal, NotEqual, Not Contains
 			/// Default value: <c>true</c>.
 			/// </summary>
@@ -143,21 +219,12 @@ namespace LinqToDB.Common
 			/// Controls behavior of LINQ query, which ends with GroupBy call.
 			/// - if <c>true</c> - <seealso cref="LinqToDBException"/> will be thrown for such queries;
 			/// - if <c>false</c> - behavior is controlled by <see cref="PreloadGroups"/> option.
-			/// Default value: <c>false</c>.
+			/// Default value: <c>true</c>.
 			/// </summary>
 			/// <remarks>
 			/// <a href="https://github.com/linq2db/linq2db/issues/365">More details</a>.
 			/// </remarks>
-			public static bool GuardGrouping;
-
-#pragma warning disable 1574
-			/// <summary>
-			/// Used to optimize huge logical operations with large number of operands like expr1.and.axpr2...and.exprN into balanced tree.
-			/// Without this option, such conditions could lead to <seealso cref="StackOverflowException"/>.
-			/// Default value: <c>false</c>.
-			/// </summary>
-			public static bool UseBinaryAggregateExpression;
-#pragma warning restore 1574
+			public static bool GuardGrouping = true;
 
 			/// <summary>
 			/// Used to disable LINQ expressions caching for queries.
@@ -170,16 +237,51 @@ namespace LinqToDB.Common
 			/// Default value: <c>false</c>.
 			/// <para />
 			/// It is not recommended to enable this option as it could lead to severe slowdown. Better approach will be
-			/// to call <see cref="LinqToDB.Linq.Query{T}.ClearCache"/> method to cleanup cache after queries, that produce severe memory leaks you need to fix.
+			/// to call <see cref="Query{T}.ClearCache"/> method to cleanup cache after queries, that produce severe memory leaks you need to fix.
 			/// <para />
 			/// <a href="https://github.com/linq2db/linq2db/issues/256">More details</a>.
 			/// </summary>
 			public static bool DisableQueryCache;
 
 			/// <summary>
-			/// Used to generate CROSS APPLY or OUTER APPLY if possible.
+			/// Specifies timeout when query will be evicted from cache since last execution of query.
+			/// Default value is 1 hour.
 			/// </summary>
-			public static bool PrefereApply = true;
+			public static TimeSpan CacheSlidingExpiration = TimeSpan.FromHours(1);
+
+			/// <summary>
+			/// Used to generate CROSS APPLY or OUTER APPLY if possible.
+			/// Default value: <c>true</c>.
+			/// </summary>
+			public static bool PreferApply = true;
+
+			/// <summary>
+			/// Allows SQL generation to automatically transform
+			/// <code>SELECT DISTINCT value FROM Table ORDER BY date</code>
+			/// Into GROUP BY equivalent if syntax is not supported
+			/// Default value: <c>true</c>.
+			/// </summary>
+			public static bool KeepDistinctOrdered = true;
+
+			/// <summary>
+			/// Enables Take/Skip parameterization.
+			/// Default value: <c>true</c>.
+			/// </summary>
+			public static bool ParameterizeTakeSkip = true;
+		}
+
+		/// <summary>
+		/// SqlServer specific global settings.
+		/// </summary>
+		[PublicAPI]
+		public static class SqlServer
+		{
+			/// <summary>
+			/// if set to <c>true</c>, SchemaProvider uses <see cref="CommandBehavior.SchemaOnly"/> to get metadata.
+			/// Otherwise the sp_describe_first_result_set sproc is used.
+			/// Default value: <c>false</c>.
+			/// </summary>
+			public static bool UseSchemaOnlyToGetSchema;
 		}
 
 		/// <summary>
@@ -189,7 +291,7 @@ namespace LinqToDB.Common
 		public static class LinqService
 		{
 			/// <summary>
-			/// Controls format of type name, sent over WCF:
+			/// Controls format of type name, sent over remote context:
 			/// - if <c>true</c> - name from <see cref="Type.AssemblyQualifiedName"/> used;
 			/// - if <c>false</c> - name from <see cref="Type.FullName"/> used.
 			/// Default value: <c>false</c>.
@@ -216,7 +318,7 @@ namespace LinqToDB.Common
 			/// If factory method is not set, retry policy is not used.
 			/// Not set by default.
 			/// </summary>
-			public static Func<DataConnection,IRetryPolicy> Factory;
+			public static Func<DataConnection,IRetryPolicy?>? Factory;
 
 			/// <summary>
 			/// Status of use of default retry policy.
@@ -225,8 +327,8 @@ namespace LinqToDB.Common
 			/// </summary>
 			public static bool UseDefaultPolicy
 			{
-				get { return Factory == DefaultRetryPolicyFactory.GetRetryPolicy; }
-				set { Factory = value ? DefaultRetryPolicyFactory.GetRetryPolicy : (Func<DataConnection,IRetryPolicy>)null; }
+				get => Factory == DefaultRetryPolicyFactory.GetRetryPolicy;
+				set => Factory = value ? DefaultRetryPolicyFactory.GetRetryPolicy : (Func<DataConnection,IRetryPolicy?>?)null;
 			}
 
 			/// <summary>
@@ -258,6 +360,77 @@ namespace LinqToDB.Common
 			/// Default value: 1 second.
 			/// </summary>
 			public static TimeSpan DefaultCoefficient = TimeSpan.FromSeconds(1);
+		}
+
+		/// <summary>
+		/// SQL generation global settings.
+		/// </summary>
+		[PublicAPI]
+		public static class Sql
+		{
+			/// <summary>
+			/// Format for association alias.
+			/// <para>
+			/// Default value: <c>"a_{0}"</c>.
+			/// </para>
+			/// <example>
+			/// In the following query
+			/// <code>
+			/// var query = from child in db.Child
+			///    select new
+			///    {
+			///       child.ChildID,
+			///       child.Parent.Value1
+			///    };
+			/// </code>
+			/// for association <c>Parent</c> will be generated association <c>A_Parent</c> in resulting SQL.
+			/// <code>
+			/// SELECT
+			///	   [child].[ChildID],
+			///	   [a_Parent].[Value1]
+			/// FROM
+			///	   [Child] [child]
+			///       LEFT JOIN [Parent] [a_Parent] ON ([child].[ParentID] = [a_Parent].[ParentID])
+			/// </code>
+			/// </example>
+			/// <remarks>
+			/// Set this value to <c>null</c> to disable special alias generation queries.
+			/// </remarks>
+			/// </summary>
+			public static string? AssociationAlias { get; set; } = "a_{0}";
+
+			/// <summary>
+			/// Indicates whether SQL Builder should generate aliases for final projection.
+			/// It is not required for correct query processing but simplifies SQL analysis.
+			/// <para>
+			/// Default value: <c>false</c>.
+			/// </para>
+			/// <example>
+			/// For the query
+			/// <code>
+			/// var query = from child in db.Child
+			///	   select new
+			///	   {
+			///       TrackId = child.ChildID,
+			///	   };
+			/// </code>
+			/// When property is <c>true</c>
+			/// <code>
+			/// SELECT
+			///	   [child].[ChildID] as [TrackId]
+			/// FROM
+			///	   [Child] [child]
+			/// </code>
+			/// Otherwise alias will be removed
+			/// <code>
+			/// SELECT
+			///	   [child].[ChildID]
+			/// FROM
+			///	   [Child] [child]
+			/// </code>
+			/// </example>
+			/// </summary>
+			public static bool GenerateFinalAliases { get; set; }
 		}
 	}
 }

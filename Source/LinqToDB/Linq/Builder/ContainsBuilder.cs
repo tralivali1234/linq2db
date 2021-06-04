@@ -8,9 +8,14 @@ namespace LinqToDB.Linq.Builder
 
 	class ContainsBuilder : MethodCallBuilder
 	{
+		private static readonly string[] MethodNames      = { "Contains"      };
+		private static readonly string[] MethodNamesAsync = { "ContainsAsync" };
+
 		protected override bool CanBuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
-			return methodCall.IsQueryable("Contains") && methodCall.Arguments.Count == 2;
+			return
+				methodCall.IsQueryable     (MethodNames     ) && methodCall.Arguments.Count == 2 ||
+				methodCall.IsAsyncExtension(MethodNamesAsync) && methodCall.Arguments.Count == 3;
 		}
 
 		protected override IBuildContext BuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
@@ -28,8 +33,8 @@ namespace LinqToDB.Linq.Builder
 			return new ContainsContext(buildInfo.Parent, methodCall, sequence, buildInStatement);
 		}
 
-		protected override SequenceConvertInfo Convert(
-			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression param)
+		protected override SequenceConvertInfo? Convert(
+			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression? param)
 		{
 			return null;
 		}
@@ -47,7 +52,7 @@ namespace LinqToDB.Linq.Builder
 			readonly MethodCallExpression _methodCall;
 			readonly bool                 _buildInStatement;
 
-			public ContainsContext(IBuildContext parent, MethodCallExpression methodCall, IBuildContext sequence, bool buildInStatement)
+			public ContainsContext(IBuildContext? parent, MethodCallExpression methodCall, IBuildContext sequence, bool buildInStatement)
 				: base(parent, sequence, null)
 			{
 				_methodCall       = methodCall;
@@ -63,19 +68,23 @@ namespace LinqToDB.Linq.Builder
 
 				query.Queries[0].Statement = sq;
 
-				var expr   = Builder.BuildSql(typeof(bool), 0);
+				var expr   = Builder.BuildSql(typeof(bool), 0, sql);
 				var mapper = Builder.BuildMapper<object>(expr);
 
+				CompleteColumns();
 				QueryRunner.SetRunQuery(query, mapper);
 			}
 
-			public override Expression BuildExpression(Expression expression, int level, bool enforceServerSide)
+			public override Expression BuildExpression(Expression? expression, int level, bool enforceServerSide)
 			{
-				var idx = ConvertToIndex(expression, level, ConvertFlags.Field);
-				return Builder.BuildSql(typeof(bool), idx[0].Index);
+				var info  = ConvertToIndex(expression, level, ConvertFlags.Field)[0];
+				var index = info.Index;
+				if (Parent != null)
+					index = ConvertToParentIndex(index, Parent);
+				return Builder.BuildSql(typeof(bool), index, info.Sql);
 			}
 
-			public override SqlInfo[] ConvertToSql(Expression expression, int level, ConvertFlags flags)
+			public override SqlInfo[] ConvertToSql(Expression? expression, int level, ConvertFlags flags)
 			{
 				if (expression == null)
 				{
@@ -85,23 +94,23 @@ namespace LinqToDB.Linq.Builder
 					if (Parent != null)
 						query = Parent.SelectQuery;
 
-					return new[] { new SqlInfo { Query = query, Sql = sql } };
+					return new[] { new SqlInfo(sql, query) };
 				}
 
 				throw new InvalidOperationException();
 			}
 
-			public override SqlInfo[] ConvertToIndex(Expression expression, int level, ConvertFlags flags)
+			public override SqlInfo[] ConvertToIndex(Expression? expression, int level, ConvertFlags flags)
 			{
 				var sql = ConvertToSql(expression, level, flags);
 
 				if (sql[0].Index < 0)
-					sql[0].Index = sql[0].Query.Select.Add(sql[0].Sql);
+					sql[0] = sql[0].WithIndex(sql[0].Query!.Select.Add(sql[0].Sql));
 
 				return sql;
 			}
 
-			public override IsExpressionResult IsExpression(Expression expression, int level, RequestFor requestFlag)
+			public override IsExpressionResult IsExpression(Expression? expression, int level, RequestFor requestFlag)
 			{
 				if (expression == null)
 				{
@@ -112,22 +121,21 @@ namespace LinqToDB.Linq.Builder
 					}
 				}
 
-				switch (requestFlag)
+				return requestFlag switch
 				{
-					case RequestFor.Root : return IsExpressionResult.False;
-				}
-
-				throw new InvalidOperationException();
+					RequestFor.Root => IsExpressionResult.False,
+					_               => throw new InvalidOperationException(),
+				};
 			}
 
-			public override IBuildContext GetContext(Expression expression, int level, BuildInfo buildInfo)
+			public override IBuildContext GetContext(Expression? expression, int level, BuildInfo buildInfo)
 			{
 				throw new InvalidOperationException();
 			}
 
-			ISqlExpression _subQuerySql;
+			ISqlExpression? _subQuerySql;
 
-			public override ISqlExpression GetSubQuery(IBuildContext context)
+			public override ISqlExpression GetSubQuery(IBuildContext? context)
 			{
 				if (_subQuerySql == null)
 				{

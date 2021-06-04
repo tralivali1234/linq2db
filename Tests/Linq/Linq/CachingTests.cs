@@ -29,7 +29,7 @@ namespace Tests.Linq
 		}
 
 		[Test]
-		public void TesSqlQueryDependent(
+		public void TestSqlQueryDependent(
 			[Values(
 				"MIN",
 				"MAX",
@@ -47,10 +47,10 @@ namespace Tests.Linq
 				nameof(ALLTYPE.TIMEDATATYPE)
 			)] string fieldName)
 		{
-			if (!UserProviders.Contains(ProviderName.SQLite))
+			if (!UserProviders.Contains(ProviderName.SQLiteClassic))
 				return;
 
-			using (var db = GetDataContext(ProviderName.SQLite))
+			using (var db = GetDataContext(ProviderName.SQLiteClassic))
 			{
 				var query =
 					from t in db.GetTable<ALLTYPE>()
@@ -61,7 +61,7 @@ namespace Tests.Linq
 					};
 
 				var sql = query.ToString();
-				Console.WriteLine(sql);
+				TestContext.WriteLine(sql);
 
 				Assert.That(sql, Contains.Substring(funcName).And.Contains(fieldName));
 			}
@@ -77,13 +77,12 @@ namespace Tests.Linq
 				.TableName(tableName);
 		}
 
-
-		static int CountOccurences(string source, string subString)
+		static int CountOccurrences(string source, string subString)
 		{
 			var count = 0;
 			var n     = 0;
 
-			if(subString != "")
+			if (subString != "")
 			{
 				while ((n = source.IndexOf(subString, n, StringComparison.Ordinal)) != -1)
 				{
@@ -97,15 +96,13 @@ namespace Tests.Linq
 
 		[Test]
 		public void TestByCall(
+			[IncludeDataSources(TestProvName.AllSqlServer2005Plus)] string context,
 			[Values("tableName1", "tableName2")] string tableName,
 			[Values("database1",  "database2")]  string databaseName,
 			[Values("schema1",    "schema2")]    string schemaName
 		)
 		{
-			if (!UserProviders.Contains(ProviderName.SqlServer))
-				return;
-
-			using (var db = GetDataContext(ProviderName.SqlServer))
+			using (var db = GetDataContext(context))
 			{
 				var query =
 					from c in db.Child
@@ -116,26 +113,24 @@ namespace Tests.Linq
 					)
 					select cc;
 
-				var sql = query.ToString();
-				Console.WriteLine(sql);
+				var sql = query.ToString()!;
+				TestContext.WriteLine(sql);
 
-				Assert.That(CountOccurences(sql, tableName),    Is.EqualTo(2));
-				Assert.That(CountOccurences(sql, databaseName), Is.EqualTo(2));
-				Assert.That(CountOccurences(sql, schemaName),   Is.EqualTo(2));
+				Assert.That(CountOccurrences(sql, tableName),    Is.EqualTo(2));
+				Assert.That(CountOccurrences(sql, databaseName), Is.EqualTo(2));
+				Assert.That(CountOccurrences(sql, schemaName),   Is.EqualTo(2));
 			}
 		}
 
 		[Test]
 		public void TestInlined(
+			[IncludeDataSources(TestProvName.AllSqlServer2005Plus)] string context,
 			[Values("tableName1", "tableName2")] string tableName,
 			[Values("database1",  "database2")]  string databaseName,
 			[Values("schema1",    "schema2")]    string schemaName
 		)
 		{
-			if (!UserProviders.Contains(ProviderName.SqlServer))
-				return;
-
-			using (var db = GetDataContext(ProviderName.SqlServer))
+			using (var db = GetDataContext(context))
 			{
 				var query =
 					from c in db.Child
@@ -147,24 +142,21 @@ namespace Tests.Linq
 					)
 					select cc;
 
-				var sql = query.ToString();
-				Console.WriteLine(sql);
+				var sql = query.ToString()!;
+				TestContext.WriteLine(sql);
 
-				Assert.That(CountOccurences(sql, tableName),    Is.EqualTo(2));
-				Assert.That(CountOccurences(sql, databaseName), Is.EqualTo(2));
-				Assert.That(CountOccurences(sql, schemaName),   Is.EqualTo(2));
+				Assert.That(CountOccurrences(sql, tableName),    Is.EqualTo(2));
+				Assert.That(CountOccurrences(sql, databaseName), Is.EqualTo(2));
+				Assert.That(CountOccurrences(sql, schemaName),   Is.EqualTo(2));
 			}
 		}
 
 		[Test]
 		public void TakeHint(
-			[Values(TakeHints.Percent, TakeHints.WithTies, TakeHints.Percent | TakeHints.WithTies)] TakeHints takeHint
-		)
+			[IncludeDataSources(TestProvName.AllSqlServer2005Plus)] string context,
+			[Values(TakeHints.Percent, TakeHints.WithTies, TakeHints.Percent | TakeHints.WithTies)] TakeHints takeHint)
 		{
-			if (!UserProviders.Contains(ProviderName.SqlServer))
-				return;
-
-			using (var db = GetDataContext(ProviderName.SqlServer))
+			using (var db = GetDataContext(context))
 			{
 				var query =
 					from c1 in db.Child
@@ -172,7 +164,7 @@ namespace Tests.Linq
 					select new {c1, c2};
 
 				var sql = query.ToString();
-				Console.WriteLine(sql);
+				TestContext.WriteLine(sql);
 
 				if (takeHint.HasFlag(TakeHints.Percent))
 					Assert.That(sql, Contains.Substring("PERCENT"));
@@ -181,6 +173,5 @@ namespace Tests.Linq
 					Assert.That(sql, Contains.Substring("WITH TIES"));
 			}
 		}
-
 	}
 }

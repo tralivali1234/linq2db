@@ -21,42 +21,44 @@ namespace Tests.UserTests
 			[Column(DataType = DataType.Date)]public DateTime DateTimeValue;
 			public bool BoolValue;
 			public Guid GuidValue;
-			public Binary BinaryValue;
+			public Binary? BinaryValue;
 			public short SmallIntValue;
 		}
 
-		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
-		public void Test1(string context)
+		[Test]
+		public void Test1([IncludeDataSources(TestProvName.AllSQLite)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var date = DateTime.Today;
+				var date = TestData.Date;
 				var q = (from t1 in db.GetTable<LinqDataTypes>()
 					join t2 in db.GetTable<LinqDataTypes>() on t1.ID equals t2.ID
 					where t2.DateTimeValue == date
 					select t2);
 
-				q.FirstOrDefault();
+				var _ = q.FirstOrDefault();
 
-				Assert.AreEqual(1, ((DataConnection)db).Command.Parameters.Count);
-				Assert.AreEqual(DbType.Date, ((IDbDataParameter) ((DataConnection)db).Command.Parameters[0]).DbType);
+				Assert.AreEqual(2, ((DataConnection)db).Command.Parameters.Count);
+				Assert.True(DbType.Date == ((IDbDataParameter) ((DataConnection)db).Command.Parameters[0]!).DbType
+					^ DbType.Date == ((IDbDataParameter)((DataConnection)db).Command.Parameters[1]!).DbType);
 			}
 		}
 
-		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
-		public void Test2(string context)
+		[Test]
+		public void Test2([IncludeDataSources(TestProvName.AllSQLite)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var date = DateTime.Today;
+				var date = TestData.Date;
 				var q = (from t1 in db.GetTable<LinqDataTypes>()
 					where t1.DateTimeValue == date
 					select t1);
 
-				q.FirstOrDefault();
+				var _ = q.FirstOrDefault();
 
-				Assert.AreEqual(1, ((DataConnection)db).Command.Parameters.Count);
-				Assert.AreEqual(DbType.Date, ((IDbDataParameter) ((DataConnection)db).Command.Parameters[0]).DbType);
+				Assert.AreEqual(2, ((DataConnection)db).Command.Parameters.Count);
+				Assert.True(DbType.Date == ((IDbDataParameter)((DataConnection)db).Command.Parameters[0]!).DbType
+					^ DbType.Date == ((IDbDataParameter)((DataConnection)db).Command.Parameters[1]!).DbType);
 			}
 		}
 	}

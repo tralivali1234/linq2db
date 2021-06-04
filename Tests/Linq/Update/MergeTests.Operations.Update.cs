@@ -1,21 +1,17 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
-using LinqToDB.Data;
 
 using NUnit.Framework;
 
 namespace Tests.xUpdate
 {
-	using Model;
-
 	public partial class MergeTests
 	{
-		[Test, MergeDataContextSource]
-		public void SameSourceUpdate(string context)
+		[Test]
+		public void SameSourceUpdate([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -64,10 +60,10 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource]
-		public void UpdatePartialSourceProjection_KnownFieldsInDefaultSetter(string context)
+		[Test]
+		public void UpdatePartialSourceProjection_KnownFieldsInDefaultSetter([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -123,10 +119,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void SameSourceUpdateWithPredicate(string context)
+		[Test]
+		public void SameSourceUpdateWithPredicate([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -160,11 +158,12 @@ namespace Tests.xUpdate
 
 		// Oracle: updates field, used in match
 		// Firebird: update of match key leads to incorrect update
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Firebird)]
-		public void SameSourceUpdateWithUpdate(string context)
+		[Test]
+		public void SameSourceUpdateWithUpdate([MergeDataContextSource(
+			TestProvName.AllOracle, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -210,10 +209,10 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource]
-		public void SameSourceUpdateWithUpdateOracle(string context)
+		[Test]
+		public void SameSourceUpdateWithUpdateOracle([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -258,10 +257,61 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource]
-		public void UpdatePartialSourceProjection_KnownFieldInSetter(string context)
+		[Test]
+		public void SameSourceUpdateWithComplexUpdateSet([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
+			{
+				PrepareData(db);
+
+				var table = GetTarget(db);
+
+				var name = "test";
+				var idx  = 6;
+
+				var rows = table
+					.Merge()
+					.Using(GetSource1(db))
+					.OnTargetKey()
+					.UpdateWhenMatched((t, s) => new TestMapping1()
+					{
+						Field1 = t.Field1 + s.Field1,
+						Field2 = Sql.AsSql(name).Length + idx,
+						Field3 = t.Field3 + s.Field3,
+						Field4 = t.Field4 + s.Field4,
+						Field5 = t.Field5 + s.Field5
+					})
+					.Merge();
+
+				var result = table.OrderBy(_ => _.Id).ToList();
+
+				AssertRowCount(2, rows, context);
+
+				Assert.AreEqual(4, result.Count);
+
+				AssertRow(InitialTargetData[0], result[0], null, null);
+				AssertRow(InitialTargetData[1], result[1], null, null);
+
+				Assert.AreEqual(3, result[2].Id);
+				Assert.IsNull(result[2].Field1);
+				Assert.AreEqual(10, result[2].Field2);
+				Assert.IsNull(result[2].Field3);
+				Assert.IsNull(result[2].Field4);
+				Assert.IsNull(result[2].Field5);
+
+				Assert.AreEqual(4, result[3].Id);
+				Assert.AreEqual(10, result[3].Field1);
+				Assert.AreEqual(10, result[3].Field2);
+				Assert.IsNull(result[3].Field3);
+				Assert.IsNull(result[3].Field4);
+				Assert.IsNull(result[3].Field5);
+			}
+		}
+
+		[Test]
+		public void UpdatePartialSourceProjection_KnownFieldInSetter([MergeDataContextSource] string context)
+		{
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -302,10 +352,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void SameSourceUpdateWithPredicateAndUpdate(string context)
+		[Test]
+		public void SameSourceUpdateWithPredicateAndUpdate([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -347,10 +399,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void UpdateWithPredicatePartialSourceProjection_UnknownFieldInCondition(string context)
+		[Test]
+		public void UpdateWithPredicatePartialSourceProjection_UnknownFieldInCondition([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -367,17 +421,17 @@ namespace Tests.xUpdate
 						{
 							Field5 = t.Field5 + s.Field1
 						})
-					.Merge());
+					.Merge())!;
 
 				Assert.IsInstanceOf<LinqToDBException>(exception);
-				Assert.AreEqual("Column Field2 doesn't exist in source", exception.Message);
+				Assert.That(exception.Message, Does.EndWith(".Field2' cannot be converted to SQL."));
 			}
 		}
 
-		[Test, MergeDataContextSource]
-		public void OtherSourceUpdate(string context)
+		[Test]
+		public void OtherSourceUpdate([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -422,10 +476,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void OtherSourceUpdateWithPredicate(string context)
+		[Test]
+		public void OtherSourceUpdateWithPredicate([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -466,10 +522,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void UpdatePartialSourceProjection_KnownFieldInCondition(string context)
+		[Test]
+		public void UpdatePartialSourceProjection_KnownFieldInCondition([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -512,10 +570,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void AnonymousSourceUpdateWithPredicate(string context)
+		[Test]
+		public void AnonymousSourceUpdateWithPredicate([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -564,10 +624,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void AnonymousListSourceUpdateWithPredicate(string context)
+		[Test]
+		public void AnonymousListSourceUpdateWithPredicate([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -617,10 +679,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void UpdateReservedAndCaseNames(string context)
+		[Test]
+		public void UpdateReservedAndCaseNames([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -669,11 +733,12 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(
-			ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird, ProviderName.Sybase)]
-		public void UpdateReservedAndCaseNamesFromList(string context)
+		[Test]
+		public void UpdateReservedAndCaseNamesFromList([MergeDataContextSource(
+			TestProvName.AllInformix, TestProvName.AllSapHana, ProviderName.Firebird, ProviderName.Sybase)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -723,10 +788,10 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource]
-		public void UpdateFromPartialSourceProjection_UnknownFieldInDefaultSetter(string context)
+		[Test]
+		public void UpdateFromPartialSourceProjection_UnknownFieldInDefaultSetter([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -738,17 +803,17 @@ namespace Tests.xUpdate
 						.Using(table.Select(_ => new TestMapping1() { Id = _.Id, Field1 = _.Field1 }))
 						.OnTargetKey()
 						.UpdateWhenMatched()
-						.Merge());
+						.Merge())!;
 
 				Assert.IsInstanceOf<LinqToDBException>(exception);
-				Assert.AreEqual("Column Field2 doesn't exist in source", exception.Message);
+				Assert.AreEqual("'s.Field2' cannot be converted to SQL.", exception.Message);
 			}
 		}
 
-		[Test, MergeDataContextSource]
-		public void UpdateFromPartialSourceProjection_UnknownFieldInSetter(string context)
+		[Test]
+		public void UpdateFromPartialSourceProjection_UnknownFieldInSetter([MergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -764,10 +829,10 @@ namespace Tests.xUpdate
 							Id = s.Id,
 							Field1 = s.Field2
 						})
-						.Merge());
+						.Merge())!;
 
 				Assert.IsInstanceOf<LinqToDBException>(exception);
-				Assert.AreEqual("Column Field2 doesn't exist in source", exception.Message);
+				Assert.AreEqual("'s.Field2' cannot be converted to SQL.", exception.Message);
 			}
 		}
 	}

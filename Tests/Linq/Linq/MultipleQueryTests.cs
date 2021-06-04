@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 
@@ -10,28 +9,26 @@ namespace Tests.Linq
 	[TestFixture]
 	public class MultipleQueryTests : TestBase
 	{
-		//[Test, DataContextSource]
-		public void Test1(string context)
+		//[Test]
+		public void Test1([DataSources] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
 					from p in    Parent select p.Children,
 					from p in db.Parent select p.Children);
 		}
 
-		//[Test, DataContextSource]
-		public void Test2(string context)
+		//[Test]
+		public void Test2([DataSources] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
 					from p in    Parent select p.Children.ToList(),
 					from p in db.Parent select p.Children.ToList());
 		}
 
-		[Test, DataContextSource]
-		public void Test3(string context)
+		[Test]
+		public void Test3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -39,31 +36,29 @@ namespace Tests.Linq
 					from p in db.Parent select db.Child);
 		}
 
-		[Test, DataContextSource]
-		public void Test4(string context)
+		[Test]
+		public void Test4([DataSources] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 			{
 				AreEqual(
-					from p in    Parent select p.Children.Select(c => c.ChildID),
-					from p in db.Parent select p.Children.Select(c => c.ChildID));
+					from p in    Parent.OrderBy(p => p.ParentID) select p.Children.Select(c => c.ChildID),
+					from p in db.Parent.OrderBy(p => p.ParentID) select p.Children.Select(c => c.ChildID));
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase)]
-		public void Test5(string context)
+		[Test]
+		public void Test5([DataSources(TestProvName.AllAccess)] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
 					from ch in    Child
 					orderby ch.ChildID
-					select    Parent.Where(p => p.ParentID == ch.Parent.ParentID).Select(p => p)
+					select    Parent.Where(p => p.ParentID == ch.Parent!.ParentID).Select(p => p)
 					,
 					from ch in db.Child
 					orderby ch.ChildID
-					select db.Parent.Where(p => p.ParentID == ch.Parent.ParentID).Select(p => p));
+					select db.Parent.Where(p => p.ParentID == ch.Parent!.ParentID).Select(p => p));
 		}
 	}
 }

@@ -1,151 +1,192 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
-using System.Text.RegularExpressions;
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-using System.ServiceModel;
-using System.ServiceModel.Description;
-#endif
 
 using LinqToDB;
 using LinqToDB.Common;
 using LinqToDB.Data;
+using LinqToDB.Data.DbCommandProcessor;
+using LinqToDB.DataProvider.Informix;
+using LinqToDB.Expressions;
 using LinqToDB.Extensions;
 using LinqToDB.Linq;
 using LinqToDB.Mapping;
+using LinqToDB.Reflection;
+using LinqToDB.Tools;
+using LinqToDB.Tools.Comparers;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
+#if NET472
+using System.ServiceModel;
+using System.ServiceModel.Description;
 using LinqToDB.ServiceModel;
 #endif
 
 using NUnit.Framework;
-using NUnit.Framework.Interfaces;
-
-//[assembly: Parallelizable]
+using NUnit.Framework.Internal;
 
 namespace Tests
 {
 	using Model;
 	using Tools;
 
-	public class TestBase
+	public partial class TestBase
 	{
+		protected static class TestData
+		{
+			// offset 40 is not used by any timezone, so we can detect tz handling issues, which could be hidden when offset match current TZ
+			public static readonly DateTimeOffset DateTimeOffset          = new DateTimeOffset(2020, 2, 29, 17, 54, 55, 123, TimeSpan.FromMinutes(40)).AddTicks(1234);
+			public static readonly DateTimeOffset DateTimeOffsetUtc       = new DateTimeOffset(2020, 2, 29, 17, 9, 55, 123, TimeSpan.Zero).AddTicks(1234);
+			public static readonly DateTime DateTime                      = new DateTime(2020, 2, 29, 17, 54, 55, 123).AddTicks(1234);
+			public static readonly DateTime DateTimeUtc                   = new DateTime(2020, 2, 29, 17, 54, 55, 123, DateTimeKind.Utc).AddTicks(1234);
+			public static readonly DateTime DateTime4Utc                  = new DateTime(2020, 2, 29, 17, 54, 55, 123, DateTimeKind.Utc).AddTicks(1000);
+			public static readonly DateTime Date                          = new (2020, 2, 29);
+			public static readonly TimeSpan TimeOfDay                     = new TimeSpan(0, 17, 54, 55, 123).Add(TimeSpan.FromTicks(1234));
+			public static readonly TimeSpan TimeOfDay4                    = new TimeSpan(0, 17, 54, 55, 123).Add(TimeSpan.FromTicks(1000));
+			public static readonly Guid     Guid1                         = new ("bc7b663d-0fde-4327-8f92-5d8cc3a11d11");
+			public static readonly Guid     Guid2                         = new ("a948600d-de21-4f74-8ac2-9516b287076e");
+			public static readonly Guid     Guid3                         = new ("bd3973a5-4323-4dd8-9f4f-df9f93e2a627");
+
+			public static byte[] Binary(int size)
+			{
+				var value = new byte[size];
+				for (var i = 0; i < value.Length; i++)
+					value[i] = (byte)(i % 256);
+
+				return value;
+			}
+
+			public static Guid SequentialGuid(int n)  => new ($"233bf399-9710-4e79-873d-2ec7bf1e{n:x4}");
+		}
+
+		private const int TRACES_LIMIT = 50000;
+
+		private static string? _baselinesPath;
+
 		static TestBase()
 		{
-			Console.WriteLine("Tests started in {0}...",
-#if NETSTANDARD1_6
-				System.IO.Directory.GetCurrentDirectory()
-#else
-				Environment.CurrentDirectory
-#endif
-				);
+			TestContext.WriteLine("Tests started in {0}...", Environment.CurrentDirectory);
 
-			Console.WriteLine("CLR Version: {0}...",
-#if NETSTANDARD1_6
-				System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
-#else
-				Environment.Version
-#endif
-				);
+			TestContext.WriteLine("CLR Version: {0}...", Environment.Version);
 
 			var traceCount = 0;
 
-			DataConnection.WriteTraceLine = (s1,s2) =>
+			DataConnection.TurnTraceSwitchOn();
+			DataConnection.WriteTraceLine = (message, name, level) =>
 			{
-				if (traceCount < 10000)
+				var ctx   = CustomTestContext.Get();
+
+				if (ctx.Get<bool>(CustomTestContext.BASELINE_DISABLED) != true)
 				{
-					Console.WriteLine("{0}: {1}", s2, s1);
-					Debug.WriteLine(s1, s2);
+					if (message?.StartsWith("BeforeExecute") == true)
+					{
+						var baseline = ctx.Get<StringBuilder>(CustomTestContext.BASELINE);
+						if (baseline == null)
+						{
+							baseline = new StringBuilder();
+							ctx.Set(CustomTestContext.BASELINE, baseline);
+						}
+						baseline.AppendLine(message);
+					}
 				}
 
-				if (traceCount++ > 10000)
-					DataConnection.TurnTraceSwitchOn(TraceLevel.Error);
+				if (ctx.Get<bool>(CustomTestContext.TRACE_DISABLED) != true)
+				{
+					var trace = ctx.Get<StringBuilder>(CustomTestContext.TRACE);
+					if (trace == null)
+					{
+						trace = new StringBuilder();
+						ctx.Set(CustomTestContext.TRACE, trace);
+					}
+
+					trace.AppendLine($"{name}: {message}");
+
+					if (traceCount < TRACES_LIMIT || level == TraceLevel.Error)
+					{
+						ctx.Set(CustomTestContext.LIMITED, true);
+						TestContext.WriteLine("{0}: {1}", name, message);
+						Debug.WriteLine(message, name);
+					}
+
+					traceCount++;
+				}
 			};
 
-//			Configuration.RetryPolicy.Factory = db => new Retry();
+			// Configuration.RetryPolicy.Factory = db => new Retry();
 
-//			Configuration.AvoidSpecificDataProviderAPI = true;
-			Configuration.Linq.TraceMapperExpression   = false;
-//			Configuration.Linq.GenerateExpressionTest  = true;
-			var assemblyPath = typeof(TestBase).AssemblyEx().GetPath();
+			Configuration.Linq.TraceMapperExpression = false;
+			// Configuration.Linq.GenerateExpressionTest  = true;
+			var assemblyPath = typeof(TestBase).Assembly.GetPath()!;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
+#if NET472
 			try
 			{
 				SqlServerTypes.Utilities.LoadNativeAssemblies(assemblyPath);
 			}
 			catch // this can fail during tests discovering with NUnitTestAdapter
-			{ }
+			{
+				// ignore
+			}
 #endif
 
-#if NETSTANDARD1_6
-			System.IO.Directory.SetCurrentDirectory(assemblyPath);
-#else
 			Environment.CurrentDirectory = assemblyPath;
-#endif
 
-			var dataProvidersJsonFile     = GetFilePath(assemblyPath, @"DataProviders.json");
-			var userDataProvidersJsonFile = GetFilePath(assemblyPath, @"UserDataProviders.json");
+			TestExternals.Log($"CurrentDirectory          : {Environment.CurrentDirectory}");
+
+			var dataProvidersJsonFile     = GetFilePath(assemblyPath, @"DataProviders.json")!;
+			var userDataProvidersJsonFile = GetFilePath(assemblyPath, @"UserDataProviders.json")!;
+
+			TestExternals.Log($"dataProvidersJsonFile     : {dataProvidersJsonFile}");
+			TestExternals.Log($"userDataProvidersJsonFile : {userDataProvidersJsonFile}");
 
 			var dataProvidersJson     = File.ReadAllText(dataProvidersJsonFile);
 			var userDataProvidersJson =
 				File.Exists(userDataProvidersJsonFile) ? File.ReadAllText(userDataProvidersJsonFile) : null;
 
-#if NETSTANDARD1_6
-			var configName = "CORE1";
-#elif NETSTANDARD2_0
-			var configName = "CORE2";
+#if NETCOREAPP2_1
+			var configName = "CORE21";
+#elif NETCOREAPP3_1
+			var configName = "CORE31";
+#elif NET5_0
+			var configName = "NET50";
+#elif NET472
+			var configName = "NET472";
 #else
-			var configName = "NET45";
+			var configName = "";
+#error Unknown framework
 #endif
 
-#if APPVEYOR
-#warning "AppVeyor configuration detected."
-
-			Console.WriteLine("AppVeyor configuration detected.");
-			configName += ".AppVeyor";
-#endif
-#if TRAVIS
-#warning "Travis configuration detected."
-
-			Console.WriteLine("Travis configuration detected.");
-			configName += ".Travis";
+#if AZURE
+			TestContext.WriteLine("Azure configuration detected.");
+			configName += ".Azure";
 #endif
 			var testSettings = SettingsReader.Deserialize(configName, dataProvidersJson, userDataProvidersJson);
-			var databasePath = Path.GetFullPath(Path.Combine("Database"));
-			var dataPath     = Path.Combine(databasePath, "Data");
 
-			if (Directory.Exists(dataPath))
-				Directory.Delete(dataPath, true);
+			CopyDatabases();
 
-			Directory.CreateDirectory(dataPath);
+			UserProviders  = new HashSet<string>(testSettings.Providers ?? Array<string>.Empty, StringComparer.OrdinalIgnoreCase);
+			SkipCategories = new HashSet<string>(testSettings.Skip      ?? Array<string>.Empty, StringComparer.OrdinalIgnoreCase);
 
-			foreach (var file in Directory.GetFiles(databasePath, "*.*"))
-			{
-				var destination = Path.Combine(dataPath, Path.GetFileName(file));
-				Console.WriteLine("{0} => {1}", file, destination);
-				File.Copy(file, destination, true);
-			}
-
-			UserProviders = new HashSet<string>(testSettings.Providers, StringComparer.OrdinalIgnoreCase);
-
-			var logLevel   = testSettings.TraceLevel;
+			var logLevel = testSettings.TraceLevel;
 			var traceLevel = TraceLevel.Info;
 
 			if (!string.IsNullOrEmpty(logLevel))
 				if (!Enum.TryParse(logLevel, true, out traceLevel))
 					traceLevel = TraceLevel.Info;
 
+			if (!string.IsNullOrEmpty(testSettings.NoLinqService))
+				DataSourcesBaseAttribute.NoLinqService = ConvertTo<bool>.From(testSettings.NoLinqService);
+
 			DataConnection.TurnTraceSwitchOn(traceLevel);
 
-			Console.WriteLine("Connection strings:");
+			TestContext.WriteLine("Connection strings:");
+			TestExternals.Log("Connection strings:");
 
-#if NETSTANDARD1_6 || NETSTANDARD2_0
+#if !NET472
 			DataConnection.DefaultSettings            = TxtSettings.Instance;
 			TxtSettings.Instance.DefaultConfiguration = "SQLiteMs";
 
@@ -154,15 +195,18 @@ namespace Tests
 				if (string.IsNullOrWhiteSpace(provider.Value.ConnectionString))
 					throw new InvalidOperationException("ConnectionString should be provided");
 
-				Console.WriteLine($"\tName=\"{provider.Key}\", Provider=\"{provider.Value.Provider}\", ConnectionString=\"{provider.Value.ConnectionString}\"");
+				TestContext.WriteLine($"\tName=\"{provider.Key}\", Provider=\"{provider.Value.Provider}\", ConnectionString=\"{provider.Value.ConnectionString}\"");
 
 				TxtSettings.Instance.AddConnectionString(
-					provider.Key, provider.Value.Provider ?? provider.Key, provider.Value.ConnectionString);
+					provider.Key, provider.Value.Provider ?? "", provider.Value.ConnectionString);
 			}
 #else
 			foreach (var provider in testSettings.Connections)
 			{
-				Console.WriteLine($"\tName=\"{provider.Key}\", Provider=\"{provider.Value.Provider}\", ConnectionString=\"{provider.Value.ConnectionString}\"");
+				var str = $"\tName=\"{provider.Key}\", Provider=\"{provider.Value.Provider}\", ConnectionString=\"{provider.Value.ConnectionString}\"";
+
+				TestContext.WriteLine(str);
+				TestExternals.Log(str);
 
 				DataConnection.AddOrSetConfiguration(
 					provider.Key,
@@ -171,69 +215,152 @@ namespace Tests
 			}
 #endif
 
-			Console.WriteLine("Providers:");
+			TestContext.WriteLine("Providers:");
+			TestExternals.Log("Providers:");
 
 			foreach (var userProvider in UserProviders)
-				Console.WriteLine($"\t{userProvider}");
-
-			var defaultConfiguration = testSettings.DefaultConfiguration;
-
-			if (!string.IsNullOrEmpty(defaultConfiguration))
 			{
-				DataConnection.DefaultConfiguration       = defaultConfiguration;
-#if NETSTANDARD1_6 || NETSTANDARD2_0
-				TxtSettings.Instance.DefaultConfiguration = defaultConfiguration;
+				TestContext.WriteLine($"\t{userProvider}");
+				TestExternals.Log($"\t{userProvider}");
+			}
+
+			DefaultProvider = testSettings.DefaultConfiguration;
+
+			if (!DefaultProvider.IsNullOrEmpty())
+			{
+				DataConnection.DefaultConfiguration = DefaultProvider;
+#if !NET472
+				TxtSettings.Instance.DefaultConfiguration = DefaultProvider;
 #endif
 			}
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
+#if NET472
 			LinqService.TypeResolver = str =>
 			{
-				switch (str)
+				return str switch
 				{
-					case "Tests.Model.Gender" : return typeof(Gender);
-					case "Tests.Model.Person" : return typeof(Person);
-					default                   : return null;
-				}
+					"Tests.Model.Gender" => typeof(Gender),
+					"Tests.Model.Person" => typeof(Person),
+					_ => null,
+				};
 			};
 #endif
+
+			// baselines
+			if (!string.IsNullOrWhiteSpace(testSettings.BaselinesPath))
+			{
+				var baselinesPath = Path.GetFullPath(testSettings.BaselinesPath);
+				if (Directory.Exists(baselinesPath))
+					_baselinesPath = baselinesPath;
+			}
 		}
 
-		protected static string GetFilePath(string basePath, string findFileName)
+		static void CopyDatabases()
+		{
+			var databasePath = Path.GetFullPath("Database");
+			var dataPath     = Path.Combine(databasePath, "Data");
+
+			TestExternals.Log($"Copy databases {databasePath} => {dataPath}");
+
+			if (TestExternals.IsParallelRun && TestExternals.Configuration != null)
+			{
+				try
+				{
+					foreach (var file in Directory.GetFiles(databasePath, "*.*"))
+					{
+						var fileName = Path.GetFileName(file);
+
+						switch (TestExternals.Configuration, fileName)
+						{
+							case ("Access.Data",         "TestData.mdb")       :
+							case ("SqlCe.Data",          "TestData.sdf")       :
+							case ("SQLite.Classic.Data", "TestData.sqlite")    :
+							case ("SQLite.MS.Data",      "TestData.MS.sqlite") :
+							{
+								var destination = Path.Combine(dataPath, Path.GetFileName(file));
+
+								TestExternals.Log($"{file} => {destination}");
+								File.Copy(file, destination, true);
+
+								break;
+							}
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					TestExternals.Log(e.ToString());
+					TestContext.WriteLine(e);
+					throw;
+				}
+			}
+			else
+			{
+				if (Directory.Exists(dataPath))
+					Directory.Delete(dataPath, true);
+
+				Directory.CreateDirectory(dataPath);
+
+				foreach (var file in Directory.GetFiles(databasePath, "*.*"))
+				{
+					var destination = Path.Combine(dataPath, Path.GetFileName(file));
+					TestContext.WriteLine("{0} => {1}", file, destination);
+					File.Copy(file, destination, true);
+				}
+			}
+		}
+
+		protected static string? GetFilePath(string basePath, string findFileName)
 		{
 			var fileName = Path.GetFullPath(Path.Combine(basePath, findFileName));
 
+			string? path = basePath;
 			while (!File.Exists(fileName))
 			{
-				Console.WriteLine($"File not found: {fileName}");
+				TestContext.WriteLine($"File not found: {fileName}");
 
-				basePath = Path.GetDirectoryName(basePath);
+				path = Path.GetDirectoryName(path);
 
-				if (basePath == null)
+				if (path == null)
 					return null;
 
-				fileName = Path.GetFullPath(Path.Combine(basePath, findFileName));
+				fileName = Path.GetFullPath(Path.Combine(path, findFileName));
 			}
 
-			Console.WriteLine($"Base path found: {fileName}");
+			TestContext.WriteLine($"Base path found: {fileName}");
 
 			return fileName;
 		}
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0 && !MONO
-		const int IP = 22654;
-		static bool _isHostOpen;
+#if NET472
+		const           int          IP = 22654;
+		static          bool         _isHostOpen;
+		static          LinqService? _service;
+		static readonly object       _syncRoot = new ();
 #endif
 
-		static void OpenHost()
+		static void OpenHost(MappingSchema? ms)
 		{
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0 && !MONO
+#if NET472
 			if (_isHostOpen)
+			{
+				_service!.MappingSchema = ms;
 				return;
+			}
 
-			_isHostOpen = true;
+			ServiceHost host;
 
-			var host = new ServiceHost(new LinqService { AllowUpdates = true }, new Uri("net.tcp://localhost:" + IP));
+			lock (_syncRoot)
+			{
+				if (_isHostOpen)
+				{
+					_service!.MappingSchema = ms;
+					return;
+				}
+
+				host        = new ServiceHost(_service = new LinqService(ms) { AllowUpdates = true }, new Uri("net.tcp://localhost:" + (IP + TestExternals.RunID)));
+				_isHostOpen = true;
+			}
 
 			host.Description.Behaviors.Add(new ServiceMetadataBehavior());
 			host.Description.Behaviors.Find<ServiceDebugBehavior>().IncludeExceptionDetailInFaults = true;
@@ -253,62 +380,85 @@ namespace Tests
 				"LinqOverWCF");
 
 			host.Open();
-#endif
-		}
 
-		public class UserProviderInfo
-		{
-			public string Name;
-			public string ConnectionString1;
-			public string ProviderName;
+			TestExternals.Log($"host opened, Address : {host.BaseAddresses[0]}");
+#endif
 		}
 
 		public static readonly HashSet<string> UserProviders;
+		public static readonly string?         DefaultProvider;
+		public static readonly HashSet<string> SkipCategories;
 
-		public static readonly List<string> Providers = new List<string>
+		public static readonly List<string> Providers = CustomizationSupport.Interceptor.GetSupportedProviders(new List<string>
 		{
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-			ProviderName.Access,
-			ProviderName.DB2,
-			ProviderName.Informix,
-			TestProvName.MariaDB,
+#if NET472
 			ProviderName.Sybase,
-			ProviderName.SapHana,
 			ProviderName.OracleNative,
-			ProviderName.OracleManaged,
-			ProviderName.SqlCe,
-			ProviderName.SQLiteClassic,
+			TestProvName.Oracle11Native,
+			ProviderName.Informix,
 #endif
+			ProviderName.SqlCe,
+			ProviderName.Access,
+			ProviderName.AccessOdbc,
+			ProviderName.DB2,
+			ProviderName.InformixDB2,
+			ProviderName.SQLiteClassic,
+			TestProvName.SQLiteClassicMiniProfilerMapped,
+			TestProvName.SQLiteClassicMiniProfilerUnmapped,
+			ProviderName.SybaseManaged,
+			ProviderName.OracleManaged,
+			TestProvName.Oracle11Managed,
 			ProviderName.Firebird,
+			TestProvName.Firebird3,
+			TestProvName.Firebird4,
 			ProviderName.SqlServer2008,
 			ProviderName.SqlServer2012,
 			ProviderName.SqlServer2014,
+			ProviderName.SqlServer2016,
+			ProviderName.SqlServer2017,
+			TestProvName.SqlServer2019,
+			TestProvName.SqlServer2019SequentialAccess,
+			TestProvName.SqlServer2019FastExpressionCompiler,
+			TestProvName.SqlServerContained,
 			ProviderName.SqlServer2000,
 			ProviderName.SqlServer2005,
-			ProviderName.PostgreSQL,
-			ProviderName.MySql,
 			TestProvName.SqlAzure,
-			TestProvName.MySql57,
+			ProviderName.PostgreSQL,
+			ProviderName.PostgreSQL92,
+			ProviderName.PostgreSQL93,
+			ProviderName.PostgreSQL95,
+			TestProvName.PostgreSQL10,
+			TestProvName.PostgreSQL11,
+			TestProvName.PostgreSQL12,
+			TestProvName.PostgreSQL13,
+			ProviderName.MySql,
+			ProviderName.MySqlConnector,
+			TestProvName.MySql55,
+			TestProvName.MariaDB,
 			ProviderName.SQLiteMS,
-			TestProvName.Firebird3
-		};
+			ProviderName.SapHanaNative,
+			ProviderName.SapHanaOdbc
+		}).ToList();
 
-		protected ITestDataContext GetDataContext(string configuration, MappingSchema ms = null)
+		protected ITestDataContext GetDataContext(string configuration, MappingSchema? ms = null, bool testLinqService = true)
 		{
 			if (configuration.EndsWith(".LinqService"))
 			{
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0 && !MONO
-				OpenHost();
+#if NET472
+				OpenHost(ms);
 
 				var str = configuration.Substring(0, configuration.Length - ".LinqService".Length);
-				var dx  = new TestServiceModelDataContext(IP) { Configuration = str };
+
+				var dx  = testLinqService
+					? new ServiceModel.TestLinqServiceDataContext(new LinqService(ms) { AllowUpdates = true }) { Configuration = str }
+					: new TestServiceModelDataContext(IP + TestExternals.RunID) { Configuration = str } as RemoteDataContextBase;
 
 				Debug.WriteLine(((IDataContext)dx).ContextID, "Provider ");
 
 				if (ms != null)
 					dx.MappingSchema = new MappingSchema(dx.MappingSchema, ms);
 
-				return dx;
+				return (ITestDataContext)dx;
 #else
 				configuration = configuration.Substring(0, configuration.Length - ".LinqService".Length);
 #endif
@@ -319,7 +469,38 @@ namespace Tests
 			var res = new TestDataConnection(configuration);
 			if (ms != null)
 				res.AddMappingSchema(ms);
+
+			// add extra mapping schema to not share mappers with other sql2017/2019 providers
+			// use same schema to use cache within test provider scope
+			if (configuration == TestProvName.SqlServer2019SequentialAccess)
+				res.AddMappingSchema(_sequentialAccessSchema);
+			else if (configuration == TestProvName.SqlServer2019FastExpressionCompiler)
+				res.AddMappingSchema(_fecSchema);
+
 			return res;
+		}
+
+		private static readonly MappingSchema _sequentialAccessSchema = new ();
+		private static readonly MappingSchema _fecSchema = new ();
+
+		protected static char GetParameterToken(string context)
+		{
+			var token = '@';
+
+			switch (context)
+			{
+				case ProviderName.SapHanaOdbc:
+				case ProviderName.Informix:
+					token = '?'; break;
+				case ProviderName.SapHanaNative:
+				case TestProvName.Oracle11Managed:
+				case TestProvName.Oracle11Native:
+				case ProviderName.OracleManaged:
+				case ProviderName.OracleNative:
+					token = ':'; break;
+			}
+
+			return CustomizationSupport.Interceptor.GetParameterToken(token, context);
 		}
 
 		protected void TestOnePerson(int id, string firstName, IQueryable<Person> persons)
@@ -352,8 +533,8 @@ namespace Tests
 			TestPerson(1, "John", persons);
 		}
 
-		private List<LinqDataTypes> _types;
-		protected IEnumerable<LinqDataTypes>  Types
+		private   List<LinqDataTypes>?      _types;
+		protected IEnumerable<LinqDataTypes> Types
 		{
 			get
 			{
@@ -366,8 +547,8 @@ namespace Tests
 			}
 		}
 
-		private   List<LinqDataTypes2> _types2;
-		protected List<LinqDataTypes2>  Types2
+		private   List<LinqDataTypes2>? _types2;
+		protected List<LinqDataTypes2>   Types2
 		{
 			get
 			{
@@ -382,7 +563,7 @@ namespace Tests
 
 		protected internal const int MaxPersonID = 4;
 
-		private          List<Person> _person;
+		private   List<Person>?       _person;
 		protected IEnumerable<Person>  Person
 		{
 			get
@@ -401,8 +582,8 @@ namespace Tests
 			}
 		}
 
-		private   List<Patient> _patient;
-		protected List<Patient>  Patient
+		private   List<Patient>? _patient;
+		protected List<Patient>   Patient
 		{
 			get
 			{
@@ -420,8 +601,8 @@ namespace Tests
 			}
 		}
 
-		private   List<Doctor> _doctor;
-		protected List<Doctor>  Doctor
+		private   List<Doctor>? _doctor;
+		protected List<Doctor>   Doctor
 		{
 			get
 			{
@@ -438,8 +619,8 @@ namespace Tests
 
 		#region Parent/Child Model
 
-		private          List<Parent> _parent;
-		protected IEnumerable<Parent>  Parent
+		private   List<Parent>?      _parent;
+		protected IEnumerable<Parent> Parent
 		{
 			get
 			{
@@ -447,15 +628,14 @@ namespace Tests
 					using (new DisableLogging())
 					using (var db = new TestDataConnection())
 					{
-						db.Parent.Delete(c => c.ParentID >= 1000);
 						_parent = db.Parent.ToList();
 						db.Close();
 
 						foreach (var p in _parent)
 						{
 							p.ParentTest    = p;
-							p.Children      = Child.     Where(c => c.ParentID == p.ParentID).ToList();
-							p.GrandChildren = GrandChild.Where(c => c.ParentID == p.ParentID).ToList();
+							p.Children      = Child         .Where(c => c.ParentID == p.ParentID).ToList();
+							p.GrandChildren = GrandChild    .Where(c => c.ParentID == p.ParentID).ToList();
 							p.Types         = Types.FirstOrDefault(t => t.ID == p.ParentID);
 						}
 					}
@@ -464,8 +644,8 @@ namespace Tests
 			}
 		}
 
-		private          List<Parent1> _parent1;
-		protected IEnumerable<Parent1>  Parent1
+		private   List<Parent1>?      _parent1;
+		protected IEnumerable<Parent1> Parent1
 		{
 			get
 			{
@@ -476,23 +656,17 @@ namespace Tests
 			}
 		}
 
-		private   List<Parent4> _parent4;
-		protected List<Parent4>  Parent4
-		{
-			get
-			{
-				return _parent4 ?? (_parent4 = Parent.Select(p => new Parent4 { ParentID = p.ParentID, Value1 = ConvertTo<TypeValue>.From(p.Value1) }).ToList());
-			}
-		}
+		private   List<Parent4>? _parent4;
+		protected List<Parent4> Parent4 => _parent4 ??= Parent.Select(p => new Parent4 { ParentID = p.ParentID, Value1 = ConvertTo<TypeValue>.From(p.Value1) }).ToList();
 
-		private   List<Parent5> _parent5;
-		protected List<Parent5>  Parent5
+		private   List<Parent5>? _parent5;
+		protected List<Parent5>   Parent5
 		{
 			get
 			{
 				if (_parent5 == null)
 				{
-					_parent5 = Parent.Select(p => new Parent5 { ParentID = p.ParentID, Value1 = p.Value1}).ToList();
+					_parent5 = Parent.Select(p => new Parent5 { ParentID = p.ParentID, Value1 = p.Value1 }).ToList();
 
 					foreach (var p in _parent5)
 						p.Children = _parent5.Where(c => c.Value1 == p.ParentID).ToList();
@@ -502,58 +676,42 @@ namespace Tests
 			}
 		}
 
-		private          List<ParentInheritanceBase> _parentInheritance;
-		protected IEnumerable<ParentInheritanceBase>  ParentInheritance
+		private   List<ParentInheritanceBase>?      _parentInheritance;
+		protected IEnumerable<ParentInheritanceBase> ParentInheritance
 		{
 			get
 			{
 				if (_parentInheritance == null)
 					_parentInheritance = Parent.Select(p =>
-						p.Value1       == null ? new ParentInheritanceNull  { ParentID = p.ParentID } :
-						p.Value1.Value == 1    ? new ParentInheritance1     { ParentID = p.ParentID, Value1 = p.Value1.Value } :
-						 (ParentInheritanceBase) new ParentInheritanceValue { ParentID = p.ParentID, Value1 = p.Value1.Value }
+						p.Value1 == null ? new ParentInheritanceNull { ParentID = p.ParentID } :
+						p.Value1.Value == 1 ? new ParentInheritance1 { ParentID = p.ParentID, Value1 = p.Value1.Value } :
+						 (ParentInheritanceBase)new ParentInheritanceValue { ParentID = p.ParentID, Value1 = p.Value1.Value }
 					).ToList();
 
 				return _parentInheritance;
 			}
 		}
 
-		private   List<ParentInheritanceValue> _parentInheritanceValue;
-		protected List<ParentInheritanceValue>  ParentInheritanceValue
-		{
-			get
-			{
-				return _parentInheritanceValue ?? (_parentInheritanceValue =
-					ParentInheritance.Where(p => p is ParentInheritanceValue).Cast<ParentInheritanceValue>().ToList());
-			}
-		}
+		private   List<ParentInheritanceValue>? _parentInheritanceValue;
+		protected List<ParentInheritanceValue> ParentInheritanceValue => _parentInheritanceValue ??=
+					ParentInheritance.Where(p => p is ParentInheritanceValue).Cast<ParentInheritanceValue>().ToList();
 
-		private   List<ParentInheritance1> _parentInheritance1;
-		protected List<ParentInheritance1>  ParentInheritance1
-		{
-			get
-			{
-				return _parentInheritance1 ?? (_parentInheritance1 =
-					ParentInheritance.Where(p => p is ParentInheritance1).Cast<ParentInheritance1>().ToList());
-			}
-		}
+		private   List<ParentInheritance1>? _parentInheritance1;
+		protected List<ParentInheritance1> ParentInheritance1 =>
+			_parentInheritance1 ??=
+				ParentInheritance.Where(p => p is ParentInheritance1).Cast<ParentInheritance1>().ToList();
 
-		private   List<ParentInheritanceBase4> _parentInheritance4;
-		protected List<ParentInheritanceBase4>  ParentInheritance4
-		{
-			get
-			{
-				return _parentInheritance4 ?? (_parentInheritance4 = Parent
+		private   List<ParentInheritanceBase4>? _parentInheritance4;
+		protected List<ParentInheritanceBase4> ParentInheritance4 =>
+			_parentInheritance4 ??= Parent
 					.Where(p => p.Value1.HasValue && (new[] { 1, 2 }.Contains(p.Value1.Value)))
 					.Select(p => p.Value1 == 1 ?
 						(ParentInheritanceBase4)new ParentInheritance14 { ParentID = p.ParentID } :
-						(ParentInheritanceBase4)new ParentInheritance24 { ParentID = p.ParentID }
-				).ToList());
-			}
-		}
+												new ParentInheritance24 { ParentID = p.ParentID }
+				).ToList();
 
-		protected        List<Child> _child;
-		protected IEnumerable<Child>  Child
+		protected List<Child>?      _child;
+		protected IEnumerable<Child> Child
 		{
 			get
 			{
@@ -567,7 +725,7 @@ namespace Tests
 
 						foreach (var ch in _child)
 						{
-							ch.Parent        = Parent. Single(p => p.ParentID == ch.ParentID);
+							ch.Parent        = Parent .Single(p => p.ParentID == ch.ParentID);
 							ch.Parent1       = Parent1.Single(p => p.ParentID == ch.ParentID);
 							ch.ParentID2     = new Parent3 { ParentID2 = ch.Parent.ParentID, Value1 = ch.Parent.Value1 };
 							ch.GrandChildren = GrandChild.Where(c => c.ParentID == ch.ParentID && c.ChildID == ch.ChildID).ToList();
@@ -579,8 +737,8 @@ namespace Tests
 			}
 		}
 
-		private          List<GrandChild> _grandChild;
-		protected IEnumerable<GrandChild>  GrandChild
+		private   List<GrandChild>?      _grandChild;
+		protected IEnumerable<GrandChild> GrandChild
 		{
 			get
 			{
@@ -599,8 +757,8 @@ namespace Tests
 			}
 		}
 
-		private          List<GrandChild1> _grandChild1;
-		protected IEnumerable<GrandChild1>  GrandChild1
+		private   List<GrandChild1>?      _grandChild1;
+		protected IEnumerable<GrandChild1> GrandChild1
 		{
 			get
 			{
@@ -613,7 +771,7 @@ namespace Tests
 						foreach (var ch in _grandChild1)
 						{
 							ch.Parent = Parent1.Single(p => p.ParentID == ch.ParentID);
-							ch.Child  = Child.  Single(c => c.ParentID == ch.ParentID && c.ChildID == ch.ChildID);
+							ch.Child  = Child  .Single(c => c.ParentID == ch.ParentID && c.ChildID == ch.ChildID);
 						}
 					}
 
@@ -625,8 +783,8 @@ namespace Tests
 
 		#region Inheritance Parent/Child Model
 
-		private   List<InheritanceParentBase> _inheritanceParent;
-		protected List<InheritanceParentBase>  InheritanceParent
+		private   List<InheritanceParentBase>? _inheritanceParent;
+		protected List<InheritanceParentBase>   InheritanceParent
 		{
 			get
 			{
@@ -641,8 +799,8 @@ namespace Tests
 			}
 		}
 
-		private   List<InheritanceChildBase> _inheritanceChild;
-		protected List<InheritanceChildBase>  InheritanceChild
+		private   List<InheritanceChildBase>? _inheritanceChild;
+		protected List<InheritanceChildBase>   InheritanceChild
 		{
 			get
 			{
@@ -675,8 +833,8 @@ namespace Tests
 				_context = context;
 			}
 
-			private List<Northwind.Category> _category;
-			public  List<Northwind.Category>  Category
+			private List<Northwind.Category>? _category;
+			public List<Northwind.Category>    Category
 			{
 				get
 				{
@@ -688,8 +846,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.Customer> _customer;
-			public  List<Northwind.Customer>  Customer
+			private List<Northwind.Customer>? _customer;
+			public List<Northwind.Customer>    Customer
 			{
 				get
 				{
@@ -707,8 +865,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.Employee> _employee;
-			public  List<Northwind.Employee>  Employee
+			private List<Northwind.Employee>? _employee;
+			public List<Northwind.Employee>    Employee
 			{
 				get
 				{
@@ -721,8 +879,8 @@ namespace Tests
 
 							foreach (var employee in _employee)
 							{
-								employee.Employees         = (from e in _employee where e.ReportsTo  == employee.EmployeeID select e).ToList();
-								employee.ReportsToEmployee = (from e in _employee where e.EmployeeID == employee.ReportsTo  select e).SingleOrDefault();
+								employee.Employees         = (from e in _employee where e.ReportsTo == employee.EmployeeID select e).ToList();
+								employee.ReportsToEmployee = (from e in _employee where e.EmployeeID == employee.ReportsTo select e).SingleOrDefault();
 							}
 						}
 					}
@@ -731,8 +889,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.EmployeeTerritory> _employeeTerritory;
-			public  List<Northwind.EmployeeTerritory>  EmployeeTerritory
+			private List<Northwind.EmployeeTerritory>? _employeeTerritory;
+			public List<Northwind.EmployeeTerritory>    EmployeeTerritory
 			{
 				get
 				{
@@ -744,8 +902,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.OrderDetail> _orderDetail;
-			public  List<Northwind.OrderDetail>  OrderDetail
+			private List<Northwind.OrderDetail>? _orderDetail;
+			public List<Northwind.OrderDetail>    OrderDetail
 			{
 				get
 				{
@@ -757,8 +915,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.Order> _order;
-			public  List<Northwind.Order>  Order
+			private List<Northwind.Order>? _order;
+			public List<Northwind.Order>    Order
 			{
 				get
 				{
@@ -779,8 +937,8 @@ namespace Tests
 				}
 			}
 
-			private IEnumerable<Northwind.Product> _product;
-			public  IEnumerable<Northwind.Product>  Product
+			private IEnumerable<Northwind.Product>? _product;
+			public IEnumerable<Northwind.Product>    Product
 			{
 				get
 				{
@@ -794,19 +952,13 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.ActiveProduct> _activeProduct;
-			public  List<Northwind.ActiveProduct>  ActiveProduct
-			{
-				get { return _activeProduct ?? (_activeProduct = Product.OfType<Northwind.ActiveProduct>().ToList()); }
-			}
+			private List<Northwind.ActiveProduct>? _activeProduct;
+			public List<Northwind.ActiveProduct> ActiveProduct => _activeProduct ??= Product.OfType<Northwind.ActiveProduct>().ToList();
 
-			public  IEnumerable<Northwind.DiscontinuedProduct>  DiscontinuedProduct
-			{
-				get { return Product.OfType<Northwind.DiscontinuedProduct>(); }
-			}
+			public IEnumerable<Northwind.DiscontinuedProduct> DiscontinuedProduct => Product.OfType<Northwind.DiscontinuedProduct>();
 
-			private List<Northwind.Region> _region;
-			public  List<Northwind.Region>  Region
+			private List<Northwind.Region>? _region;
+			public List<Northwind.Region>    Region
 			{
 				get
 				{
@@ -818,8 +970,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.Shipper> _shipper;
-			public  List<Northwind.Shipper>  Shipper
+			private List<Northwind.Shipper>? _shipper;
+			public List<Northwind.Shipper>    Shipper
 			{
 				get
 				{
@@ -831,8 +983,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.Supplier> _supplier;
-			public  List<Northwind.Supplier>  Supplier
+			private List<Northwind.Supplier>? _supplier;
+			public List<Northwind.Supplier>    Supplier
 			{
 				get
 				{
@@ -844,8 +996,8 @@ namespace Tests
 				}
 			}
 
-			private List<Northwind.Territory> _territory;
-			public  List<Northwind.Territory>  Territory
+			private List<Northwind.Territory>? _territory;
+			public List<Northwind.Territory>    Territory
 			{
 				get
 				{
@@ -860,62 +1012,121 @@ namespace Tests
 
 		#endregion
 
-		[Sql.Function("VERSION", ServerSideOnly = true)]
-		private static string MySqlVersion()
-		{
-			throw new InvalidOperationException();
-		}
-
 		protected IEnumerable<LinqDataTypes2> AdjustExpectedData(ITestDataContext db, IEnumerable<LinqDataTypes2> data)
 		{
-			if (db.ContextID == "MySql" || db.ContextID == "MySql.LinqService")
+			if (db.ProviderNeedsTimeFix(db.ContextID))
 			{
-				// MySql versions prior to 5.6.4 do not store fractional seconds so we need to trim
-				// them from expected data too
-				var version = db.Types.Select(_ => MySqlVersion()).First();
-				var match = new Regex(@"^\d+\.\d+.\d+").Match(version);
-				if (match.Success)
+				var adjusted = new List<LinqDataTypes2>();
+				foreach (var record in data)
 				{
-					var versionParts = match.Value.Split('.').Select(_ => int.Parse(_)).ToArray();
-
-					if (versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2] < 50604)
+					var copy = new LinqDataTypes2()
 					{
-						var adjusted = new List<LinqDataTypes2>();
-						foreach (var record in data)
-						{
-							var copy = new LinqDataTypes2()
-							{
-								ID             = record.ID,
-								MoneyValue     = record.MoneyValue,
-								DateTimeValue  = record.DateTimeValue,
-								DateTimeValue2 = record.DateTimeValue2,
-								BoolValue      = record.BoolValue,
-								GuidValue      = record.GuidValue,
-								SmallIntValue  = record.SmallIntValue,
-								IntValue       = record.IntValue,
-								BigIntValue    = record.BigIntValue,
-								StringValue    = record.StringValue
-							};
+						ID             = record.ID,
+						MoneyValue     = record.MoneyValue,
+						DateTimeValue  = record.DateTimeValue,
+						DateTimeValue2 = record.DateTimeValue2,
+						BoolValue      = record.BoolValue,
+						GuidValue      = record.GuidValue,
+						SmallIntValue  = record.SmallIntValue,
+						IntValue       = record.IntValue,
+						BigIntValue    = record.BigIntValue,
+						StringValue    = record.StringValue
+					};
 
-							if (copy.DateTimeValue != null)
-							{
-								copy.DateTimeValue = copy.DateTimeValue.Value.AddMilliseconds(-copy.DateTimeValue.Value.Millisecond);
-							}
-
-							adjusted.Add(copy);
-						}
-
-						return adjusted;
+					if (copy.DateTimeValue != null)
+					{
+						copy.DateTimeValue = copy.DateTimeValue.Value.AddMilliseconds(-copy.DateTimeValue.Value.Millisecond);
 					}
+
+					adjusted.Add(copy);
 				}
+
+				return adjusted;
 			}
 
 			return data;
 		}
 
-		protected void AreEqual<T>(IEnumerable<T> expected, IEnumerable<T> result)
+		protected bool IsCaseSensitiveDB(string context)
 		{
-			AreEqual(t => t, expected, result, EqualityComparer<T>.Default);
+			// we intentionally configure Sql Server 2019 test database to be case-sensitive to test
+			// linq2db support for this configuration
+			// on CI we test two configurations:
+			// linux/mac: db is case sensitive, catalog is case insensitive
+			// windows: both db and catalog are case sensitive
+			return GetProviderName(context, out var _) == TestProvName.SqlServer2019;
+		}
+
+		/// <summary>
+		/// Returns case-sensitivity of string comparison (e.g. using LIKE) without explicit collation specified.
+		/// Depends on database implementation or database collation.
+		/// </summary>
+		protected bool IsCaseSensitiveComparison(string context)
+		{
+			var provider = GetProviderName(context, out var _);
+
+			// we intentionally configure Sql Server 2019 test database to be case-sensitive to test
+			// linq2db support for this configuration
+			// on CI we test two configurations:
+			// linux/mac: db is case sensitive, catalog is case insensitive
+			// windows: both db and catalog are case sensitive
+			return provider == TestProvName.SqlServer2019
+				|| provider == ProviderName.DB2
+				|| provider.StartsWith(ProviderName.Firebird)
+				|| provider.StartsWith(ProviderName.Informix)
+				|| provider.StartsWith(ProviderName.Oracle)
+				|| provider.StartsWith(ProviderName.PostgreSQL)
+				|| provider.StartsWith(ProviderName.SapHana)
+				|| provider.StartsWith(ProviderName.Sybase)
+				;
+		}
+
+		/// <summary>
+		/// Returns status of test CollatedTable - wether it is configured to have proper column collations or
+		/// use database defaults (<see cref="IsCaseSensitiveComparison"/>).
+		/// </summary>
+		protected bool IsCollatedTableConfigured(string context)
+		{
+			var provider = GetProviderName(context, out var _);
+
+			// unconfigured providers (some could be configured in theory):
+			// Access : no such concept as collation on column level (db-only)
+			// DB2
+			// Informix
+			// Oracle (in theory v12 has collations, but to enable them you need to complete quite a quest...)
+			// PostgreSQL (v12 + custom collation required (no default CI collations))
+			// SAP HANA
+			// SQL CE
+			// Sybase ASE
+			return provider == TestProvName.SqlAzure
+				|| provider == TestProvName.MariaDB
+				|| provider == TestProvName.AllOracleNative
+				|| provider.StartsWith(ProviderName.SqlServer)
+				|| provider.StartsWith(ProviderName.Firebird)
+				|| provider.StartsWith(ProviderName.MySql)
+				// while it is configured, LIKE in SQLite is case-insensitive (for ASCII only though)
+				//|| provider.StartsWith(ProviderName.SQLite)
+				;
+		}
+
+		protected void AreEqual<T>(IEnumerable<T> expected, IEnumerable<T> result, bool allowEmpty = false)
+		{
+			AreEqual(t => t, expected, result, EqualityComparer<T>.Default, allowEmpty);
+		}
+
+		protected void AreEqual<T>(IEnumerable<T> expected, IEnumerable<T> result, Func<IEnumerable<T>, IEnumerable<T>> sort)
+		{
+			AreEqual(t => t, expected, result, EqualityComparer<T>.Default, sort);
+		}
+
+		protected void AreEqualWithComparer<T>(IEnumerable<T> expected, IEnumerable<T> result)
+		{
+			AreEqual(t => t, expected, result, ComparerBuilder.GetEqualityComparer<T>());
+		}
+
+		protected void AreEqualWithComparer<T>(IEnumerable<T> expected, IEnumerable<T> result, Func<MemberAccessor,bool> memberPredicate)
+		{
+			AreEqual(t => t, expected, result, ComparerBuilder.GetEqualityComparer<T>(memberPredicate));
 		}
 
 		protected void AreEqual<T>(IEnumerable<T> expected, IEnumerable<T> result, IEqualityComparer<T> comparer)
@@ -923,17 +1134,40 @@ namespace Tests
 			AreEqual(t => t, expected, result, comparer);
 		}
 
-		protected void AreEqual<T>(Func<T,T> fixSelector, IEnumerable<T> expected, IEnumerable<T> result)
+		protected void AreEqual<T>(IEnumerable<T> expected, IEnumerable<T> result, IEqualityComparer<T> comparer, Func<IEnumerable<T>, IEnumerable<T>> sort)
+		{
+			AreEqual(t => t, expected, result, comparer, sort);
+		}
+
+		protected void AreEqual<T>(Func<T, T> fixSelector, IEnumerable<T> expected, IEnumerable<T> result)
 		{
 			AreEqual(fixSelector, expected, result, EqualityComparer<T>.Default);
 		}
 
-		protected void AreEqual<T>(Func<T,T> fixSelector, IEnumerable<T> expected, IEnumerable<T> result, IEqualityComparer<T> comparer)
+		protected void AreEqual<T>(Func<T, T> fixSelector, IEnumerable<T> expected, IEnumerable<T> result, IEqualityComparer<T> comparer, bool allowEmpty = false)
+		{
+			AreEqual(fixSelector, expected, result, comparer, null, allowEmpty);
+		}
+
+		protected void AreEqual<T>(
+			Func<T, T> fixSelector,
+			IEnumerable<T> expected,
+			IEnumerable<T> result,
+			IEqualityComparer<T> comparer,
+			Func<IEnumerable<T>, IEnumerable<T>>? sort,
+			bool allowEmpty = false)
 		{
 			var resultList   = result.  Select(fixSelector).ToList();
 			var expectedList = expected.Select(fixSelector).ToList();
 
-			Assert.AreNotEqual(0, expectedList.Count, "Expected list cannot be empty.");
+			if (sort != null)
+			{
+				resultList   = sort(resultList).  ToList();
+				expectedList = sort(expectedList).ToList();
+			}
+
+			if (!allowEmpty)
+				Assert.AreNotEqual(0, expectedList.Count, "Expected list cannot be empty.");
 			Assert.AreEqual(expectedList.Count, resultList.Count, "Expected and result lists are different. Length: ");
 
 			var exceptExpectedList = resultList.  Except(expectedList, comparer).ToList();
@@ -944,20 +1178,26 @@ namespace Tests
 			var message        = new StringBuilder();
 
 			if (exceptResult != 0 || exceptExpected != 0)
+			{
+				Debug.WriteLine(resultList.  ToDiagnosticString());
+				Debug.WriteLine(expectedList.ToDiagnosticString());
+
 				for (var i = 0; i < resultList.Count; i++)
 				{
-					Debug.  WriteLine   ("{0} {1} --- {2}", comparer.Equals(expectedList[i], resultList[i]) ? " " : "-", expectedList[i], resultList[i]);
-					message.AppendFormat("{0} {1} --- {2}", comparer.Equals(expectedList[i], resultList[i]) ? " " : "-", expectedList[i], resultList[i]);
-					message.AppendLine  ();
+					var equals = comparer.Equals(expectedList[i], resultList[i]);
+					Debug.  WriteLine   ("{0} {1} {3} {2}", equals ? " " : "!", expectedList[i], resultList[i], equals ? "==" : "<>");
+					message.AppendFormat("{0} {1} {3} {2}", equals ? " " : "!", expectedList[i], resultList[i], equals ? "==" : "<>");
+					message.AppendLine();
 				}
+			}
 
 			Assert.AreEqual(0, exceptExpected, $"Expected Was{Environment.NewLine}{message}");
-			Assert.AreEqual(0, exceptResult,   $"Expect Result{Environment.NewLine}{message}");
+			Assert.AreEqual(0, exceptResult  , $"Expect Result{Environment.NewLine}{message}");
 		}
 
 		protected void AreEqual<T>(IEnumerable<IEnumerable<T>> expected, IEnumerable<IEnumerable<T>> result)
 		{
-			var resultList   = result.  ToList();
+			var resultList   = result.ToList();
 			var expectedList = expected.ToList();
 
 			Assert.AreNotEqual(0, expectedList.Count);
@@ -966,7 +1206,7 @@ namespace Tests
 			for (var i = 0; i < resultList.Count; i++)
 			{
 				var elist = expectedList[i].ToList();
-				var rlist = resultList  [i].ToList();
+				var rlist = resultList[i].ToList();
 
 				if (elist.Count > 0 || rlist.Count > 0)
 					AreEqual(elist, rlist);
@@ -975,7 +1215,7 @@ namespace Tests
 
 		protected void AreSame<T>(IEnumerable<T> expected, IEnumerable<T> result)
 		{
-			var resultList   = result.  ToList();
+			var resultList   = result.ToList();
 			var expectedList = expected.ToList();
 
 			Assert.AreNotEqual(0, expectedList.Count);
@@ -990,27 +1230,204 @@ namespace Tests
 			Assert.IsTrue(b);
 		}
 
-		protected void CompareSql(string result, string expected)
+		public T[] AssertQuery<T>(IQueryable<T> query)
 		{
-			var ss = expected.Trim('\r', '\n').Split('\n');
+			var expr    = query.Expression;
+			var loaded  = new Dictionary<Type, Expression>();
+			var actual  = query.ToArray();
+			var newExpr = expr.Transform(loaded, static (loaded, e) =>
+			{
+				if (e.NodeType == ExpressionType.Call)
+				{
+					var mc = (MethodCallExpression)e;
 
-			while (ss.All(_ => _.Length > 0 && _[0] == '\t'))
-				for (var i = 0; i < ss.Length; i++)
-					ss[i] = ss[i].Substring(1);
+					if (mc.IsSameGenericMethod(Methods.LinqToDB.AsSubQuery))
+						return mc.Arguments[0];
 
-			Assert.AreEqual(string.Join("\n", ss), result.Trim('\r', '\n'));
+					if (typeof(ITable<>).IsSameOrParentOf(mc.Type))
+					{
+						var entityType = mc.Method.ReturnType.GetGenericArguments()[0];
+
+						if (entityType != null)
+						{
+							if (!loaded.TryGetValue(entityType, out var itemsExpression))
+							{
+								var newCall = LinqToDB.Common.TypeHelper.MakeMethodCall(Methods.Queryable.ToArray, mc);
+								using (new DisableLogging())
+								{
+									var items = newCall.EvaluateExpression();
+									itemsExpression = Expression.Constant(items, entityType.MakeArrayType());
+									loaded.Add(entityType, itemsExpression);
+								}
+							}
+							var queryCall =
+								LinqToDB.Common.TypeHelper.MakeMethodCall(Methods.Enumerable.AsQueryable,
+									itemsExpression);
+							return queryCall;
+						}
+					}
+				}
+
+				return e;
+			})!;
+
+			var empty = LinqToDB.Common.Tools.CreateEmptyQuery<T>();
+			T[]? expected;
+
+			expected = empty.Provider.CreateQuery<T>(newExpr).ToArray();
+
+			if (actual.Length > 0 || expected.Length > 0)
+				AreEqual(expected, actual, ComparerBuilder.GetEqualityComparer<T>());
+
+			return actual;
+		}
+
+		protected void CompareSql(string expected, string result)
+		{
+			Assert.AreEqual(normalize(expected), normalize(result));
+
+			static string normalize(string sql)
+			{
+				var lines = sql.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+				return string.Join("\n", lines.Where(l => !l.StartsWith("-- ")).Select(l => l.TrimStart('\t', ' ')));
+			}
 		}
 
 		protected List<LinqDataTypes> GetTypes(string context)
 		{
 			return DataCache<LinqDataTypes>.Get(context);
 		}
+
+		public static TempTable<T> CreateTempTable<T>(IDataContext db, string tableName, string context)
+			where T : notnull
+		{
+			return TempTable.Create<T>(db, GetTempTableName(tableName, context));
+		}
+
+		public static string GetTempTableName(string tableName, string context)
+		{
+			var finalTableName = tableName;
+			switch (GetProviderName(context, out var _))
+			{
+				case TestProvName.SqlAzure                           :
+				case ProviderName.SqlServer                          :
+				case ProviderName.SqlServer2000                      :
+				case ProviderName.SqlServer2005                      :
+				case ProviderName.SqlServer2008                      :
+				case ProviderName.SqlServer2012                      :
+				case ProviderName.SqlServer2014                      :
+				case ProviderName.SqlServer2016                      :
+				case ProviderName.SqlServer2017                      :
+				case TestProvName.SqlServer2019                      :
+				case TestProvName.SqlServer2019SequentialAccess      :
+				case TestProvName.SqlServer2019FastExpressionCompiler:
+				case TestProvName.SqlServerContained                 :
+					{
+					if (!tableName.StartsWith("#"))
+						finalTableName = "#" + tableName;
+					break;
+				}
+				default:
+					throw new NotImplementedException();
+			}
+
+			return finalTableName;
+		}
+
+		protected static string GetProviderName(string context, out bool isLinqService)
+		{
+			isLinqService = context.EndsWith(".LinqService");
+			return context.Replace(".LinqService", "");
+		}
+
+		[SetUp]
+		public virtual void OnBeforeTest()
+		{
+			// SequentialAccess-enabled provider setup
+			var (provider, _) = NUnitUtils.GetContext(TestExecutionContext.CurrentContext.CurrentTest);
+			if (provider == TestProvName.SqlServer2019SequentialAccess)
+			{
+				Configuration.OptimizeForSequentialAccess = true;
+				DbCommandProcessorExtensions.Instance = new SequentialAccessCommandProcessor();
+			}
+			else if (provider == TestProvName.SqlServer2019FastExpressionCompiler)
+			{
+				//Compilation.SetExpressionCompiler(_ => ExpressionCompiler.CompileFast(_, true));
+			}
+		}
+
+		[TearDown]
+		public virtual void OnAfterTest()
+		{
+			// SequentialAccess-enabled provider cleanup
+			var (provider, _) = NUnitUtils.GetContext(TestExecutionContext.CurrentContext.CurrentTest);
+			if (provider == TestProvName.SqlServer2019SequentialAccess)
+			{
+				Configuration.OptimizeForSequentialAccess = false;
+				DbCommandProcessorExtensions.Instance = null;
+			}
+			if (provider == TestProvName.SqlServer2019FastExpressionCompiler)
+			{
+				//Compilation.SetExpressionCompiler(null);
+			}
+
+			if (provider?.Contains("SapHana") == true)
+			{
+				using (new DisableLogging())
+				using (new DisableBaseline("isn't baseline query"))
+				using (var db = new TestDataConnection(provider))
+				{
+					// release memory
+					db.Execute("ALTER SYSTEM CLEAR SQL PLAN CACHE");
+				}
+			}
+
+			// dump baselines
+			var ctx = CustomTestContext.Get();
+
+			if (_baselinesPath != null)
+			{
+				var baseline = ctx.Get<StringBuilder>(CustomTestContext.BASELINE);
+				if (baseline != null)
+					BaselinesWriter.Write(_baselinesPath, baseline.ToString());
+			}
+
+			var trace = ctx.Get<StringBuilder>(CustomTestContext.TRACE);
+			if (trace != null && TestContext.CurrentContext.Result.FailCount > 0 && ctx.Get<bool>(CustomTestContext.LIMITED))
+			{
+				// we need to set ErrorInfo.Message element text
+				// because Azure displays only ErrorInfo node data
+				TestExecutionContext.CurrentContext.CurrentResult.SetResult(
+					TestExecutionContext.CurrentContext.CurrentResult.ResultState,
+					TestExecutionContext.CurrentContext.CurrentResult.Message + "\r\n" + trace.ToString(),
+					TestExecutionContext.CurrentContext.CurrentResult.StackTrace);
+			}
+
+			CustomTestContext.Release();
+		}
+
+		protected string GetCurrentBaselines()
+		{
+			return CustomTestContext.Get().Get<StringBuilder>(CustomTestContext.BASELINE)?.ToString() ?? string.Empty;
+		}
+
+		protected static bool IsIDSProvider(string context)
+		{
+			if (!context.Contains("Informix"))
+				return false;
+			var providerName = GetProviderName(context, out var _);
+			if (providerName == ProviderName.InformixDB2)
+				return true;
+
+			using (DataConnection dc = new TestDataConnection(GetProviderName(context, out var _)))
+				return ((InformixDataProvider)dc.DataProvider).Adapter.IsIDSProvider;
+		}
 	}
 
 	static class DataCache<T>
 		where T : class
 	{
-		static readonly Dictionary<string,List<T>> _dic = new Dictionary<string, List<T>>();
+		static readonly Dictionary<string,List<T>> _dic = new ();
 		public static List<T> Get(string context)
 		{
 			lock (_dic)
@@ -1046,66 +1463,168 @@ namespace Tests
 		}
 	}
 
-	public class AllowMultipleQuery : IDisposable
+	public class GuardGrouping : IDisposable
 	{
-		public AllowMultipleQuery()
+		private readonly bool _oldValue = Configuration.Linq.GuardGrouping;
+
+		public GuardGrouping(bool enable)
 		{
-			Configuration.Linq.AllowMultipleQuery = true;
+			Configuration.Linq.GuardGrouping = enable;
 		}
 
 		public void Dispose()
 		{
-			Configuration.Linq.AllowMultipleQuery = false;
+			Configuration.Linq.GuardGrouping = _oldValue;
 		}
 	}
 
-	public class GuardGrouping : IDisposable
+	public class ParameterizeTakeSkip : IDisposable
 	{
-		public GuardGrouping()
+		private readonly bool _oldValue = Configuration.Linq.ParameterizeTakeSkip;
+
+		public ParameterizeTakeSkip(bool enable)
 		{
-			Configuration.Linq.GuardGrouping = true;
+			Configuration.Linq.ParameterizeTakeSkip = enable;
 		}
 
 		public void Dispose()
 		{
-			Configuration.Linq.GuardGrouping = false;
+			Configuration.Linq.ParameterizeTakeSkip = _oldValue;
+		}
+	}
+
+	public class PreloadGroups : IDisposable
+	{
+		private readonly bool _oldValue = Configuration.Linq.PreloadGroups;
+
+		public PreloadGroups(bool enable)
+		{
+			Configuration.Linq.PreloadGroups = enable;
+		}
+
+		public void Dispose()
+		{
+			Configuration.Linq.PreloadGroups = _oldValue;
+		}
+	}
+
+	public class GenerateExpressionTest : IDisposable
+	{
+		private readonly bool _oldValue = Configuration.Linq.GenerateExpressionTest;
+
+		public GenerateExpressionTest(bool enable)
+		{
+			Configuration.Linq.GenerateExpressionTest = enable;
+		}
+
+		public void Dispose()
+		{
+			Configuration.Linq.GenerateExpressionTest = _oldValue;
+		}
+	}
+
+	public class DoNotClearOrderBys : IDisposable
+	{
+		private readonly bool _oldValue = Configuration.Linq.DoNotClearOrderBys;
+
+		public DoNotClearOrderBys(bool enable)
+		{
+			Configuration.Linq.DoNotClearOrderBys = enable;
+		}
+
+		public void Dispose()
+		{
+			Configuration.Linq.DoNotClearOrderBys = _oldValue;
+		}
+	}
+
+	public class GenerateFinalAliases : IDisposable
+	{
+		private readonly bool _oldValue = Configuration.Sql.GenerateFinalAliases;
+
+		public GenerateFinalAliases(bool enable)
+		{
+			Configuration.Sql.GenerateFinalAliases = enable;
+		}
+
+		public void Dispose()
+		{
+			Configuration.Sql.GenerateFinalAliases = _oldValue;
+		}
+	}
+
+	public class SerializeAssemblyQualifiedName : IDisposable
+	{
+		private readonly bool _oldValue = Configuration.LinqService.SerializeAssemblyQualifiedName;
+
+		public SerializeAssemblyQualifiedName(bool enable)
+		{
+			Configuration.LinqService.SerializeAssemblyQualifiedName = enable;
+		}
+
+		public void Dispose()
+		{
+			Configuration.LinqService.SerializeAssemblyQualifiedName = _oldValue;
 		}
 	}
 
 	public class DisableLogging : IDisposable
 	{
-		private TraceSwitch _traceSwitch;
+		private readonly CustomTestContext _ctx;
+		private readonly bool _oldState;
 
 		public DisableLogging()
 		{
-			_traceSwitch = DataConnection.TraceSwitch;
-			DataConnection.TurnTraceSwitchOn(TraceLevel.Off);
+			_ctx   = CustomTestContext.Get();
+			_oldState = _ctx.Get<bool>(CustomTestContext.TRACE_DISABLED);
+			_ctx.Set(CustomTestContext.TRACE_DISABLED, true);
 		}
 
 		public void Dispose()
 		{
-			DataConnection.TraceSwitch = _traceSwitch;
+			_ctx.Set(CustomTestContext.TRACE_DISABLED, _oldState);
+		}
+	}
+
+	public class DisableBaseline : IDisposable
+	{
+		private readonly CustomTestContext _ctx;
+		private readonly bool _oldState;
+
+		public DisableBaseline(string reason, bool disable = true)
+		{
+			_ctx = CustomTestContext.Get();
+			_oldState = _ctx.Get<bool>(CustomTestContext.BASELINE_DISABLED);
+			_ctx.Set(CustomTestContext.BASELINE_DISABLED, disable);
+		}
+
+		public void Dispose()
+		{
+			_ctx.Set(CustomTestContext.BASELINE_DISABLED, _oldState);
 		}
 	}
 
 	public class DisableQueryCache : IDisposable
 	{
-		public DisableQueryCache()
+		private readonly bool _oldValue = Configuration.Linq.DisableQueryCache;
+
+		public DisableQueryCache(bool value = true)
 		{
-			Configuration.Linq.DisableQueryCache = true;
+			Configuration.Linq.DisableQueryCache = value;
 		}
 
 		public void Dispose()
 		{
-			Configuration.Linq.DisableQueryCache = false;
+			Configuration.Linq.DisableQueryCache = _oldValue;
 		}
 	}
 
 	public class WithoutJoinOptimization : IDisposable
 	{
-		public WithoutJoinOptimization()
+		public WithoutJoinOptimization(bool opimizerSwitch = false)
 		{
-			Configuration.Linq.OptimizeJoins = false;
+			Configuration.Linq.OptimizeJoins = opimizerSwitch;
+			Query.ClearCaches();
 		}
 
 		public void Dispose()
@@ -1114,33 +1633,9 @@ namespace Tests
 		}
 	}
 
-	public class LocalTable<T> : IDisposable
-	{
-		private IDataContext _db;
-
-		public LocalTable(IDataContext db)
-		{
-			try
-			{
-				_db = db;
-				_db.CreateTable<T>();
-			}
-			catch
-			{
-				_db.DropTable<T>();
-				_db.CreateTable<T>();
-			}
-		}
-
-		public void Dispose()
-		{
-			_db.DropTable<T>();
-		}
-	}
-
 	public class DeletePerson : IDisposable
 	{
-		IDataContext _db;
+		readonly IDataContext _db;
 
 		public DeletePerson(IDataContext db)
 		{
@@ -1153,14 +1648,14 @@ namespace Tests
 			Delete(_db);
 		}
 
-		private readonly Func<IDataContext, int> Delete =
+		readonly Func<IDataContext,int> Delete =
 			CompiledQuery.Compile<IDataContext, int>(db => db.GetTable<Person>().Delete(_ => _.ID > TestBase.MaxPersonID));
 
 	}
 
-	public class WithoutComparasionNullCheck : IDisposable
+	public class WithoutComparisonNullCheck : IDisposable
 	{
-		public WithoutComparasionNullCheck()
+		public WithoutComparisonNullCheck()
 		{
 			Configuration.Linq.CompareNullsAsValues = false;
 		}
@@ -1172,61 +1667,53 @@ namespace Tests
 		}
 	}
 
-	public abstract class DataSourcesBase : DataAttribute, IParameterDataSource
+	public static class TestExternals
 	{
-		public bool IncludeLinqService { get; private set; }
-		public string[] Providers { get; private set; }
+		public static string? LogFilePath;
+		public static bool    IsParallelRun;
+		public static int     RunID;
+		public static string? Configuration;
 
-		public DataSourcesBase(bool includeLinqService, string[] providers)
+		static StreamWriter? _logWriter;
+
+		public static void Log(string text)
 		{
-			IncludeLinqService = includeLinqService;
-			Providers = providers;
-		}
+			if (LogFilePath != null)
+			{
+				if (_logWriter == null)
+					_logWriter = File.CreateText(LogFilePath);
 
-		public IEnumerable GetData(IParameterInfo parameter)
-		{
-			if (!IncludeLinqService)
-				return GetProviders();
-			var providers = GetProviders().ToArray();
-			return providers.Concat(providers.Select(p => p + ".LinqService"));
-		}
-
-		protected abstract IEnumerable<string> GetProviders();
-	}
-
-	[AttributeUsage(AttributeTargets.Parameter)]
-	public class DataSources : DataSourcesBase
-	{
-		public DataSources(params string[] excludeProviders) : base(true, excludeProviders)
-		{
-		}
-
-		public DataSources(bool includeLinqService, params string[] excludeProviders) : base(includeLinqService, excludeProviders)
-		{
-		}
-
-		protected override IEnumerable<string> GetProviders()
-		{
-			return TestBase.UserProviders.Where(p => !Providers.Contains(p) && TestBase.Providers.Contains(p));
+				_logWriter.WriteLine(text);
+				_logWriter.Flush();
+			}
 		}
 	}
 
-	[AttributeUsage(AttributeTargets.Parameter)]
-	public class IncludeDataSources : DataSourcesBase
+	public class CustomCommandProcessor : IDisposable
 	{
-		public IncludeDataSources(params string[] includeProviders) : base(true, includeProviders)
+		private readonly IDbCommandProcessor? _original = DbCommandProcessorExtensions.Instance;
+		public CustomCommandProcessor(IDbCommandProcessor? processor)
 		{
+			DbCommandProcessorExtensions.Instance = processor;
 		}
 
-		public IncludeDataSources(bool includeLinqService, params string[] includeProviders) : base(includeLinqService, includeProviders)
+		public void Dispose()
 		{
+			DbCommandProcessorExtensions.Instance = _original;
 		}
-
-		protected override IEnumerable<string> GetProviders()
-		{
-			return Providers.Where(TestBase.UserProviders.Contains);
-		}
-
 	}
 
+	public class OptimizeForSequentialAccess : IDisposable
+	{
+		private readonly bool _original = Configuration.OptimizeForSequentialAccess;
+		public OptimizeForSequentialAccess(bool enable)
+		{
+			Configuration.OptimizeForSequentialAccess = enable;
+		}
+
+		public void Dispose()
+		{
+			Configuration.OptimizeForSequentialAccess = _original;
+		}
+	}
 }

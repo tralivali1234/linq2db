@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 
 using LinqToDB;
 using LinqToDB.Mapping;
+using LinqToDB.Tools.Comparers;
 
 using NUnit.Framework;
 
@@ -15,14 +16,14 @@ namespace Tests.Linq
 		[Table(Name="Person")]
 		public class PersonCalculated
 		{
-			[Column, PrimaryKey,  Identity] public int    PersonID   { get; set; } // INTEGER
-			[Column, NotNull              ] public string FirstName  { get; set; }
-			[Column, NotNull              ] public string LastName   { get; set; }
-			[Column,    Nullable          ] public string MiddleName { get; set; } // VARCHAR(50)
-			[Column, NotNull              ] public char   Gender     { get; set; } // CHARACTER(1)
+			[Column, PrimaryKey,  Identity] public int     PersonID   { get; set; } // INTEGER
+			[Column, NotNull              ] public string  FirstName  { get; set; } = null!;
+			[Column, NotNull              ] public string  LastName   { get; set; } = null!;
+			[Column,    Nullable          ] public string? MiddleName { get; set; } // VARCHAR(50)
+			[Column, NotNull              ] public char    Gender     { get; set; } // CHARACTER(1)
 
 			[ExpressionMethod(nameof(GetFullNameExpr), IsColumn = true)]
-			public string FullName { get; set; }
+			public string FullName { get; set; } = null!;
 
 			static Expression<Func<PersonCalculated, string>> GetFullNameExpr()
 			{
@@ -30,7 +31,7 @@ namespace Tests.Linq
 			}
 
 			[ExpressionMethod(nameof(GetAsSqlFullNameExpr), IsColumn = true)]
-			public string AsSqlFullName { get; set; }
+			public string AsSqlFullName { get; set; } = null!;
 
 			static Expression<Func<PersonCalculated, string>> GetAsSqlFullNameExpr()
 			{
@@ -45,11 +46,22 @@ namespace Tests.Linq
 				return (db,p) => db.Doctor.Count(d => d.PersonID == p.PersonID);
 			}
 
-			public static IEqualityComparer<PersonCalculated> Comparer = Tools.ComparerBuilder<PersonCalculated>.GetEqualityComparer();
+			public static IEqualityComparer<PersonCalculated> Comparer = ComparerBuilder.GetEqualityComparer<PersonCalculated>();
 		}
 
-		[Test, DataContextSource]
-		public void CalculatedColumnTest1(string context)
+		[Table("Doctor")]
+		public class DoctorCalculated
+		{
+			[Column, PrimaryKey, Identity] public int    PersonID { get; set; } // Long
+			[Column(Length = 50), NotNull] public string Taxonomy { get; set; } = null!; // text(50)
+
+			// Many association for test
+			[Association(ThisKey = "PersonID", OtherKey = "PersonID", CanBeNull = false, KeyName = "PersonDoctor", BackReferenceName = "PersonDoctor")]
+			public IEnumerable<PersonCalculated> PersonDoctor { get; set; } = null!;
+		}
+
+		[Test]
+		public void CalculatedColumnTest1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -64,8 +76,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CalculatedColumnTest2(string context)
+		[Test]
+		public void CalculatedColumnTest2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -81,8 +93,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CalculatedColumnTest3(string context)
+		[Test]
+		public void CalculatedColumnTest3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -101,6 +113,22 @@ namespace Tests.Linq
 				Assert.That(l[0].t.FullName,      Is.EqualTo(l[0].t.LastName + ", " + l[0].t.FirstName));
 				Assert.That(l[0].t.AsSqlFullName, Is.EqualTo(l[0].t.LastName + ", " + l[0].t.FirstName));
 				Assert.That(l[0].t.DoctorCount,   Is.EqualTo(l[0].cnt));
+			}
+		}
+
+		[Test]
+		public void CalculatedColumnTest4([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var q =
+					db.GetTable<DoctorCalculated>()
+						.SelectMany(d => d.PersonDoctor);
+				var l = q.ToList();
+
+				Assert.That(l,                  Is.Not.Empty);
+				Assert.That(l[0].AsSqlFullName, Is.Not.Null);
+				Assert.That(l[0].AsSqlFullName, Is.EqualTo(l[0].LastName + ", " + l[0].FirstName));
 			}
 		}
 	}

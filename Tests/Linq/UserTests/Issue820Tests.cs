@@ -1,8 +1,6 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
-using LinqToDB.Data;
 
 using NUnit.Framework;
 
@@ -16,7 +14,7 @@ namespace Tests.UserTests
 		[Sql.Expression("{0}", ServerSideOnly = true)]
 		public static short Nope2(short? value)
 		{
-			return value.Value;
+			return value!.Value;
 		}
 
 		[Sql.Expression("{0}", ServerSideOnly = true)]
@@ -25,8 +23,8 @@ namespace Tests.UserTests
 			return value;
 		}
 
-		[Test, DataContextSource]
-		public void TestAndWithFunction(string context)
+		[Test]
+		public void TestAndWithFunction([DataSources] string context)
 		{
 			short? param = 1;
 			using (var db = GetDataContext(context))
@@ -43,8 +41,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestAndWithCastAndFunction(string context)
+		[Test]
+		public void TestAndWithCastAndFunction([DataSources] string context)
 		{
 			short? param = 1;
 			using (var db = GetDataContext(context))
@@ -61,8 +59,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestAndWithCast(string context)
+		[Test]
+		public void TestAndWithCast([DataSources] string context)
 		{
 			short? param = 1;
 			using (var db = GetDataContext(context))
@@ -79,8 +77,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestAndWithValue(string context)
+		[Test]
+		public void TestAndWithValue([DataSources] string context)
 		{
 			short? param = 1;
 			using (var db = GetDataContext(context))
@@ -97,8 +95,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestWithoutValue(string context)
+		[Test]
+		public void TestWithoutValue([DataSources] string context)
 		{
 			short? param = 1;
 			using (var db = GetDataContext(context))
@@ -115,8 +113,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestOrWithValue(string context)
+		[Test]
+		public void TestOrWithValue([DataSources] string context)
 		{
 			short? param = 1;
 			using (var db = GetDataContext(context))

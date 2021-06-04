@@ -1,6 +1,4 @@
-﻿using System;
-
-using LinqToDB;
+﻿using LinqToDB;
 using LinqToDB.Linq;
 
 using NUnit.Framework;
@@ -12,8 +10,8 @@ namespace Tests.Exceptions
 	[TestFixture]
 	public class DmlTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void InsertOrUpdate1(string context)
+		[Test]
+		public void InsertOrUpdate1([InsertOrUpdateDataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -36,8 +34,8 @@ namespace Tests.Exceptions
 			}
 		}
 
-		[Test, DataContextSource]
-		public void InsertOrUpdate2(string context)
+		[Test]
+		public void InsertOrUpdate2([InsertOrUpdateDataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{

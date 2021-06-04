@@ -1,26 +1,41 @@
 ﻿using System;
 using System.Data;
-using System.Linq;
 using System.Text;
 
 namespace LinqToDB.DataProvider.SqlCe
 {
 	using SqlQuery;
 	using SqlProvider;
+	using Mapping;
 
 	class SqlCeSqlBuilder : BasicSqlBuilder
 	{
-		public SqlCeSqlBuilder(ISqlOptimizer sqlOptimizer, SqlProviderFlags sqlProviderFlags, ValueToSqlConverter valueToSqlConverter)
-			: base(sqlOptimizer, sqlProviderFlags, valueToSqlConverter)
+		private readonly SqlCeDataProvider? _provider;
+		public SqlCeSqlBuilder(
+			SqlCeDataProvider? provider,
+			MappingSchema      mappingSchema,
+			ISqlOptimizer      sqlOptimizer,
+			SqlProviderFlags   sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
+		{
+			_provider = provider;
+		}
+
+		// remote context
+		public SqlCeSqlBuilder(
+			MappingSchema    mappingSchema,
+			ISqlOptimizer    sqlOptimizer,
+			SqlProviderFlags sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
 		{
 		}
 
-		protected override string FirstFormat(SelectQuery selectQuery)
+		protected override string? FirstFormat(SelectQuery selectQuery)
 		{
 			return selectQuery.Select.SkipValue == null ? "TOP ({0})" : null;
 		}
 
-		protected override string LimitFormat(SelectQuery selectQuery)
+		protected override string? LimitFormat(SelectQuery selectQuery)
 		{
 			return selectQuery.Select.SkipValue != null ? "FETCH NEXT {0} ROWS ONLY" : null;
 		}
@@ -35,7 +50,7 @@ namespace LinqToDB.DataProvider.SqlCe
 		public override int CommandCount(SqlStatement statement)
 		{
 			if (statement is SqlTruncateTableStatement trun)
-				return trun.ResetIdentity ? 1 + trun.Table.Fields.Values.Count(f => f.IsIdentity) : 1;
+				return trun.ResetIdentity ? 1 + trun.Table!.IdentityFields.Count : 1;
 			return statement.NeedsIdentity() ? 2 : 1;
 		}
 
@@ -43,15 +58,13 @@ namespace LinqToDB.DataProvider.SqlCe
 		{
 			if (statement is SqlTruncateTableStatement trun)
 			{
-				var field = trun.Table.Fields.Values.Skip(commandNumber - 1).First(f => f.IsIdentity);
+				var field = trun.Table!.IdentityFields[commandNumber - 1];
 
 				StringBuilder.Append("ALTER TABLE ");
-				ConvertTableName(StringBuilder, trun.Table.Database, trun.Table.Schema, trun.Table.PhysicalName);
-				StringBuilder
-					.Append(" ALTER COLUMN ")
-					.Append(Convert(field.PhysicalName, ConvertType.NameToQueryField))
-					.AppendLine(" IDENTITY(1,1)")
-					;
+				ConvertTableName(StringBuilder, trun.Table.Server, trun.Table.Database, trun.Table.Schema, trun.Table.PhysicalName!, trun.Table.TableOptions);
+				StringBuilder.Append(" ALTER COLUMN ");
+				Convert(StringBuilder, field.PhysicalName, ConvertType.NameToQueryField);
+				StringBuilder.AppendLine(" IDENTITY(1, 1)");
 			}
 			else
 			{
@@ -61,123 +74,70 @@ namespace LinqToDB.DataProvider.SqlCe
 
 		protected override ISqlBuilder CreateSqlBuilder()
 		{
-			return new SqlCeSqlBuilder(SqlOptimizer, SqlProviderFlags, ValueToSqlConverter);
+			return new SqlCeSqlBuilder(_provider, MappingSchema, SqlOptimizer, SqlProviderFlags);
 		}
 
-		protected override void BuildFunction(SqlFunction func)
+		protected override void BuildDataTypeFromDataType(SqlDataType type, bool forCreateTable)
 		{
-			func = ConvertFunctionParameters(func);
-			base.BuildFunction(func);
-		}
-
-		protected override void BuildDataType(SqlDataType type, bool createDbType)
-		{
-			switch (type.DataType)
+			switch (type.Type.DataType)
 			{
-				case DataType.Char          : base.BuildDataType(new SqlDataType(DataType.NChar,    type.Length), createDbType); break;
-				case DataType.VarChar       : base.BuildDataType(new SqlDataType(DataType.NVarChar, type.Length), createDbType); break;
-				case DataType.SmallMoney    : StringBuilder.Append("Decimal(10,4)");                                             break;
+				case DataType.Char          : base.BuildDataTypeFromDataType(new SqlDataType(DataType.NChar,    type.Type.Length), forCreateTable); return;
+				case DataType.VarChar       : base.BuildDataTypeFromDataType(new SqlDataType(DataType.NVarChar, type.Type.Length), forCreateTable); return;
+				case DataType.SmallMoney    : StringBuilder.Append("Decimal(10, 4)");                                                               return;
 				case DataType.DateTime2     :
 				case DataType.Time          :
 				case DataType.Date          :
-				case DataType.SmallDateTime : StringBuilder.Append("DateTime");                                                  break;
-				default                     : base.BuildDataType(type, createDbType);                                            break;
-			}
-		}
+				case DataType.SmallDateTime : StringBuilder.Append("DateTime");                                                                     return;
+				case DataType.NVarChar:
+					if (type.Type.Length == null || type.Type.Length > 4000 || type.Type.Length < 1)
+					{
+						StringBuilder
+							.Append(type.Type.DataType)
+							.Append("(4000)");
+						return;
+					}
 
-		protected override void BuildFromClause(SqlStatement statement, SelectQuery selectQuery)
-		{
-			if (!statement.IsUpdate())
-				base.BuildFromClause(statement, selectQuery);
-		}
-
-		protected override void BuildOrderByClause(SelectQuery selectQuery)
-		{
-			if (selectQuery.OrderBy.Items.Count == 0 && selectQuery.Select.SkipValue != null)
-			{
-				AppendIndent();
-
-				StringBuilder.Append("ORDER BY").AppendLine();
-
-				Indent++;
-
-				AppendIndent();
-
-				BuildExpression(selectQuery.Select.Columns[0].Expression);
-				StringBuilder.AppendLine();
-
-				Indent--;
-			}
-			else
-				base.BuildOrderByClause(selectQuery);
-		}
-
-		protected override void BuildColumnExpression(SelectQuery selectQuery, ISqlExpression expr, string alias, ref bool addAlias)
-		{
-			var wrap = false;
-
-			if (expr.SystemType == typeof(bool))
-			{
-				if (expr is SqlSearchCondition)
-					wrap = true;
-				else
-					wrap = expr is SqlExpression ex && ex.Expr == "{0}" && ex.Parameters.Length == 1 && ex.Parameters[0] is SqlSearchCondition;
+					break;
 			}
 
-			if (wrap) StringBuilder.Append("CASE WHEN ");
-			base.BuildColumnExpression(selectQuery, expr, alias, ref addAlias);
-			if (wrap) StringBuilder.Append(" THEN 1 ELSE 0 END");
+			base.BuildDataTypeFromDataType(type, forCreateTable);
 		}
 
-		public override object Convert(object value, ConvertType convertType)
+		public override StringBuilder Convert(StringBuilder sb, string value, ConvertType convertType)
 		{
 			switch (convertType)
 			{
 				case ConvertType.NameToQueryParameter:
 				case ConvertType.NameToCommandParameter:
 				case ConvertType.NameToSprocParameter:
-					return "@" + value;
+					return sb.Append('@').Append(value);
 
 				case ConvertType.NameToQueryField:
 				case ConvertType.NameToQueryFieldAlias:
 				case ConvertType.NameToQueryTableAlias:
-					{
-						var name = value.ToString();
+					if (value.Length > 0 && value[0] == '[')
+						return sb.Append(value);
 
-						if (name.Length > 0 && name[0] == '[')
-							return value;
-					}
-
-					return "[" + value + "]";
+					return sb.Append('[').Append(value).Append(']');
 
 				case ConvertType.NameToDatabase:
 				case ConvertType.NameToSchema:
 				case ConvertType.NameToQueryTable:
-					if (value != null)
-					{
-						var name = value.ToString();
+					if (value.Length > 0 && value[0] == '[')
+						return sb.Append(value);
 
-						if (name.Length > 0 && name[0] == '[')
-							return value;
+					if (value.IndexOf('.') > 0)
+						value = string.Join("].[", value.Split('.'));
 
-						if (name.IndexOf('.') > 0)
-							value = string.Join("].[", name.Split('.'));
-
-						return "[" + value + "]";
-					}
-
-					break;
+					return sb.Append('[').Append(value).Append(']');
 
 				case ConvertType.SprocParameterToName:
-					if (value != null)
-					{
-						var str = value.ToString();
-						return str.Length > 0 && str[0] == '@'? str.Substring(1): str;
-					}
-					break;
+					return value.Length > 0 && value[0] == '@'
+						? sb.Append(value.Substring(1))
+						: sb.Append(value);
 			}
 
-			return value;
+			return sb.Append(value);
 		}
 
 		protected override void BuildCreateTableIdentityAttribute2(SqlField field)
@@ -185,15 +145,28 @@ namespace LinqToDB.DataProvider.SqlCe
 			StringBuilder.Append("IDENTITY");
 		}
 
-		public override StringBuilder BuildTableName(StringBuilder sb, string database, string schema, string table)
+		public override StringBuilder BuildTableName(StringBuilder sb, string? server, string? database, string? schema, string table, TableOptions tableOptions)
 		{
 			return sb.Append(table);
 		}
 
-		protected override string GetProviderTypeName(IDbDataParameter parameter)
+		protected override string? GetProviderTypeName(IDbDataParameter parameter)
 		{
-			dynamic p = parameter;
-			return p.SqlDbType.ToString();
+			if (_provider != null)
+			{
+				var param = _provider.TryGetProviderParameter(parameter, MappingSchema);
+				if (param != null)
+					return _provider.Adapter.GetDbType(param).ToString();
+			}
+
+			return base.GetProviderTypeName(parameter);
 		}
+
+		protected override void BuildMergeStatement(SqlMergeStatement merge)
+		{
+			throw new LinqToDBException($"{Name} provider doesn't support SQL MERGE statement");
+		}
+
+		protected override void BuildIsDistinctPredicate(SqlPredicate.IsDistinct expr) => BuildIsDistinctPredicateFallback(expr);
 	}
 }

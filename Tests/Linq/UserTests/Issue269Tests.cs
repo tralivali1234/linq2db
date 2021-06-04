@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using LinqToDB;
 using NUnit.Framework;
 
@@ -7,21 +8,25 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue269Tests : TestBase
 	{
-		class TestDataContextSourceAttribute : DataContextSourceAttribute
+		[AttributeUsage(AttributeTargets.Parameter)]
+		class TestDataContextSourceAttribute : DataSourcesAttribute
 		{
 			public TestDataContextSourceAttribute() : base(
-				ProviderName.Access, ProviderName.SQLiteClassic, ProviderName.Oracle,
-				ProviderName.MySql, ProviderName.Sybase,
-				ProviderName.OracleNative, ProviderName.OracleManaged,
+				TestProvName.AllAccess,
+				TestProvName.AllSQLite,
+				TestProvName.AllOracle,
+				TestProvName.AllMySql,
+				TestProvName.AllSybase,
+				TestProvName.AllSqlServer,
 				ProviderName.DB2,
-				TestProvName.MySql57,
-				ProviderName.SQLiteMS, ProviderName.SqlServer2000, TestProvName.MariaDB)
+				ProviderName.SqlCe,
+				TestProvName.AllSapHana)
 			{
 			}
 		}
 
-		[Test, TestDataContextSource]
-		public void TestTake(string context)
+		[Test]
+		public void TestTake([TestDataContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -29,7 +34,7 @@ namespace Tests.UserTests
 					.Where(pat => db.Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Take(1)
 						.Any(_ => _.Contains("with")));
 
@@ -37,7 +42,7 @@ namespace Tests.UserTests
 					.Where(pat => Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Take(1)
 						.Any(_ => _.Contains("with")));
 
@@ -45,8 +50,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, TestDataContextSource]
-		public void TestDistinct(string context)
+		[Test]
+		public void TestDistinct([TestDataContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -54,15 +59,18 @@ namespace Tests.UserTests
 					.Where(pat => db.Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Distinct()
 						.Any(_ => _.Contains("with")));
+
+				// DISTINCT should be optimized out
+//				Assert.That(q.EnumQueries().All(x => !x.Select.IsDistinct), Is.True);
 
 				var e = Patient
 					.Where(pat => Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Distinct()
 						.Any(_ => _.Contains("with")));
 
@@ -70,8 +78,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, TestDataContextSource]
-		public void TestSkipDistinct(string context)
+		[Test]
+		public void TestSkipDistinct([TestDataContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -79,7 +87,7 @@ namespace Tests.UserTests
 					.Where(pat => db.Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Skip(0)
 						.Distinct()
 						.Any(_ => _.Contains("with")));
@@ -88,7 +96,7 @@ namespace Tests.UserTests
 					.Where(pat => Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Skip(0)
 						.Distinct()
 						.Any(_ => _.Contains("with")));
@@ -97,8 +105,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, TestDataContextSource]
-		public void TestDistinctSkip(string context)
+		[Test]
+		public void TestDistinctSkip([TestDataContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -106,7 +114,7 @@ namespace Tests.UserTests
 					.Where(pat => db.Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Distinct()
 						.Skip(0)
 						.Any(_ => _.Contains("with")));
@@ -115,7 +123,7 @@ namespace Tests.UserTests
 					.Where(pat => Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Distinct()
 						.Skip(0)
 						.Any(_ => _.Contains("with")));
@@ -124,8 +132,8 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, TestDataContextSource]
-		public void TestSkip(string context)
+		[Test]
+		public void TestSkip([TestDataContextSource] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -133,7 +141,7 @@ namespace Tests.UserTests
 					.Where(pat => db.Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Skip(0)
 						.Any(_ => _.Contains("with")));
 
@@ -141,13 +149,12 @@ namespace Tests.UserTests
 					.Where(pat => Person
 						.Where(per => per.ID == pat.PersonID)
 						.OrderByDescending(per => per.FirstName)
-						.Select(c => c.Patient.Diagnosis)
+						.Select(c => c.Patient!.Diagnosis)
 						.Skip(0)
 						.Any(_ => _.Contains("with")));
 
 				AreEqual(e, q);
 			}
 		}
-
 	}
 }

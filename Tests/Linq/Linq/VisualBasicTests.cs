@@ -1,6 +1,4 @@
-﻿#if !MONO && !TRAVIS
-
-using System;
+﻿using System;
 using System.Linq;
 
 using LinqToDB;
@@ -16,8 +14,8 @@ namespace Tests.Linq
 	[TestFixture]
 	public class VisualBasicTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void CompareString(string context)
+		[Test]
+		public void CompareString([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -25,18 +23,20 @@ namespace Tests.Linq
 					CompilerServices.CompareString(db));
 		}
 
-		[Test, DataContextSource]
-		public void CompareString1(string context)
+		[Test]
+		public void CompareString1([IncludeDataSources(TestProvName.AllSQLite)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var str = CompilerServices.CompareString(db).ToString();
-				Assert.That(str.IndexOf("CASE"), Is.EqualTo(-1));
+				var query = (IQueryable<Person>)CompilerServices.CompareString(db);
+				var str   = query.ToString();
+				TestContext.WriteLine(str);
+				Assert.That(str, Does.Not.Contain("CASE"));
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SapHana)]
-		public void ParameterName(string context)
+		[Test]
+		public void ParameterName([DataSources(TestProvName.AllSapHana)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -44,8 +44,8 @@ namespace Tests.Linq
 					VisualBasicCommon.ParamenterName(db));
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
-		public void SearchCondition1(string context)
+		[Test]
+		public void SearchCondition1([DataSources(TestProvName.AllAccess)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -55,8 +55,8 @@ namespace Tests.Linq
 					VisualBasicCommon.SearchCondition1(db));
 		}
 
-		[Test, NorthwindDataContext]
-		public void SearchCondition2(string context)
+		[Test]
+		public void SearchCondition2([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -69,8 +69,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void SearchCondition3(string context)
+		[Test]
+		public void SearchCondition3([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -89,8 +89,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void SearchCondition4(string context)
+		[Test]
+		public void SearchCondition4([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -108,7 +108,78 @@ namespace Tests.Linq
 					vbResults);
 			}
 		}
+
+		[ActiveIssue(649)]
+		[Test]
+		public void Issue649Test1([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable<VBTests.Activity649>())
+			using (db.CreateLocalTable<VBTests.Person649>())
+			{
+				var result = VBTests.Issue649Test1(db);
+			}
+		}
+
+		[Test]
+		public void Issue649Test2([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable<VBTests.Activity649>())
+			using (db.CreateLocalTable<VBTests.Person649>())
+			{
+				var result = VBTests.Issue649Test2(db);
+			}
+		}
+
+		[Test]
+		public void Issue649Test3([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable<VBTests.Activity649>())
+			using (db.CreateLocalTable<VBTests.Person649>())
+			{
+				var result = VBTests.Issue649Test3(db);
+			}
+		}
+
+		[ActiveIssue(649)]
+		[Test]
+		public void Issue649Test4([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.InlineParameters = true;
+				var q1 = db.Child.GroupBy(c => new
+				{
+					c.ParentID,
+					c.ChildID
+				}, (c, g) => new
+				{
+					Child = c,
+					Grouped = g
+				}).Select(data => new
+				{
+					ParentID  = data.Child.ParentID,
+					ChildID   = data.Child.ChildID,
+					LastChild = data.Grouped.Max(f => f.ChildID)
+				});
+
+				var str = q1.ToString();
+			}
+		}
+
+		#region issue 2746
+
+		[Test]
+		public void Issue2746([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				VBTests.Issue2746Test(db, "1");
+			}
+		}
+		#endregion
+
 	}
 }
-
-#endif

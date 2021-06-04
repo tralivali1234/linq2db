@@ -5,8 +5,6 @@ using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
 
-using JetBrains.Annotations;
-
 namespace LinqToDB.Metadata
 {
 	using Common;
@@ -15,38 +13,34 @@ namespace LinqToDB.Metadata
 	{
 		readonly Dictionary<string,MetaTypeInfo> _types;
 
-#if !NETSTANDARD1_6
 		public XmlAttributeReader(string xmlFile)
 			: this(xmlFile, Assembly.GetCallingAssembly())
 		{
 		}
-#endif
 
-		public XmlAttributeReader([NotNull] string xmlFile, [NotNull] Assembly assembly)
+		public XmlAttributeReader(string xmlFile, Assembly assembly)
 		{
-			if (xmlFile  == null) throw new ArgumentNullException("xmlFile");
-			if (assembly == null) throw new ArgumentNullException("assembly");
+			if (xmlFile  == null) throw new ArgumentNullException(nameof(xmlFile));
+			if (assembly == null) throw new ArgumentNullException(nameof(assembly));
 
-			StreamReader streamReader = null;
+			StreamReader? streamReader = null;
 
 			try
 			{
-#if !NETSTANDARD1_6
 				if (File.Exists(xmlFile))
 				{
 					streamReader = File.OpenText(xmlFile);
 				}
 				else
 				{
-					var combinePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, xmlFile);
+					var combinePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory!, xmlFile);
 
 					if (File.Exists(combinePath))
 						streamReader = File.OpenText(combinePath);
 				}
-#endif
 
-				var embedded = streamReader == null;
-				var stream   = embedded ? assembly.GetManifestResourceStream(xmlFile) : streamReader.BaseStream;
+				var embedded   = streamReader == null;
+				Stream? stream = embedded ? assembly.GetManifestResourceStream(xmlFile) : streamReader!.BaseStream;
 
 				if (embedded && stream == null)
 				{
@@ -68,14 +62,14 @@ namespace LinqToDB.Metadata
 			}
 		}
 
-		public XmlAttributeReader([NotNull] Stream xmlDocStream)
+		public XmlAttributeReader(Stream xmlDocStream)
 		{
 			if (xmlDocStream == null) throw new ArgumentNullException(nameof(xmlDocStream));
 
 			_types = LoadStream(xmlDocStream, "");
 		}
 
-		static AttributeInfo[] GetAttrs(string fileName, XElement el, string exclude, string typeName, string memberName)
+		static AttributeInfo[] GetAttrs(string fileName, XElement el, string? exclude, string typeName, string? memberName)
 		{
 			var attrs = el.Elements().Where(e => e.Name.LocalName != exclude).Select(a =>
 			{
@@ -98,7 +92,7 @@ namespace LinqToDB.Metadata
 
 					var val =
 						type != null ?
-							Converter.ChangeType(value.Value, Type.GetType(type.Value, true)) :
+							Converter.ChangeType(value.Value, Type.GetType(type.Value, true)!) :
 							value.Value;
 
 					return Tuple.Create(name, val);
@@ -143,9 +137,7 @@ namespace LinqToDB.Metadata
 		public T[] GetAttributes<T>(Type type, bool inherit = true)
 			where T : Attribute
 		{
-			MetaTypeInfo t;
-
-			if (_types.TryGetValue(type.FullName, out t) || _types.TryGetValue(type.Name, out t))
+			if (_types.TryGetValue(type.FullName!, out var t) || _types.TryGetValue(type.Name, out t))
 				return t.GetAttribute(typeof(T)).Select(a => (T) a.MakeAttribute(typeof(T))).ToArray();
 
 			return Array<T>.Empty;
@@ -154,13 +146,9 @@ namespace LinqToDB.Metadata
 		public T[] GetAttributes<T>(Type type, MemberInfo memberInfo, bool inherit = true)
 			where T : Attribute
 		{
-			MetaTypeInfo t;
-
-			if (_types.TryGetValue(type.FullName, out t) || _types.TryGetValue(type.Name, out t))
+			if (_types.TryGetValue(type.FullName!, out var t) || _types.TryGetValue(type.Name, out t))
 			{
-				MetaMemberInfo m;
-
-				if (t.Members.TryGetValue(memberInfo.Name, out m))
+				if (t.Members.TryGetValue(memberInfo.Name, out var m))
 				{
 					return m.GetAttribute(typeof(T)).Select(a => (T)a.MakeAttribute(typeof(T))).ToArray();
 				}
@@ -171,6 +159,6 @@ namespace LinqToDB.Metadata
 
 		/// <inheritdoc cref="IMetadataReader.GetDynamicColumns"/>
 		public MemberInfo[] GetDynamicColumns(Type type)
-			=> new MemberInfo[0];
+			=> Array<MemberInfo>.Empty;
 	}
 }

@@ -1,4 +1,13 @@
-﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Doctor') AND type in (N'U'))
+﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('dbo.SameTableName') AND type IN (N'U'))
+BEGIN DROP TABLE dbo.SameTableName END
+GO
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('dbo.TestSchema_SameTableName') AND type IN (N'U'))
+BEGIN DROP TABLE dbo.TestSchema_SameTableName END
+GO
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('TestSchema.SameTableName') AND type IN (N'U'))
+BEGIN DROP TABLE TestSchema.SameTableName END
+GO
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Doctor') AND type in (N'U'))
 BEGIN DROP TABLE Doctor END
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Patient') AND type in (N'U'))
@@ -9,6 +18,10 @@ BEGIN DROP TABLE InheritanceParent END
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('InheritanceChild') AND type in (N'U'))
 BEGIN DROP TABLE InheritanceChild END
+GO
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TestProcedure' AND schema_id = SCHEMA_ID('TestSchema'))
+	DROP PROCEDURE TestSchema.TestProcedure
+GO
 
 CREATE TABLE InheritanceParent
 (
@@ -52,7 +65,7 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
 GO
-INSERT INTO Person (FirstName, LastName, Gender) VALUES (N'Jürgen', N'König',   'M')
+INSERT INTO Person (FirstName, LastName, MiddleName, Gender) VALUES (N'Jürgen', N'König', 'Ko', 'M')
 GO
 -- Doctor Table Extension
 
@@ -107,6 +120,24 @@ SELECT * FROM Person WHERE PersonID = @id
 GO
 
 GRANT EXEC ON Person_SelectByKey TO PUBLIC
+GO
+
+-- Person_SelectByKeyLowercase
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Person_SelectByKeyLowercase')
+BEGIN DROP Procedure Person_SelectByKeyLowercase
+END
+GO
+
+CREATE Procedure Person_SelectByKeyLowercase
+	@id int
+AS
+
+SELECT PersonID, FirstName FROM Person WHERE PersonID = @id
+
+GO
+
+GRANT EXEC ON Person_SelectByKeyLowercase TO PUBLIC
 GO
 
 -- Person_SelectAll
@@ -314,6 +345,28 @@ GO
 GRANT EXEC ON Person_SelectByName TO PUBLIC
 GO
 
+-- VariableResults
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'VariableResults')
+BEGIN DROP Procedure VariableResults END
+GO
+CREATE PROCEDURE VariableResults
+	@ReturnFullRow bit = 1
+AS
+BEGIN
+	IF @ReturnFullRow = 1
+	BEGIN
+		SELECT
+			1      as Code,
+			'Val1' as Value1,
+			'Val2' as Value2
+	END
+	ELSE
+		SELECT
+			'v' as Value1,
+			2   as Code
+END
+GO
 
 -- OutRefTest
 
@@ -423,7 +476,13 @@ CREATE TABLE AllTypes
 -- SKIP SqlServer.2008 BEGIN
 -- SKIP SqlServer.2012 BEGIN
 -- SKIP SqlServer.2014 BEGIN
--- SKIP SqlAzure.2012 BEGIN
+-- SKIP SqlServer.2016 BEGIN
+-- SKIP SqlServer.2017 BEGIN
+-- SKIP SqlServer.2019 BEGIN
+-- SKIP SqlServer.2019.SA BEGIN
+-- SKIP SqlServer.2019.FEC BEGIN
+-- SKIP SqlServer.Contained BEGIN
+-- SKIP SqlAzure BEGIN
 	datetime2DataType        varchar(50)       NULL,
 	datetimeoffsetDataType   varchar(50)       NULL,
 	datetimeoffset0DataType  varchar(50)       NULL,
@@ -439,7 +498,13 @@ CREATE TABLE AllTypes
 -- SKIP SqlServer.2008 END
 -- SKIP SqlServer.2012 END
 -- SKIP SqlServer.2014 END
--- SKIP SqlAzure.2012 END
+-- SKIP SqlServer.2016 END
+-- SKIP SqlServer.2017 END
+-- SKIP SqlServer.2019 END
+-- SKIP SqlServer.2019.SA END
+-- SKIP SqlServer.2019.FEC END
+-- SKIP SqlServer.Contained END
+-- SKIP SqlAzure END
 
 ) ON [PRIMARY]
 GO
@@ -553,14 +618,14 @@ GO
 CREATE TABLE GrandChild (ParentID int, ChildID int, GrandChildID int, _ID INT IDENTITY PRIMARY KEY)
 GO
 
--- SKIP SqlAzure.2012 BEGIN
+-- SKIP SqlAzure BEGIN
 
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is Parent table' , @level0type=N'SCHEMA', @level0name=N'dbo', @level1type=N'TABLE', @level1name=N'Parent'
 GO
 
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This ChildID column', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'TABLE', @level1name=N'Child', @level2type=N'COLUMN', @level2name=N'ChildID'
 GO
--- SKIP SqlAzure.2012 END
+-- SKIP SqlAzure END
 
 
 CREATE FUNCTION GetParentByID(@id int)
@@ -620,7 +685,13 @@ GO
 -- SKIP SqlServer.2008 BEGIN
 -- SKIP SqlServer.2012 BEGIN
 -- SKIP SqlServer.2014 BEGIN
--- SKIP SqlAzure.2012 BEGIN
+-- SKIP SqlServer.2016 BEGIN
+-- SKIP SqlServer.2017 BEGIN
+-- SKIP SqlServer.2019 BEGIN
+-- SKIP SqlServer.2019.SA BEGIN
+-- SKIP SqlServer.2019.FEC BEGIN
+-- SKIP SqlServer.Contained BEGIN
+-- SKIP SqlAzure BEGIN
 CREATE TABLE LinqDataTypes
 (
 	ID             int,
@@ -636,9 +707,15 @@ CREATE TABLE LinqDataTypes
 	StringValue    nvarchar(50)    NULL
 )
 GO
--- SKIP SqlAzure.2012 END
+-- SKIP SqlAzure END
 -- SKIP SqlServer.2012 END
 -- SKIP SqlServer.2014 END
+-- SKIP SqlServer.2016 END
+-- SKIP SqlServer.2017 END
+-- SKIP SqlServer.2019 END
+-- SKIP SqlServer.2019.SA END
+-- SKIP SqlServer.2019.FEC END
+-- SKIP SqlServer.Contained END
 -- SKIP SqlServer.2008 END
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('TestIdentity') AND type in (N'U'))
@@ -894,6 +971,11 @@ GO
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('TestSchema.TestSchemaA') AND type in (N'U'))
 BEGIN
 	DROP TABLE TestSchema.TestSchemaA
+END
+GO
+
+IF EXISTS (SELECT  SCHEMA_NAME FROM    INFORMATION_SCHEMA.SCHEMATA WHERE   SCHEMA_NAME = 'TestSchema')
+BEGIN
 	DROP SCHEMA [TestSchema]
 END
 GO
@@ -927,12 +1009,14 @@ GO
 
 CREATE TABLE [TestSchema].[TestSchemaB]
 (
-	[TestSchemaBID]       INT NOT NULL,
-	[OriginTestSchemaAID] INT NOT NULL,
-	[TargetTestSchemaAID] INT NOT NULL,
+	[TestSchemaBID]           INT NOT NULL,
+	[OriginTestSchemaAID]     INT NOT NULL,
+	[TargetTestSchemaAID]     INT NOT NULL,
+	[Target_Test_Schema_A_ID] INT NOT NULL,
 	CONSTRAINT [PK_TestSchema_TestSchemaB] PRIMARY KEY (TestSchemaBID),
-	CONSTRAINT [FK_TestSchema_TestSchemaBY_OriginTestSchemaA] FOREIGN KEY (OriginTestSchemaAID) REFERENCES [TestSchema].[TestSchemaA] ([TestSchemaAID]),
-	CONSTRAINT [FK_TestSchema_TestSchemaBY_TargetTestSchemaA] FOREIGN KEY (TargetTestSchemaAID) REFERENCES [TestSchema].[TestSchemaA] ([TestSchemaAID])
+	CONSTRAINT [FK_TestSchema_TestSchemaBY_OriginTestSchemaA]  FOREIGN KEY (OriginTestSchemaAID)       REFERENCES [TestSchema].[TestSchemaA] ([TestSchemaAID]),
+	CONSTRAINT [FK_TestSchema_TestSchemaBY_TargetTestSchemaA]  FOREIGN KEY (TargetTestSchemaAID)       REFERENCES [TestSchema].[TestSchemaA] ([TestSchemaAID]),
+	CONSTRAINT [FK_TestSchema_TestSchemaBY_TargetTestSchemaA2] FOREIGN KEY ([Target_Test_Schema_A_ID]) REFERENCES [TestSchema].[TestSchemaA] ([TestSchemaAID])
 );
 GO
 
@@ -946,4 +1030,264 @@ BEGIN
 END
 GO
 GRANT EXEC ON AddIssue792Record TO PUBLIC
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('Issue1144') AND type in (N'U'))
+BEGIN DROP TABLE Issue1144 END
+GO
+CREATE TABLE Issue1144
+(
+	id	INT
+	CONSTRAINT PK_Issue1144 PRIMARY KEY CLUSTERED (id ASC)
+)
+GO
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Column description' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'Issue1144', @level2type=N'COLUMN',@level2name=N'id'
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Index description' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'Issue1144', @level2type=N'INDEX',@level2name=N'PK_Issue1144'
+
+GO
+CREATE TABLE dbo.SameTableName
+(
+	id	INT
+)
+GO
+CREATE TABLE dbo.TestSchema_SameTableName
+(
+	id	INT
+)
+GO
+CREATE TABLE TestSchema.SameTableName
+(
+	id	INT
+)
+GO
+-- SKIP SqlServer.2005 BEGIN
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('dbo.Issue1115') AND type in (N'U'))
+BEGIN DROP TABLE dbo.Issue1115 END
+GO
+
+CREATE TABLE Issue1115
+(
+	id    hierarchyid    NOT NULL CONSTRAINT PK_Issue1115 PRIMARY KEY CLUSTERED
+
+)
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'TableTypeTestProc')
+DROP PROC TableTypeTestProc
+GO
+IF EXISTS (SELECT * FROM sys.types WHERE name = 'TestTableType')
+DROP TYPE TestTableType
+GO
+CREATE TYPE TestTableType AS TABLE
+(
+	Id   INT,
+	Name NVARCHAR(10)
+)
+GO
+CREATE PROC TableTypeTestProc (
+	@table TestTableType READONLY
+)
+AS
+BEGIN
+	SELECT * FROM @table AS Result
+END
+GO
+-- SKIP SqlServer.2005 END
+CREATE PROCEDURE TestSchema.TestProcedure
+AS
+BEGIN
+	SELECT 1
+END
+GO
+
+
+-- PersonSearch
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'PersonSearch')
+BEGIN DROP Procedure PersonSearch END
+GO
+CREATE PROCEDURE PersonSearch
+	@nameFilter	nvarchar(512)
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from interfering with SELECT statements.
+	SET NOCOUNT ON;
+
+	Create Table #PeopleIds (
+		PersonID int
+	);
+	INSERT INTO #PeopleIds
+	SELECT Person.PersonID
+	FROM Person
+	WHERE FirstName like '%' + @nameFilter + '%'
+	OR LastName like '%' + @nameFilter + '%';
+
+	-- 0: List of matching person ids.
+	SELECT PersonID FROM #PeopleIds;
+
+	-- 1: List of matching persons.
+	SELECT * FROM Person WHERE Person.PersonID
+	IN (SELECT PersonID FROM #PeopleIds) ORDER BY LastName;
+
+	-- 2: List of matching patients.
+	SELECT * FROM Patient WHERE Patient.PersonID
+	IN (SELECT PersonID FROM #PeopleIds);
+
+	-- 3: Is doctor in the results.
+	SELECT
+	CASE WHEN COUNT(*) >= 1 THEN
+		CAST (1 as BIT)
+	ELSE
+		CAST (0 as BIT)
+	END
+	FROM Doctor
+	WHERE Doctor.PersonID
+	IN (SELECT PersonID FROM #PeopleIds);
+
+	-- 4: List of matching persons again.
+	SELECT * FROM Person WHERE Person.PersonID
+	IN (SELECT PersonID FROM #PeopleIds) ORDER BY LastName;
+
+	-- 5: Number of matched people.
+	SELECT COUNT(*) FROM #PeopleIds;
+
+	-- 6: First matched person.
+	SELECT TOP 1 * FROM Person WHERE Person.PersonID
+	IN (SELECT PersonID FROM #PeopleIds) ORDER BY LastName;
+
+	Drop Table #PeopleIds;
+END
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'Issue1897')
+BEGIN DROP Procedure Issue1897 END
+GO
+
+CREATE PROCEDURE dbo.Issue1897
+AS
+BEGIN
+	RETURN 4
+END
+
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'TF' AND name = 'Issue1921')
+BEGIN DROP FUNCTION Issue1921 END
+GO
+
+CREATE FUNCTION dbo.Issue1921()
+RETURNS @table table (name sysname, objid    int)
+AS
+BEGIN
+  INSERT INTO @table
+  SELECT  name, object_id from sys.objects where name ='Issue1921'
+RETURN
+END
+GO
+
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'QueryProcParameters')
+BEGIN DROP Procedure QueryProcParameters END
+GO
+
+CREATE Procedure QueryProcParameters
+	@input          int,
+	@output1        int output,
+	@output2        int output
+AS
+
+SET @output1 = @input + 1
+SELECT * FROM Person
+SET @output2 = @input + 2
+
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'QueryProcMultipleParameters')
+BEGIN DROP Procedure QueryProcMultipleParameters END
+GO
+
+CREATE Procedure QueryProcMultipleParameters
+	@input          int,
+	@output1        int output,
+	@output2        int output,
+	@output3        int output
+AS
+
+SET @output1 = @input + 1
+SELECT * FROM Person
+SET @output2 = @input + 2
+SELECT * FROM Doctor
+SET @output3 = @input + 3
+
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'ExecuteProcIntParameters')
+BEGIN DROP Procedure ExecuteProcIntParameters END
+GO
+
+CREATE Procedure ExecuteProcIntParameters
+	@input          int,
+	@output         int output
+AS
+
+SET @output = @input + 1
+UPDATE Person SET FirstName = N'John' WHERE FirstName = N'John'
+
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'ExecuteProcStringParameters')
+BEGIN DROP Procedure ExecuteProcStringParameters END
+GO
+
+CREATE Procedure ExecuteProcStringParameters
+	@input          int,
+	@output         int output
+AS
+
+SET @output = @input + 1
+SELECT N'издрасте'
+
+GO
+-- ScalarFunction function
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'FN' AND name = 'ScalarFunction')
+BEGIN DROP FUNCTION ScalarFunction
+END
+GO
+CREATE FUNCTION ScalarFunction(@value INT)
+RETURNS INT
+AS
+BEGIN
+	RETURN @value
+END
+GO
+
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is <test> procedure!', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'PROCEDURE', @level1name=N'ExecuteProcStringParameters'
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is <test> procedure parameter!', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'PROCEDURE', @level1name=N'ExecuteProcStringParameters', @level2type=N'PARAMETER', @level2name=N'@input'
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is <test> table function!', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'FUNCTION', @level1name=N'GetParentByID'
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is <test> table function parameter!', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'FUNCTION', @level1name=N'GetParentByID', @level2type=N'PARAMETER', @level2name=N'@id'
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is <test> scalar function!', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'FUNCTION', @level1name=N'ScalarFunction'
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'This is <test> scalar function parameter!', @level0type=N'SCHEMA', @level0name=N'dbo',  @level1type=N'FUNCTION', @level1name=N'ScalarFunction', @level2type=N'PARAMETER', @level2name=N'@value'
+GO
+
+-- test T4 name conflict
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID('dbo.DataType') AND type in (N'U'))
+BEGIN DROP TABLE dbo.DataType END
+GO
+
+CREATE TABLE DataType
+(
+	id INT NOT NULL
+
+)
+GO
+
+DROP TABLE CollatedTable
+GO
+CREATE TABLE CollatedTable
+(
+	Id				INT NOT NULL,
+	CaseSensitive	NVARCHAR(20) COLLATE Latin1_General_CS_AI NOT NULL,
+	CaseInsensitive	NVARCHAR(20) COLLATE Latin1_General_CI_AI NOT NULL
+)
 GO

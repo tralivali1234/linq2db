@@ -8,29 +8,94 @@ namespace LinqToDB.Data
 {
 	using System.Data;
 
+	/// <summary>
+	/// Tracing information for the <see cref="DataConnection"/> events.
+	/// </summary>
 	public class TraceInfo
 	{
-		public TraceInfo(TraceInfoStep traceInfoStep)
+		/// <summary>
+		/// Initializes a new instance of the <see cref="TraceInfo"/> class.
+		/// </summary>
+		/// <param name="dataConnection"><see cref="DataConnection"/> instance, generated this trace.</param>
+		/// <param name="traceInfoStep">Trace execution step.</param>
+		/// <param name="operation">Operation associated with trace event.</param>
+		/// <param name="isAsync">Flag indicating whether operation was executed asynchronously.</param>
+		public TraceInfo(DataConnection dataConnection, TraceInfoStep traceInfoStep, TraceOperation operation, bool isAsync)
 		{
-			TraceInfoStep = traceInfoStep;
+			DataConnection = dataConnection;
+			TraceInfoStep  = traceInfoStep;
+			Operation      = operation;
+			IsAsync        = isAsync;
 		}
 
-		public TraceInfoStep  TraceInfoStep    { get; private set; }
-		public TraceLevel     TraceLevel       { get; set; }
-		public DataConnection DataConnection   { get; set; }
-		public IDbCommand     Command          { get; set; }
-		public TimeSpan?      ExecutionTime    { get; set; }
-		public int?           RecordsAffected  { get; set; }
-		public Exception      Exception        { get; set; }
-		public string         CommandText      { get; set; }
-		public Expression     MapperExpression { get; set; }
-		public bool           IsAsync          { get; set; }
+		/// <summary>
+		/// Gets the tracing execution step, <see cref="TraceInfoStep"/>.
+		/// </summary>
+		public TraceInfoStep TraceInfoStep { get; }
 
-		[Obsolete("Use TraceInfoStep instead.")]
-		public bool BeforeExecute              { get { return TraceInfoStep == TraceInfoStep.BeforeExecute; } }
+		/// <summary>
+		/// Gets the operation, for which tracing event generated, <see cref="TraceOperation"/>.
+		/// </summary>
+		public TraceOperation Operation { get; }
 
-		private string _sqlText;
-		public  string  SqlText
+		/// <summary>
+		/// Gets or sets the tracing detail level, <see cref="TraceLevel"/>.
+		/// </summary>
+		public TraceLevel TraceLevel { get; set; }
+
+		/// <summary>
+		/// Gets or sets the <see cref="DataConnection"/> that produced the tracing event.
+		/// </summary>
+		public DataConnection DataConnection { get; }
+
+		/// <summary>
+		/// Gets or sets the <see cref="IDbCommand"/> associated with the tracing event.
+		/// </summary>
+		public IDbCommand? Command { get; set; }
+
+		/// <summary>
+		/// Gets or sets the starting <see cref="DateTime"/> of the operation (UTC).
+		/// </summary>
+		public DateTime? StartTime { get; set; }
+
+		/// <summary>
+		/// Gets or sets the execution time for <see cref="TraceInfoStep.AfterExecute"/>,
+		/// <see cref="TraceInfoStep.Completed"/>, and <see cref="TraceInfoStep.Error"/> steps.
+		/// </summary>
+		public TimeSpan? ExecutionTime { get; set; }
+
+		/// <summary>
+		/// Gets or sets the number of rows affected by the command
+		/// or the number of rows produced by the <see cref="DataReader"/>.
+		/// </summary>
+		public int? RecordsAffected { get; set; }
+
+		/// <summary>
+		/// Gets or sets the <see cref="Exception"/> for <see cref="TraceInfoStep.Error"/> step.
+		/// </summary>
+		public Exception? Exception { get; set; }
+
+		/// <summary>
+		/// Gets or sets the text of the command.
+		/// </summary>
+		public string? CommandText { get; set; }
+
+		/// <summary>
+		/// Gets or sets the expression used by the results mapper.
+		/// </summary>
+		public Expression? MapperExpression { get; set; }
+
+		/// <summary>
+		/// Gets a flag indicating whether operation was executed asynchronously.
+		/// </summary>
+		public bool IsAsync { get; }
+
+		private string? _sqlText;
+
+		/// <summary>
+		/// Gets the formatted SQL text of the command.
+		/// </summary>
+		public string SqlText
 		{
 			get
 			{
@@ -42,7 +107,7 @@ namespace LinqToDB.Data
 					if (_sqlText != null)
 						return _sqlText;
 
-					var sqlProvider = DataConnection.DataProvider.CreateSqlBuilder();
+					var sqlProvider = DataConnection.DataProvider.CreateSqlBuilder(DataConnection.MappingSchema);
 					var sb          = new StringBuilder();
 
 					sb.Append("-- ").Append(DataConnection.ConfigurationString);
@@ -58,7 +123,7 @@ namespace LinqToDB.Data
 
 					sb.AppendLine();
 
-					sqlProvider.PrintParameters(sb, Command.Parameters.Cast<IDbDataParameter>().ToArray());
+					sqlProvider.PrintParameters(sb, Command.Parameters.Cast<IDbDataParameter>());
 
 					sb.AppendLine(Command.CommandText);
 

@@ -1,22 +1,22 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
-using LinqToDB.Data;
 
 using NUnit.Framework;
 
 namespace Tests.xUpdate
 {
-	using Model;
-
 	public partial class MergeTests
 	{
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative,
-			ProviderName.Sybase, ProviderName.SapHana, ProviderName.Firebird, ProviderName.Firebird)]
-		public void SameSourceDelete(string context)
+		[Test]
+		public void SameSourceDelete([MergeDataContextSource(
+			TestProvName.AllOracle,
+			TestProvName.AllSybase,
+			TestProvName.AllSapHana,
+			TestProvName.AllFirebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -40,11 +40,16 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void SameSourceDeleteWithPredicate(string context)
+		[Test]
+		public void SameSourceDeleteWithPredicate([MergeDataContextSource(
+			TestProvName.AllOracle,
+			TestProvName.AllInformix,
+			TestProvName.AllSybase,
+			TestProvName.AllSapHana,
+			TestProvName.AllFirebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -69,11 +74,14 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void DeletePartialSourceProjection_KnownFieldInCondition(string context)
+		[Test]
+		public void DeletePartialSourceProjection_KnownFieldInCondition([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, TestProvName.AllFirebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -98,11 +106,14 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void DeleteWithPredicatePartialSourceProjection_UnknownFieldInCondition(string context)
+		[Test]
+		public void DeleteWithPredicatePartialSourceProjection_UnknownFieldInCondition([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -114,19 +125,24 @@ namespace Tests.xUpdate
 					.Using(GetSource1(db).Select(_ => new TestMapping1() { Id = _.Id, Field1 = _.Field1 }))
 					.OnTargetKey()
 					.DeleteWhenMatchedAnd((t, s) => s.Field2 == 4)
-					.Merge());
+					.Merge())!;
 
 				Assert.IsInstanceOf<LinqToDBException>(exception);
-				Assert.AreEqual("Column Field2 doesn't exist in source", exception.Message);
+				Assert.That(exception.Message,  Does.EndWith(".Field2' cannot be converted to SQL."));
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014,
-			TestProvName.SqlAzure, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void SameSourceDeleteWithPredicateDelete(string context)
+		[Test]
+		public void SameSourceDeleteWithPredicateDelete([MergeDataContextSource(
+			TestProvName.AllOracle,
+			TestProvName.AllSybase,
+			TestProvName.AllSqlServer2008Plus,
+			TestProvName.AllInformix,
+			TestProvName.AllSapHana,
+			ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -151,11 +167,13 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative,
-			ProviderName.Sybase, ProviderName.SapHana, ProviderName.Firebird)]
-		public void OtherSourceDelete(string context)
+		[Test]
+		public void OtherSourceDelete([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -180,11 +198,13 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative,
-			ProviderName.Sybase, ProviderName.SapHana, ProviderName.Firebird)]
-		public void OtherSourceDeletePartialSourceProjection_UnknownFieldInMatch(string context)
+		[Test]
+		public void OtherSourceDeletePartialSourceProjection_UnknownFieldInMatch([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -196,18 +216,21 @@ namespace Tests.xUpdate
 					.Using(GetSource1(db).Select(_ => new TestMapping1() { Id = _.Id, Field1 = _.Field1 }))
 					.On((t, s) => s.Field2 == 3)
 					.DeleteWhenMatched()
-					.Merge());
+					.Merge())!;
 
 				Assert.IsInstanceOf<LinqToDBException>(exception);
-				Assert.AreEqual("Column Field2 doesn't exist in source", exception.Message);
+				Assert.That(exception.Message, Does.EndWith(".Field2' cannot be converted to SQL."));
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void OtherSourceDeleteWithPredicate(string context)
+		[Test]
+		public void OtherSourceDeleteWithPredicate([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -232,11 +255,14 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void AnonymousSourceDeleteWithPredicate(string context)
+		[Test]
+		public void AnonymousSourceDeleteWithPredicate([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -270,11 +296,14 @@ namespace Tests.xUpdate
 		}
 
 		// Oracle: implicit Delete to UpdateWithDelete conversion failed here
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void AnonymousListSourceDeleteWithPredicate(string context)
+		[Test]
+		public void AnonymousListSourceDeleteWithPredicate([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -307,11 +336,14 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleManaged, ProviderName.OracleNative,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void DeleteReservedAndCaseNames(string context)
+		[Test]
+		public void DeleteReservedAndCaseNames([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -344,11 +376,14 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged,
-			ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana, ProviderName.Firebird)]
-		public void DeleteReservedAndCaseNamesFromList(string context)
+		[Test]
+		public void DeleteReservedAndCaseNamesFromList([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix,
+			TestProvName.AllSapHana, ProviderName.Firebird)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -381,10 +416,13 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeDataContextSource(ProviderName.Oracle, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.Sybase)]
-		public void DeleteFromPartialSourceProjection_MissingKeyField(string context)
+		[Test]
+		public void DeleteFromPartialSourceProjection_MissingKeyField([MergeDataContextSource(
+			TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllSapHana)]
+			string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				PrepareData(db);
 
@@ -396,10 +434,10 @@ namespace Tests.xUpdate
 						.Using(table.Select(_ => new TestMapping1() { Field1 = _.Field1 }))
 						.OnTargetKey()
 						.DeleteWhenMatched()
-						.Merge());
+						.Merge())!;
 
 				Assert.IsInstanceOf<LinqToDBException>(exception);
-				Assert.AreEqual("Column Id doesn't exist in source", exception.Message);
+				Assert.That(exception.Message, Does.EndWith(".Id' cannot be converted to SQL."));
 			}
 		}
 	}

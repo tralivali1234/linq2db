@@ -2,56 +2,60 @@
 using System.Data;
 using System.Linq;
 using System.Text;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Globalization;
 
 namespace LinqToDB.DataProvider.PostgreSQL
 {
 	using Common;
 	using SqlQuery;
 	using SqlProvider;
+	using Extensions;
+	using Mapping;
 
 	public class PostgreSQLSqlBuilder : BasicSqlBuilder
 	{
-		public PostgreSQLSqlBuilder(ISqlOptimizer sqlOptimizer, SqlProviderFlags sqlProviderFlags, ValueToSqlConverter valueToSqlConverter)
-			: base(sqlOptimizer, sqlProviderFlags, valueToSqlConverter)
+		private readonly PostgreSQLDataProvider? _provider;
+
+		public PostgreSQLSqlBuilder(
+			PostgreSQLDataProvider? provider,
+			MappingSchema           mappingSchema,
+			ISqlOptimizer           sqlOptimizer,
+			SqlProviderFlags        sqlProviderFlags)
+			: this(mappingSchema, sqlOptimizer, sqlProviderFlags)
+		{
+			_provider = provider;
+		}
+
+		// remote context
+		public PostgreSQLSqlBuilder(
+			MappingSchema    mappingSchema,
+			ISqlOptimizer    sqlOptimizer,
+			SqlProviderFlags sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
 		{
 		}
 
-		public override int CommandCount(SqlStatement statement)
+		protected override bool IsRecursiveCteKeywordRequired => true;
+		protected override bool SupportsNullInColumn          => false;
+
+		protected override void BuildGetIdentity(SqlInsertClause insertClause)
 		{
-			return statement.NeedsIdentity() ? 2 : 1;
-		}
+			var identityField = insertClause.Into!.GetIdentityField();
 
-		protected override void BuildCommand(SqlStatement statement, int commandNumber)
-		{
-			var insertClause = Statement.GetInsertClause();
-			if (insertClause != null)
-			{
-				var into = insertClause.Into;
-				var attr = GetSequenceNameAttribute(into, false);
-				var name =
-					attr != null
-						? attr.SequenceName
-						: Convert(
-							$"{into.PhysicalName}_{into.GetIdentityField().PhysicalName}_seq",
-							ConvertType.NameToQueryField);
+			if (identityField == null)
+				throw new SqlException("Identity field must be defined for '{0}'.", insertClause.Into.Name);
 
-				name = Convert(name, ConvertType.NameToQueryTable);
-
-				var database = GetTableDatabaseName(into);
-				var schema   = GetTableSchemaName(into);
-
-				AppendIndent()
-					.Append("SELECT currval('");
-
-				BuildTableName(StringBuilder, database, schema, name.ToString());
-
-				StringBuilder.AppendLine("')");
-			}
+			AppendIndent().AppendLine("RETURNING ");
+			AppendIndent().Append('\t');
+			BuildExpression(identityField, false, true);
+			StringBuilder.AppendLine();
 		}
 
 		protected override ISqlBuilder CreateSqlBuilder()
 		{
-			return new PostgreSQLSqlBuilder(SqlOptimizer, SqlProviderFlags, ValueToSqlConverter);
+			return new PostgreSQLSqlBuilder(_provider, MappingSchema, SqlOptimizer, SqlProviderFlags);
 		}
 
 		protected override string LimitFormat(SelectQuery selectQuery)
@@ -64,39 +68,78 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			return "OFFSET {0} ";
 		}
 
-		protected override void BuildDataType(SqlDataType type, bool createDbType)
+		protected override void BuildDataTypeFromDataType(SqlDataType type, bool forCreateTable)
 		{
-			switch (type.DataType)
+			switch (type.Type.DataType)
 			{
+				case DataType.Decimal       :
+					StringBuilder.Append("decimal");
+					if (type.Type.Precision > 0)
+					{
+						StringBuilder
+							.Append('(')
+							.Append(type.Type.Precision.Value.ToString(NumberFormatInfo.InvariantInfo));
+						if (type.Type.Scale > 0)
+							StringBuilder
+								.Append(", ")
+								.Append(type.Type.Scale.Value.ToString(NumberFormatInfo.InvariantInfo));
+						StringBuilder
+							.Append(')');
+					}
+					break;
 				case DataType.SByte         :
 				case DataType.Byte          : StringBuilder.Append("SmallInt");       break;
-				case DataType.Money         : StringBuilder.Append("Decimal(19,4)");  break;
-				case DataType.SmallMoney    : StringBuilder.Append("Decimal(10,4)");  break;
+				case DataType.Money         : StringBuilder.Append("money");          break;
+				case DataType.SmallMoney    : StringBuilder.Append("Decimal(10, 4)"); break;
 				case DataType.DateTime2     :
 				case DataType.SmallDateTime :
 				case DataType.DateTime      : StringBuilder.Append("TimeStamp");      break;
 				case DataType.DateTimeOffset: StringBuilder.Append("TimeStampTZ");    break;
 				case DataType.Boolean       : StringBuilder.Append("Boolean");        break;
+				case DataType.Text          : StringBuilder.Append("text");           break;
 				case DataType.NVarChar      :
 					StringBuilder.Append("VarChar");
-					if (type.Length > 0)
-						StringBuilder.Append('(').Append(type.Length).Append(')');
-					break;
-				case DataType.Undefined      :
-					if (type.Type == typeof(string))
-						goto case DataType.NVarChar;
+					if (type.Type.Length > 0)
+						StringBuilder.Append('(').Append(type.Type.Length.Value.ToString(NumberFormatInfo.InvariantInfo)).Append(')');
 					break;
 				case DataType.Json           : StringBuilder.Append("json");           break;
 				case DataType.BinaryJson     : StringBuilder.Append("jsonb");          break;
 				case DataType.Guid           : StringBuilder.Append("uuid");           break;
-				default                      : base.BuildDataType(type, createDbType); break;
-			}
-		}
+				case DataType.VarBinary      : StringBuilder.Append("bytea");          break;
+				case DataType.BitArray       :
+					if (type.Type.Length == 1)
+						StringBuilder.Append("bit");
+					if (type.Type.Length > 1)
+						StringBuilder.Append("bit(").Append(type.Type.Length.Value.ToString(NumberFormatInfo.InvariantInfo)).Append(')');
+					else
+						StringBuilder.Append("bit varying");
+					break;
+				case DataType.NChar          :
+					StringBuilder.Append("character");
+					if (type.Type.Length > 1) // this is correct condition
+						StringBuilder.Append('(').Append(type.Type.Length.Value.ToString(NumberFormatInfo.InvariantInfo)).Append(')');
+					break;
+					case DataType.Interval   : StringBuilder.Append("interval");       break;
+				case DataType.Udt            :
+					var udtType = type.Type.SystemType.ToNullableUnderlying();
 
-		protected override void BuildFromClause(SqlStatement statement, SelectQuery selectQuery)
-		{
-			if (!statement.IsUpdate())
-				base.BuildFromClause(statement, selectQuery);
+					     if (_provider != null && udtType == _provider.Adapter.NpgsqlPointType   ) StringBuilder.Append("point");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlLineType    ) StringBuilder.Append("line");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlBoxType     ) StringBuilder.Append("box");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlLSegType    ) StringBuilder.Append("lseg");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlCircleType  ) StringBuilder.Append("circle");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlPolygonType ) StringBuilder.Append("polygon");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlPathType    ) StringBuilder.Append("path");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlDateType    ) StringBuilder.Append("date");
+					else if (_provider != null && udtType == _provider.Adapter.NpgsqlDateTimeType) StringBuilder.Append("timestamp");
+					else if (udtType == typeof(PhysicalAddress) && _provider != null && !_provider.HasMacAddr8) StringBuilder.Append("macaddr");
+					else if (udtType == typeof(IPAddress)) StringBuilder.Append("inet");
+					else base.BuildDataTypeFromDataType(type, forCreateTable);
+
+					break;
+
+				default                      : base.BuildDataTypeFromDataType(type, forCreateTable); break;
+			}
 		}
 
 		protected sealed override bool IsReserved(string word)
@@ -106,7 +149,7 @@ namespace LinqToDB.DataProvider.PostgreSQL
 
 		public static PostgreSQLIdentifierQuoteMode IdentifierQuoteMode = PostgreSQLIdentifierQuoteMode.Auto;
 
-		public override object Convert(object value, ConvertType convertType)
+		public override StringBuilder Convert(StringBuilder sb, string value, ConvertType convertType)
 		{
 			switch (convertType)
 			{
@@ -116,21 +159,16 @@ namespace LinqToDB.DataProvider.PostgreSQL
 				case ConvertType.NameToQueryTableAlias:
 				case ConvertType.NameToDatabase:
 				case ConvertType.NameToSchema:
-					if (value != null && IdentifierQuoteMode != PostgreSQLIdentifierQuoteMode.None)
+				case ConvertType.SequenceName:
+					if (IdentifierQuoteMode != PostgreSQLIdentifierQuoteMode.None)
 					{
-						var name = value.ToString();
+						if (value.Length > 0 && value[0] == '"')
+							return sb.Append(value);
 
-						if (name.Length > 0 && name[0] == '"')
-							return name;
-
-						if (IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Quote)
-							return '"' + name + '"';
-
-						if (IsReserved(name))
-							return '"' + name + '"';
-
-						if (name.Any(c => char.IsWhiteSpace(c) || IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Auto && char.IsUpper(c)))
-							return '"' + name + '"';
+						if (IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Quote
+							|| IsReserved(value)
+							|| value.Any(c => char.IsWhiteSpace(c) || IdentifierQuoteMode == PostgreSQLIdentifierQuoteMode.Auto && char.IsUpper(c)))
+							return sb.Append('"').Append(value).Append('"');
 					}
 
 					break;
@@ -138,22 +176,65 @@ namespace LinqToDB.DataProvider.PostgreSQL
 				case ConvertType.NameToQueryParameter:
 				case ConvertType.NameToCommandParameter:
 				case ConvertType.NameToSprocParameter:
-					return ":" + value;
+					return sb.Append(':').Append(value);
 
 				case ConvertType.SprocParameterToName:
-					if (value != null)
-					{
-						var str = value.ToString();
-						return (str.Length > 0 && str[0] == ':')? str.Substring(1): str;
-					}
-
-					break;
+					return (value.Length > 0 && value[0] == ':')
+						? sb.Append(value.Substring(1))
+						: sb.Append(value);
 			}
 
-			return value;
+			return sb.Append(value);
 		}
 
-		public override ISqlExpression GetIdentityExpression(SqlTable table)
+		protected override void BuildInsertOrUpdateQuery(SqlInsertOrUpdateStatement insertOrUpdate)
+		{
+			BuildInsertQuery(insertOrUpdate, insertOrUpdate.Insert, true);
+
+			AppendIndent();
+			StringBuilder.Append("ON CONFLICT (");
+
+			var firstKey = true;
+			foreach (var expr in insertOrUpdate.Update.Keys)
+			{
+				if (!firstKey)
+					StringBuilder.Append(InlineComma);
+				firstKey = false;
+
+				BuildExpression(expr.Column, false, true);
+			}
+
+			if (insertOrUpdate.Update.Items.Count > 0)
+			{
+				StringBuilder.AppendLine(") DO UPDATE SET");
+
+				Indent++;
+
+				var first = true;
+
+				foreach (var expr in insertOrUpdate.Update.Items)
+				{
+					if (!first)
+						StringBuilder.AppendLine(Comma);
+					first = false;
+
+					AppendIndent();
+					BuildExpression(expr.Column, false, true);
+					StringBuilder.Append(" = ");
+					BuildExpression(expr.Expression!, true, true);
+				}
+
+				Indent--;
+
+				StringBuilder.AppendLine();
+			}
+			else
+			{
+				StringBuilder.AppendLine(") DO NOTHING");
+			}
+		}
+
+		public override ISqlExpression? GetIdentityExpression(SqlTable table)
 		{
 			if (!table.SequenceAttributes.IsNullOrEmpty())
 			{
@@ -161,13 +242,18 @@ namespace LinqToDB.DataProvider.PostgreSQL
 
 				if (attr != null)
 				{
-					var name     = Convert(attr.SequenceName, ConvertType.NameToQueryTable).ToString();
+					var name     = ConvertInline(attr.SequenceName, ConvertType.SequenceName);
+					var server   = GetTableServerName(table);
 					var database = GetTableDatabaseName(table);
-					var schema   = GetTableSchemaName  (table);
+					var schema   = attr.Schema != null
+						? ConvertInline(attr.Schema, ConvertType.NameToSchema)
+						: GetTableSchemaName(table);
 
-					var sb = BuildTableName(new StringBuilder(), database, schema, name);
-
-					return new SqlExpression($"nextval('{sb}')", Precedence.Primary);
+					var sb = new StringBuilder();
+					sb.Append("nextval(");
+					ValueToSqlConverter.Convert(sb, BuildTableName(new StringBuilder(), server, database, schema, name, table.TableOptions).ToString());
+					sb.Append(')');
+					return new SqlExpression(sb.ToString(), Precedence.Primary);
 				}
 			}
 
@@ -178,13 +264,19 @@ namespace LinqToDB.DataProvider.PostgreSQL
 		{
 			if (field.IsIdentity)
 			{
-				if (field.DataType == DataType.Int32)
+				if (field.Type!.Value.DataType == DataType.Int16)
+				{
+					StringBuilder.Append("SMALLSERIAL");
+					return;
+				}
+
+				if (field.Type!.Value.DataType == DataType.Int32)
 				{
 					StringBuilder.Append("SERIAL");
 					return;
 				}
 
-				if (field.DataType == DataType.Int64)
+				if (field.Type!.Value.DataType == DataType.Int64)
 				{
 					StringBuilder.Append("BIGSERIAL");
 					return;
@@ -194,18 +286,18 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			base.BuildCreateTableFieldType(field);
 		}
 
-		protected override bool BuildJoinType(SqlJoinedTable join)
+		protected override bool BuildJoinType(JoinType joinType, SqlSearchCondition condition)
 		{
-			switch (join.JoinType)
+			switch (joinType)
 			{
 				case JoinType.CrossApply : StringBuilder.Append("INNER JOIN LATERAL "); return true;
 				case JoinType.OuterApply : StringBuilder.Append("LEFT JOIN LATERAL ");  return true;
 			}
 
-			return base.BuildJoinType(join);
+			return base.BuildJoinType(joinType, condition);
 		}
 
-		public override StringBuilder BuildTableName(StringBuilder sb, string database, string schema, string table)
+		public override StringBuilder BuildTableName(StringBuilder sb, string? server, string? database, string? schema, string table, TableOptions tableOptions)
 		{
 			if (database != null && database.Length == 0) database = null;
 			if (schema   != null && schema.  Length == 0) schema   = null;
@@ -215,24 +307,31 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			if (database != null && schema == null)
 				database = null;
 
-			return base.BuildTableName(sb, database, schema, table);
+			return base.BuildTableName(sb, null, database, schema, table, tableOptions);
 		}
 
-		protected override string GetProviderTypeName(IDbDataParameter parameter)
+		protected override string? GetProviderTypeName(IDbDataParameter parameter)
 		{
-			dynamic p = parameter;
-			return p.NpgsqlDbType.ToString();
+			if (_provider != null)
+			{
+				var param = _provider.TryGetProviderParameter(parameter, MappingSchema);
+				if (param != null)
+					return _provider.Adapter.GetDbType(param).ToString();
+			}
+
+			return base.GetProviderTypeName(parameter);
 		}
 
 		protected override void BuildTruncateTableStatement(SqlTruncateTableStatement truncateTable)
 		{
 			var table = truncateTable.Table;
 
+			BuildTag(truncateTable);
 			AppendIndent();
 			StringBuilder.Append("TRUNCATE TABLE ");
-			BuildPhysicalTable(table, null);
+			BuildPhysicalTable(table!, null);
 
-			if (truncateTable.Table.Fields.Values.Any(f => f.IsIdentity))
+			if (truncateTable.Table!.IdentityFields.Count > 0)
 			{
 				if (truncateTable.ResetIdentity)
 					StringBuilder.Append(" RESTART IDENTITY");
@@ -241,6 +340,103 @@ namespace LinqToDB.DataProvider.PostgreSQL
 			}
 
 			StringBuilder.AppendLine();
+		}
+
+		protected override void BuildDropTableStatement(SqlDropTableStatement dropTable)
+		{
+			BuildDropTableStatementIfExists(dropTable);
+		}
+
+		protected override void BuildMergeStatement(SqlMergeStatement merge)
+		{
+			throw new LinqToDBException($"{Name} provider doesn't support SQL MERGE statement");
+		}
+
+		protected override void BuildReturningSubclause(SqlStatement statement)
+		{
+			var output = statement.GetOutputClause();
+			if (output != null)
+			{
+				StringBuilder
+					.AppendLine("RETURNING");
+
+				++Indent;
+
+				bool first = true;
+				foreach (var oi in output.OutputItems)
+				{
+					if (!first)
+						StringBuilder.AppendLine(Comma);
+					first = false;
+
+					AppendIndent();
+
+					BuildExpression(oi.Expression!);
+				}
+
+				StringBuilder
+					.AppendLine();
+
+				--Indent;
+			}
+		}
+
+		public override string? GetTableSchemaName(SqlTable table)
+		{
+			return table.Schema == null || table.TableOptions.HasIsTemporary() ? null : ConvertInline(table.Schema, ConvertType.NameToSchema);
+		}
+
+		protected override void BuildCreateTableCommand(SqlTable table)
+		{
+			string command;
+
+			if (table.TableOptions.IsTemporaryOptionSet())
+			{
+				switch (table.TableOptions & TableOptions.IsTemporaryOptionSet)
+				{
+					case TableOptions.IsTemporary                                                                                    :
+					case TableOptions.IsTemporary |                                          TableOptions.IsLocalTemporaryData       :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure                                           :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData       :
+					case                                                                     TableOptions.IsLocalTemporaryData       :
+					case                                                                     TableOptions.IsTransactionTemporaryData :
+					case                            TableOptions.IsLocalTemporaryStructure                                           :
+					case                            TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData       :
+					case                            TableOptions.IsLocalTemporaryStructure | TableOptions.IsTransactionTemporaryData :
+						command = "CREATE TEMPORARY TABLE ";
+						break;
+					case var value :
+						throw new InvalidOperationException($"Incompatible table options '{value}'");
+				}
+			}
+			else
+			{
+				command = "CREATE TABLE ";
+			}
+
+			StringBuilder.Append(command);
+
+			if (table.TableOptions.HasCreateIfNotExists())
+				StringBuilder.Append("IF NOT EXISTS ");
+		}
+
+		protected override void BuildEndCreateTableStatement(SqlCreateTableStatement createTable)
+		{
+			var table = createTable.Table;
+
+			if (table.TableOptions.IsTemporaryOptionSet())
+			{
+				StringBuilder.AppendLine(table.TableOptions.HasIsTransactionTemporaryData()
+					? "ON COMMIT DELETE ROWS"
+					: "ON COMMIT PRESERVE ROWS");
+			}
+
+			base.BuildEndCreateTableStatement(createTable);
+		}
+
+		public override string GetReserveSequenceValuesSql(int count, string sequenceName)
+		{
+			return $"SELECT nextval('{ConvertInline(sequenceName, ConvertType.SequenceName)}') FROM generate_series(1, {count.ToString(CultureInfo.InvariantCulture)})";
 		}
 	}
 }

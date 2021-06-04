@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Specialized;
-
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
 
 namespace LinqToDB.DataProvider.SqlServer
 {
@@ -13,25 +10,28 @@ namespace LinqToDB.DataProvider.SqlServer
 	[UsedImplicitly]
 	class SqlServerFactory : IDataProviderFactory
 	{
-		#region IDataProviderFactory Implementation
-
 		IDataProvider IDataProviderFactory.GetDataProvider(IEnumerable<NamedValue> attributes)
 		{
-			var version = attributes.FirstOrDefault(_ => _.Name == "version");
-			if (version != null)
+			var provider     = SqlServerProvider.SystemDataSqlClient;
+			var version      = attributes.FirstOrDefault(_ => _.Name == "version");
+			var assemblyName = attributes.FirstOrDefault(_ => _.Name == "assemblyName")?.Value;
+
+			if (assemblyName == SqlServerProviderAdapter.MicrosoftAssemblyName)
 			{
-				switch (version.Value)
-				{
-					case "2000" : return new SqlServerDataProvider(ProviderName.SqlServer2000, SqlServerVersion.v2000);
-					case "2005" : return new SqlServerDataProvider(ProviderName.SqlServer2005, SqlServerVersion.v2005);
-					case "2012" : return new SqlServerDataProvider(ProviderName.SqlServer2012, SqlServerVersion.v2012);
-					case "2014" : return new SqlServerDataProvider(ProviderName.SqlServer2014, SqlServerVersion.v2012);
-				}
+				provider = SqlServerProvider.MicrosoftDataSqlClient;
 			}
 
-			return new SqlServerDataProvider(ProviderName.SqlServer2008, SqlServerVersion.v2008);
+			return version?.Value switch
+			{
+				"2000" => SqlServerTools.GetDataProvider(SqlServerVersion.v2000, provider),
+				"2005" => SqlServerTools.GetDataProvider(SqlServerVersion.v2005, provider),
+				"2012" => SqlServerTools.GetDataProvider(SqlServerVersion.v2012, provider),
+				"2014" => SqlServerTools.GetDataProvider(SqlServerVersion.v2012, provider),
+				"2016" => SqlServerTools.GetDataProvider(SqlServerVersion.v2016, provider),
+				"2017" => SqlServerTools.GetDataProvider(SqlServerVersion.v2017, provider),
+				"2019" => SqlServerTools.GetDataProvider(SqlServerVersion.v2017, provider),
+				_      => SqlServerTools.GetDataProvider(SqlServerVersion.v2008, provider),
+			};
 		}
-
-		#endregion
 	}
 }

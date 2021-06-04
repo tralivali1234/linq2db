@@ -16,45 +16,70 @@ namespace LinqToDB.SqlQuery
 			_reservedWords[ProviderName.PostgreSQL]    = _reservedWordsPostgres;
 			_reservedWords[ProviderName.PostgreSQL92]  = _reservedWordsPostgres;
 			_reservedWords[ProviderName.PostgreSQL93]  = _reservedWordsPostgres;
+			_reservedWords[ProviderName.PostgreSQL95]  = _reservedWordsPostgres;
 			_reservedWords[ProviderName.Oracle]        = _reservedWordsOracle;
 			_reservedWords[ProviderName.OracleManaged] = _reservedWordsOracle;
 			_reservedWords[ProviderName.OracleNative]  = _reservedWordsOracle;
+			_reservedWords[ProviderName.Firebird]      = _reservedWordsFirebird;
 
 
-			var assembly = typeof(SelectQuery).AssemblyEx();
+			var assembly = typeof(SelectQuery).Assembly;
 			var name = assembly.GetManifestResourceNames().Single(_ => _.EndsWith("ReservedWords.txt"));
 
-			using (var stream = assembly.GetManifestResourceStream(name))
+			using (var stream = assembly.GetManifestResourceStream(name)!)
 			using (var reader = new StreamReader(stream))
 			{
-				string s;
+				string? s;
 				while ((s = reader.ReadLine()) != null)
-					_reservedWordsAll.Add(s);
+				{
+					if(!s.StartsWith("#"))
+						_reservedWordsAll.Add(s);
+
+				}
 			}
 
 			name = assembly.GetManifestResourceNames().Single(_ => _.EndsWith("ReservedWordsPostgres.txt"));
 
-			using (var stream = assembly.GetManifestResourceStream(name))
+			using (var stream = assembly.GetManifestResourceStream(name)!)
 			using (var reader = new StreamReader(stream))
 			{
-				string s;
+				string? s;
 				while ((s = reader.ReadLine()) != null)
 				{
-					_reservedWordsPostgres.Add(s);
-					_reservedWordsAll     .Add(s);
+					if (!s.StartsWith("#"))
+					{
+						_reservedWordsPostgres.Add(s);
+						_reservedWordsAll     .Add(s);
+					}
 				}
 			}
 
 			name = assembly.GetManifestResourceNames().Single(_ => _.EndsWith("ReservedWordsOracle.txt"));
 
-			using (var stream = assembly.GetManifestResourceStream(name))
+			using (var stream = assembly.GetManifestResourceStream(name)!)
 			using (var reader = new StreamReader(stream))
 			{
-				string s;
+				string? s;
 				while ((s = reader.ReadLine()) != null)
 				{
-					_reservedWordsOracle.Add(s);
-					_reservedWordsAll   .Add(s);
+					if(!s.StartsWith("#"))
+					{
+						_reservedWordsOracle.Add(s);
+						_reservedWordsAll   .Add(s);
+					}
+				}
+			}
+
+			name = assembly.GetManifestResourceNames().Single(_ => _.EndsWith("ReservedWordsFirebird.txt"));
+
+			using (var stream = assembly.GetManifestResourceStream(name)!)
+			using (var reader = new StreamReader(stream))
+			{
+				string? s;
+				while ((s = reader.ReadLine()) != null)
+				{
+					if(!s.StartsWith("#"))
+						_reservedWordsFirebird.Add(s);
 				}
 			}
 		}
@@ -62,22 +87,24 @@ namespace LinqToDB.SqlQuery
 		static readonly HashSet<string> _reservedWordsAll      = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		static readonly HashSet<string> _reservedWordsPostgres = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		static readonly HashSet<string> _reservedWordsOracle   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		static readonly HashSet<string> _reservedWordsFirebird = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
 
 		static readonly ConcurrentDictionary<string,HashSet<string>> _reservedWords =
 			new ConcurrentDictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
 
-		public static bool IsReserved(string word, string providerName = null)
+		public static bool IsReserved(string word, string? providerName = null)
 		{
 			if (string.IsNullOrEmpty(providerName))
 				return _reservedWordsAll.Contains(word);
 
-			if (!_reservedWords.TryGetValue(providerName, out var words))
+			if (!_reservedWords.TryGetValue(providerName!, out var words))
 				words = _reservedWordsAll;
 
 			return words.Contains(word);
 		}
 
-		public static void Add(string word, string providerName = null)
+		public static void Add(string word, string? providerName = null)
 		{
 			lock (_reservedWordsAll)
 				_reservedWordsAll.Add(word);
@@ -85,7 +112,7 @@ namespace LinqToDB.SqlQuery
 			if (string.IsNullOrEmpty(providerName))
 				return;
 
-			var set = _reservedWords.GetOrAdd(providerName, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+			var set = _reservedWords.GetOrAdd(providerName!, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
 			lock (set)
 				set.Add(word);

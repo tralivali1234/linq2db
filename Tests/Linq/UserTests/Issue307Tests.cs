@@ -27,13 +27,13 @@ namespace Tests.UserTests
 			public Gender Gender { get; set; }
 
 			[Column]
-			public String FirstName { get; private set; }
+			public string FirstName { get; private set; } = null!;
 
 			[Column]
-			public String MiddleName { get; set; }
+			public string MiddleName { get; set; } = null!;
 
 			[Column]
-			public String LastName { get; set; }
+			public string? LastName { get; set; }
 
 			public void SetFirstName(string firstName)
 			{
@@ -46,9 +46,11 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Issue307Test(string context)
+		[Test]
+		public void Issue307Test([DataSources] string context)
 		{
+			ResetPersonIdentity(context);
+
 			using (var db = GetDataContext(context))
 			using (new DeletePerson(db))
 			{

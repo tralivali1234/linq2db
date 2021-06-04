@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 using LinqToDB.Common;
@@ -16,10 +15,10 @@ namespace Tests.xUpdate
 	public partial class MergeTests
 	{
 		// ASE: just fails
-		[Test, MergeDataContextSource(ProviderName.Sybase)]
-		public void Merge(string context)
+		[Test]
+		public void Merge([MergeDataContextSource(ProviderName.Sybase, ProviderName.SybaseManaged)] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				db.GetTable<LinqDataTypes2>()
 					.Merge()
@@ -32,14 +31,14 @@ namespace Tests.xUpdate
 		}
 
 		// ASE: just fails
-		[Test, MergeDataContextSource(ProviderName.Sybase)]
-		public void MergeWithEmptySource(string context)
+		[Test]
+		public void MergeWithEmptySource([MergeDataContextSource(TestProvName.AllOracle, TestProvName.AllSybase)] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				db.GetTable<Person>()
 					.Merge()
-					.Using(new Person[] { })
+					.Using(Array<Person>.Empty)
 					.OnTargetKey()
 					.UpdateWhenMatched()
 					.InsertWhenNotMatched()
@@ -47,8 +46,8 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeBySourceDataContextSource]
-		public void MergeWithDelete(string context)
+		[Test]
+		public void MergeWithDelete([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
@@ -64,8 +63,8 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeBySourceDataContextSource]
-		public void MergeWithDeletePredicate1(string context)
+		[Test]
+		public void MergeWithDeletePredicate1([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
@@ -81,8 +80,8 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeBySourceDataContextSource]
-		public void MergeWithDeletePredicate3(string context)
+		[Test]
+		public void MergeWithDeletePredicate3([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
@@ -115,8 +114,8 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, MergeBySourceDataContextSource]
-		public void MergeWithDeletePredicate4(string context)
+		[Test]
+		public void MergeWithDeletePredicate4([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
@@ -140,29 +139,29 @@ namespace Tests.xUpdate
 				var patient = person.ID;
 				var merge = db.GetTable<Person>()
 					.Merge()
-					.Using(db.Person.Where(t => t.Patient.PersonID == patient))
+					.Using(db.Person.Where(t => t.Patient!.PersonID == patient))
 					.OnTargetKey()
 					.UpdateWhenMatched()
 					.InsertWhenNotMatched()
-					.DeleteWhenNotMatchedBySourceAnd(t => t.Patient.PersonID == patient);
+					.DeleteWhenNotMatchedBySourceAnd(t => t.Patient!.PersonID == patient);
 				merge.Merge();
 				patient++;
 				merge.Merge();
 			}
 		}
 
-		[Test, MergeBySourceDataContextSource]
-		public void MergeWithDeletePredicate5(string context)
+		[Test]
+		public void MergeWithDeletePredicate5([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
 			{
 				db.GetTable<Child>()
 					.Merge()
-					.Using(db.Child.Where(t => t.Parent.ParentID == 2 && t.GrandChildren.Any(g => g.Child.ChildID == 22)))
+					.Using(db.Child.Where(t => t.Parent!.ParentID == 2 && t.GrandChildren.Any(g => g.Child!.ChildID == 22)))
 					.OnTargetKey()
 					.InsertWhenNotMatched()
-					.DeleteWhenNotMatchedBySourceAnd(t => t.Parent.ParentID == 2 && t.GrandChildren.Any(g => g.Child.ChildID == 22))
+					.DeleteWhenNotMatchedBySourceAnd(t => t.Parent!.ParentID == 2 && t.GrandChildren.Any(g => g.Child!.ChildID == 22))
 					.Merge();
 			}
 		}
@@ -177,17 +176,21 @@ namespace Tests.xUpdate
 			[Column("CHARDATATYPE", DataType = DataType.Char, Length = 1, Configuration = ProviderName.DB2)]
 			public char charDataType;
 			[Column(DataType = DataType.NChar, Length = 20)]
-			public string ncharDataType;
+			public string? ncharDataType;
 			[Column(DataType = DataType.NVarChar, Length = 20)]
-			public string nvarcharDataType;
+			public string? nvarcharDataType;
 		}
 
-		// ASE: alltypes table must be fixed
 		// DB2: ncharDataType field missing in AllTypes
 		// Informix: install the latest server
-		[Test, MergeDataContextSource(ProviderName.DB2, ProviderName.Sybase, ProviderName.Informix)]
-		public void MergeChar1(string context)
+		[Test]
+		public void MergeChar1([MergeDataContextSource(
+			false,
+			ProviderName.DB2, ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllInformix)]
+			string context)
 		{
+			ResetAllTypesIdentity(context);
+
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
 			{
@@ -210,8 +213,11 @@ namespace Tests.xUpdate
 		// ASE: alltypes table must be fixed
 		// DB2: ncharDataType field missing in AllTypes
 		// Informix: install the latest server
-		[Test, MergeDataContextSource(ProviderName.DB2, ProviderName.Sybase, ProviderName.Informix)]
-		public void MergeChar2(string context)
+		[Test]
+		public void MergeChar2([MergeDataContextSource(
+			false,
+			ProviderName.DB2, ProviderName.Sybase, TestProvName.AllInformix)]
+			string context)
 		{
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
@@ -238,9 +244,14 @@ namespace Tests.xUpdate
 		// ASE: AllTypes table must be fixed
 		// DB2: ncharDataType and nvarcharDataType fields missing in AllTypes
 		// Informix, SAP: looks like \0 terminates string
-		[Test, MergeDataContextSource(ProviderName.DB2, ProviderName.Sybase, ProviderName.Informix, ProviderName.SapHana)]
-		public void MergeString(string context)
+		[Test]
+		public void MergeString([MergeDataContextSource(
+			false,
+			ProviderName.DB2, ProviderName.Sybase, TestProvName.AllInformix, TestProvName.AllSapHana)]
+			string context)
 		{
+			ResetAllTypesIdentity(context);
+
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
 			{

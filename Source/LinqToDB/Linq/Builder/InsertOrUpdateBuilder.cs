@@ -31,13 +31,15 @@ namespace LinqToDB.Linq.Builder
 				insertOrUpdateStatement.Insert.Items,
 				sequence);
 
-			UpdateBuilder.BuildSetter(
-				builder,
-				buildInfo,
-				(LambdaExpression)methodCall.Arguments[2].Unwrap(),
-				sequence,
-				insertOrUpdateStatement.Update.Items,
-				sequence);
+			var updateExpr = methodCall.Arguments[2].Unwrap();
+			if (!(updateExpr is ConstantExpression constant && constant.Value == null))
+				UpdateBuilder.BuildSetter(
+					builder,
+					buildInfo,
+					(LambdaExpression)updateExpr,
+					sequence,
+					insertOrUpdateStatement.Update.Items,
+					sequence);
 
 			insertOrUpdateStatement.Insert.Into  = ((TableBuilder.TableContext)sequence).SqlTable;
 			insertOrUpdateStatement.Update.Table = ((TableBuilder.TableContext)sequence).SqlTable;
@@ -82,8 +84,8 @@ namespace LinqToDB.Linq.Builder
 			return new InsertOrUpdateContext(buildInfo.Parent, sequence);
 		}
 
-		protected override SequenceConvertInfo Convert(
-			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression param)
+		protected override SequenceConvertInfo? Convert(
+			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression? param)
 		{
 			return null;
 		}
@@ -94,7 +96,7 @@ namespace LinqToDB.Linq.Builder
 
 		class InsertOrUpdateContext : SequenceContextBase
 		{
-			public InsertOrUpdateContext(IBuildContext parent, IBuildContext sequence)
+			public InsertOrUpdateContext(IBuildContext? parent, IBuildContext sequence)
 				: base(parent, sequence, null)
 			{
 			}
@@ -107,27 +109,27 @@ namespace LinqToDB.Linq.Builder
 					QueryRunner.MakeAlternativeInsertOrUpdate(query);
 			}
 
-			public override Expression BuildExpression(Expression expression, int level, bool enforceServerSide)
+			public override Expression BuildExpression(Expression? expression, int level, bool enforceServerSide)
 			{
 				throw new NotImplementedException();
 			}
 
-			public override SqlInfo[] ConvertToSql(Expression expression, int level, ConvertFlags flags)
+			public override SqlInfo[] ConvertToSql(Expression? expression, int level, ConvertFlags flags)
 			{
 				throw new NotImplementedException();
 			}
 
-			public override SqlInfo[] ConvertToIndex(Expression expression, int level, ConvertFlags flags)
+			public override SqlInfo[] ConvertToIndex(Expression? expression, int level, ConvertFlags flags)
 			{
 				throw new NotImplementedException();
 			}
 
-			public override IsExpressionResult IsExpression(Expression expression, int level, RequestFor requestFlag)
+			public override IsExpressionResult IsExpression(Expression? expression, int level, RequestFor requestFlag)
 			{
 				throw new NotImplementedException();
 			}
 
-			public override IBuildContext GetContext(Expression expression, int level, BuildInfo buildInfo)
+			public override IBuildContext GetContext(Expression? expression, int level, BuildInfo buildInfo)
 			{
 				throw new NotImplementedException();
 			}

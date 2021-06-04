@@ -6,8 +6,8 @@ namespace LinqToDB.SqlQuery
 {
 	public class SqlTruncateTableStatement : SqlStatement
 	{
-		public SqlTable Table         { get; set; }
-		public bool     ResetIdentity { get; set; }
+		public SqlTable? Table         { get; set; }
+		public bool      ResetIdentity { get; set; }
 
 		public override QueryType          QueryType    => QueryType.TruncateTable;
 		public override QueryElementType   ElementType  => QueryElementType.TruncateTableStatement;
@@ -18,42 +18,27 @@ namespace LinqToDB.SqlQuery
 			set {}
 		}
 
-		public override SelectQuery SelectQuery { get => null; set {}}
+		public override SelectQuery? SelectQuery { get => null; set {}}
 
 		public override StringBuilder ToString(StringBuilder sb, Dictionary<IQueryElement, IQueryElement> dic)
 		{
 			sb.Append("TRUNCATE TABLE ");
 
-			((IQueryElement)Table)?.ToString(sb, dic);
+			((IQueryElement?)Table)?.ToString(sb, dic);
 
 			sb.AppendLine();
 
 			return sb;
 		}
 
-		public override ISqlExpression Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> func)
+		public override ISqlExpression? Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 		{
-			((ISqlExpressionWalkable)Table)?.Walk(skipColumns, func);
+			Table = ((ISqlExpressionWalkable?)Table)?.Walk(options, func) as SqlTable;
 
 			return null;
 		}
 
-		public override ICloneableElement Clone(Dictionary<ICloneableElement,ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
-		{
-			if (!doClone(this))
-				return this;
-
-			var clone = new SqlDropTableStatement();
-
-			if (Table != null)
-				clone.Table = (SqlTable)Table.Clone(objectTree, doClone);
-
-			objectTree.Add(this, clone);
-
-			return clone;
-		}
-
-		public override ISqlTableSource GetTableSource(ISqlTableSource table)
+		public override ISqlTableSource? GetTableSource(ISqlTableSource table)
 		{
 			return null;
 		}

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using NUnit.Framework;
 
@@ -10,8 +9,8 @@ namespace Tests.Samples
 	[TestFixture]
 	public class JoinOperatorTests : TestBase
 	{
-		[Test, NorthwindDataContext]
-		public void InnerJoinOnSingleColumn(string context)
+		[Test]
+		public void InnerJoinOnSingleColumn([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -23,15 +22,13 @@ namespace Tests.Samples
 
 				foreach (var category in query)
 				{
-#if !APPVEYOR
-					Console.WriteLine(category.CategoryID);
-#endif
+					TestContext.WriteLine(category.CategoryID);
 				}
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void InnerJoinOnMultipleColumns(string context)
+		[Test]
+		public void InnerJoinOnMultipleColumns([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{

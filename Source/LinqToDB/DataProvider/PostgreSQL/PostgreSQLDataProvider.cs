@@ -1,292 +1,459 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq.Expressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace LinqToDB.DataProvider.PostgreSQL
 {
+	using Common;
 	using Data;
-	using Expressions;
 	using Mapping;
 	using SqlProvider;
-	using Extensions;
 
-	public class PostgreSQLDataProvider : DynamicDataProviderBase
+	public class PostgreSQLDataProvider : DynamicDataProviderBase<NpgsqlProviderAdapter>
 	{
 		public PostgreSQLDataProvider(PostgreSQLVersion version = PostgreSQLVersion.v92)
-			: this(
-				version == PostgreSQLVersion.v92 ? ProviderName.PostgreSQL92 : ProviderName.PostgreSQL93,
-				new PostgreSQLMappingSchema(),
-				version)
+			: this(GetProviderName(version), version)
 		{
 		}
 
-		public PostgreSQLDataProvider(string providerName, PostgreSQLVersion version)
-			: this(providerName, new PostgreSQLMappingSchema(), version)
-		{
-		}
-
-		protected PostgreSQLDataProvider(string name, MappingSchema mappingSchema, PostgreSQLVersion version = PostgreSQLVersion.v92)
-			: base(name, mappingSchema)
+		public PostgreSQLDataProvider(string name, PostgreSQLVersion version = PostgreSQLVersion.v92)
+			: base(
+				  name,
+				  GetMappingSchema(version, NpgsqlProviderAdapter.GetInstance().MappingSchema),
+				  NpgsqlProviderAdapter.GetInstance())
 		{
 			Version = version;
 
-			if (version == PostgreSQLVersion.v93)
-				SqlProviderFlags.IsApplyJoinSupported = true;
-
-			SqlProviderFlags.IsInsertOrUpdateSupported         = false;
+			SqlProviderFlags.IsApplyJoinSupported              = version != PostgreSQLVersion.v92;
+			SqlProviderFlags.IsInsertOrUpdateSupported         = version == PostgreSQLVersion.v95;
 			SqlProviderFlags.IsUpdateSetTableAliasSupported    = false;
 			SqlProviderFlags.IsCommonTableExpressionsSupported = true;
+			SqlProviderFlags.IsDistinctOrderBySupported        = false;
+			SqlProviderFlags.IsSubQueryOrderBySupported        = true;
+			SqlProviderFlags.IsAllSetOperationsSupported       = true;
+			SqlProviderFlags.IsGroupByExpressionSupported      = false;
 
-			SetCharFieldToType<char>("bpchar", (r, i) => DataTools.GetChar(r, i));
+			SetCharFieldToType<char>("bpchar"   , DataTools.GetCharExpression);
+			SetCharFieldToType<char>("character", DataTools.GetCharExpression);
 
-			SetCharField("bpchar", (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharField("bpchar"   , (r,i) => r.GetString(i).TrimEnd(' '));
+			SetCharField("character", (r,i) => r.GetString(i).TrimEnd(' '));
 
 			_sqlOptimizer = new PostgreSQLSqlOptimizer(SqlProviderFlags);
+
+			ConfigureTypes();
 		}
 
-		public PostgreSQLVersion Version { get; private set; }
-
-		internal Type BitStringType;
-		internal Type NpgsqlIntervalType;
-		internal Type NpgsqlInetType;
-		internal Type NpgsqlTimeType;
-		internal Type NpgsqlTimeTZType;
-		internal Type NpgsqlPointType;
-		internal Type NpgsqlLSegType;
-		internal Type NpgsqlBoxType;
-		internal Type NpgsqlPathType;
-		internal Type NpgsqlPolygonType;
-		internal Type NpgsqlCircleType;
-		internal Type NpgsqlMacAddressType;
-
-		Type _npgsqlTimeStamp;
-		Type _npgsqlTimeStampTZ;
-		Type _npgsqlDate;
-		Type _npgsqlDateTime;
-
-		CommandBehavior _commandBehavior = CommandBehavior.Default;
-
-		protected override void OnConnectionTypeCreated(Type connectionType)
+		private void ConfigureTypes()
 		{
-			var npgSql = connectionType.AssemblyEx();
+			// https://www.postgresql.org/docs/current/static/datatype.html
+			// not all types are supported now
+			// numeric types
+			mapType("smallint"                , NpgsqlProviderAdapter.NpgsqlDbType.Smallint);
+			mapType("integer"                 , NpgsqlProviderAdapter.NpgsqlDbType.Integer);
+			mapType("bigint"                  , NpgsqlProviderAdapter.NpgsqlDbType.Bigint);
+			mapType("numeric"                 , NpgsqlProviderAdapter.NpgsqlDbType.Numeric);
+			mapType("real"                    , NpgsqlProviderAdapter.NpgsqlDbType.Real);
+			mapType("double precision"        , NpgsqlProviderAdapter.NpgsqlDbType.Double);
+			// monetary types
+			mapType("money"                   , NpgsqlProviderAdapter.NpgsqlDbType.Money);
+			// character types
+			mapType("character"               , NpgsqlProviderAdapter.NpgsqlDbType.Char);
+			mapType("character varying"       , NpgsqlProviderAdapter.NpgsqlDbType.Varchar);
+			mapType("text"                    , NpgsqlProviderAdapter.NpgsqlDbType.Text);
+			mapType("name"                    , NpgsqlProviderAdapter.NpgsqlDbType.Name);
+			mapType("char"                    , NpgsqlProviderAdapter.NpgsqlDbType.InternalChar);
+			// binary types
+			mapType("bytea"                   , NpgsqlProviderAdapter.NpgsqlDbType.Bytea);
+			// date/time types (reltime missing from enum)
+			mapType("timestamp"               , NpgsqlProviderAdapter.NpgsqlDbType.Timestamp);
+			mapType("timestamp with time zone", NpgsqlProviderAdapter.NpgsqlDbType.TimestampTZ);
+			mapType("date"                    , NpgsqlProviderAdapter.NpgsqlDbType.Date);
+			mapType("time"                    , NpgsqlProviderAdapter.NpgsqlDbType.Time);
+			mapType("time with time zone"     , NpgsqlProviderAdapter.NpgsqlDbType.TimeTZ);
+			mapType("interval"                , NpgsqlProviderAdapter.NpgsqlDbType.Interval);
+			mapType("abstime"                 , NpgsqlProviderAdapter.NpgsqlDbType.Abstime);
+			// boolean type
+			mapType("boolean"                 , NpgsqlProviderAdapter.NpgsqlDbType.Boolean);
+			// geometric types
+			mapType("point"                   , NpgsqlProviderAdapter.NpgsqlDbType.Point);
+			mapType("line"                    , NpgsqlProviderAdapter.NpgsqlDbType.Line);
+			mapType("lseg"                    , NpgsqlProviderAdapter.NpgsqlDbType.LSeg);
+			mapType("box"                     , NpgsqlProviderAdapter.NpgsqlDbType.Box);
+			mapType("path"                    , NpgsqlProviderAdapter.NpgsqlDbType.Path);
+			mapType("polygon"                 , NpgsqlProviderAdapter.NpgsqlDbType.Polygon);
+			mapType("circle"                  , NpgsqlProviderAdapter.NpgsqlDbType.Circle);
+			// network address types
+			mapType("cidr"                    , NpgsqlProviderAdapter.NpgsqlDbType.Cidr);
+			mapType("inet"                    , NpgsqlProviderAdapter.NpgsqlDbType.Inet);
+			mapType("macaddr"                 , NpgsqlProviderAdapter.NpgsqlDbType.MacAddr);
+			mapType("macaddr8"                , NpgsqlProviderAdapter.NpgsqlDbType.MacAddr8);
+			// bit string types
+			mapType("bit"                     , NpgsqlProviderAdapter.NpgsqlDbType.Bit);
+			mapType("bit varying"             , NpgsqlProviderAdapter.NpgsqlDbType.Varbit);
+			// text search types
+			mapType("tsvector"                , NpgsqlProviderAdapter.NpgsqlDbType.TsVector);
+			mapType("tsquery"                 , NpgsqlProviderAdapter.NpgsqlDbType.TsQuery);
+			// UUID type
+			mapType("uuid"                    , NpgsqlProviderAdapter.NpgsqlDbType.Uuid);
+			// XML type
+			mapType("xml"                     , NpgsqlProviderAdapter.NpgsqlDbType.Xml);
+			// JSON types
+			mapType("json"                    , NpgsqlProviderAdapter.NpgsqlDbType.Json);
+			mapType("jsonb"                   , NpgsqlProviderAdapter.NpgsqlDbType.Jsonb);
+			// Object Identifier Types (only supported by npgsql)
+			mapType("oid"                     , NpgsqlProviderAdapter.NpgsqlDbType.Oid);
+			mapType("regtype"                 , NpgsqlProviderAdapter.NpgsqlDbType.Regtype);
+			mapType("xid"                     , NpgsqlProviderAdapter.NpgsqlDbType.Xid);
+			mapType("cid"                     , NpgsqlProviderAdapter.NpgsqlDbType.Cid);
+			mapType("tid"                     , NpgsqlProviderAdapter.NpgsqlDbType.Tid);
+			// other types
+			mapType("citext"                  , NpgsqlProviderAdapter.NpgsqlDbType.Citext);
+			mapType("hstore"                  , NpgsqlProviderAdapter.NpgsqlDbType.Hstore);
+			mapType("refcursor"               , NpgsqlProviderAdapter.NpgsqlDbType.Refcursor);
+			mapType("oidvector"               , NpgsqlProviderAdapter.NpgsqlDbType.Oidvector);
+			mapType("int2vector"              , NpgsqlProviderAdapter.NpgsqlDbType.Int2Vector);
 
-			BitStringType         = npgSql.GetType("NpgsqlTypes.BitString",         false);
-			NpgsqlIntervalType    = npgSql.GetType("NpgsqlTypes.NpgsqlInterval",    false);
-			NpgsqlInetType        = npgSql.GetType("NpgsqlTypes.NpgsqlInet",        true);
-			NpgsqlTimeType        = npgSql.GetType("NpgsqlTypes.NpgsqlTime",        false);
-			NpgsqlTimeTZType      = npgSql.GetType("NpgsqlTypes.NpgsqlTimeTZ",      false);
-			NpgsqlPointType       = npgSql.GetType("NpgsqlTypes.NpgsqlPoint",       true);
-			NpgsqlLSegType        = npgSql.GetType("NpgsqlTypes.NpgsqlLSeg",        true);
-			NpgsqlBoxType         = npgSql.GetType("NpgsqlTypes.NpgsqlBox",         true);
-			NpgsqlPathType        = npgSql.GetType("NpgsqlTypes.NpgsqlPath",        true);
-			_npgsqlTimeStamp      = npgSql.GetType("NpgsqlTypes.NpgsqlTimeStamp",   false);
-			_npgsqlTimeStampTZ    = npgSql.GetType("NpgsqlTypes.NpgsqlTimeStampTZ", false);
-			_npgsqlDate           = npgSql.GetType("NpgsqlTypes.NpgsqlDate",        true);
-			_npgsqlDateTime       = npgSql.GetType("NpgsqlTypes.NpgsqlDateTime",    false);
-			NpgsqlMacAddressType  = npgSql.GetType("NpgsqlTypes.NpgsqlMacAddress",  false);
-			NpgsqlCircleType      = npgSql.GetType("NpgsqlTypes.NpgsqlCircle",      true);
-			NpgsqlPolygonType     = npgSql.GetType("NpgsqlTypes.NpgsqlPolygon",     true);
+			SetProviderField(Adapter.NpgsqlTimeSpanType, Adapter.NpgsqlTimeSpanType, Adapter.GetIntervalReaderMethod     , dataReaderType: Adapter.DataReaderType);
+			SetProviderField(Adapter.NpgsqlDateTimeType, Adapter.NpgsqlDateTimeType, Adapter.GetTimeStampReaderMethod    , dataReaderType: Adapter.DataReaderType);
+			SetProviderField(Adapter.NpgsqlInetType    , Adapter.NpgsqlInetType    , GetProviderSpecificValueReaderMethod, dataReaderType: Adapter.DataReaderType);
+			SetProviderField(Adapter.NpgsqlDateType    , Adapter.NpgsqlDateType    , Adapter.GetDateReaderMethod         , dataReaderType: Adapter.DataReaderType);
 
-			// https://github.com/linq2db/linq2db/pull/718
-			//if (npgSql.GetName().Version >= new Version(3, 1, 9))
-			//{
-			//	_commandBehavior = CommandBehavior.KeyInfo;
-			//}
-
-			if (BitStringType        != null) SetProviderField(BitStringType,        BitStringType,        "GetBitString");
-			if (NpgsqlIntervalType   != null) SetProviderField(NpgsqlIntervalType,   NpgsqlIntervalType,   "GetInterval");
-			if (NpgsqlTimeType       != null) SetProviderField(NpgsqlTimeType,       NpgsqlTimeType,       "GetTime");
-			if (NpgsqlTimeTZType     != null) SetProviderField(NpgsqlTimeTZType,     NpgsqlTimeTZType,     "GetTimeTZ");
-			if (_npgsqlTimeStamp     != null) SetProviderField(_npgsqlTimeStamp,     _npgsqlTimeStamp,     "GetTimeStamp");
-			if (_npgsqlTimeStampTZ   != null) SetProviderField(_npgsqlTimeStampTZ,   _npgsqlTimeStampTZ,   "GetTimeStampTZ");
-			if (NpgsqlMacAddressType != null) SetProviderField(NpgsqlMacAddressType, NpgsqlMacAddressType, "GetProviderSpecificValue");
-			if (_npgsqlDateTime      != null) SetProviderField(_npgsqlDateTime,      _npgsqlDateTime,      "GetTimeStamp");
-
-			SetProviderField(NpgsqlInetType,       NpgsqlInetType,       "GetProviderSpecificValue");
-			SetProviderField(_npgsqlDate,          _npgsqlDate,          "GetDate");
-
-			if (_npgsqlTimeStampTZ != null)
+			bool mapType(string dbType, NpgsqlProviderAdapter.NpgsqlDbType type)
 			{
-				// SetProviderField2<NpgsqlDataReader,DateTimeOffset,NpgsqlTimeStampTZ>((r,i) => (NpgsqlTimeStampTZ)r.GetProviderSpecificValue(i));
-
-				var dataReaderParameter = Expression.Parameter(DataReaderType, "r");
-				var indexParameter      = Expression.Parameter(typeof(int),    "i");
-
-				ReaderExpressions[new ReaderInfo { ToType = typeof(DateTimeOffset), ProviderFieldType = _npgsqlTimeStampTZ }] =
-					Expression.Lambda(
-						Expression.Convert(
-							Expression.Call(dataReaderParameter, "GetProviderSpecificValue", null, indexParameter),
-							_npgsqlTimeStampTZ),
-						dataReaderParameter,
-						indexParameter);
-			}
-
-			_setMoney     = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Money");
-			_setVarBinary = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Bytea");
-			_setBoolean   = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Boolean");
-			_setXml       = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Xml");
-			_setText      = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Text");
-			_setBit       = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Bit");
-			_setHstore    = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Hstore");
-			_setJson      = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Json");
-			_setJsonb     = GetSetParameter(connectionType, "NpgsqlParameter", "NpgsqlDbType", "NpgsqlTypes.NpgsqlDbType", "Jsonb");
-
-			if (BitStringType        != null) MappingSchema.AddScalarType(BitStringType);
-			if (NpgsqlIntervalType   != null) MappingSchema.AddScalarType(NpgsqlIntervalType);
-			if (NpgsqlTimeType       != null) MappingSchema.AddScalarType(NpgsqlTimeType);
-			if (NpgsqlTimeTZType     != null) MappingSchema.AddScalarType(NpgsqlTimeTZType);
-			if (_npgsqlTimeStamp     != null) MappingSchema.AddScalarType(_npgsqlTimeStamp);
-			if (_npgsqlTimeStampTZ   != null) MappingSchema.AddScalarType(_npgsqlTimeStampTZ);
-			if (NpgsqlMacAddressType != null) MappingSchema.AddScalarType(NpgsqlMacAddressType);
-			if (_npgsqlDateTime      != null) MappingSchema.AddScalarType(_npgsqlDateTime);
-
-			MappingSchema.AddScalarType(NpgsqlInetType);
-			MappingSchema.AddScalarType(NpgsqlPointType);
-			MappingSchema.AddScalarType(NpgsqlLSegType);
-			MappingSchema.AddScalarType(NpgsqlBoxType);
-			MappingSchema.AddScalarType(NpgsqlPathType);
-			MappingSchema.AddScalarType(NpgsqlCircleType);
-			MappingSchema.AddScalarType(_npgsqlDate);
-			MappingSchema.AddScalarType(NpgsqlPolygonType);
-
-			if (_npgsqlTimeStampTZ != null)
-			{
-				// SetConvertExpression<NpgsqlTimeStampTZ,DateTimeOffset>(
-				//     d => new DateTimeOffset(d.Year, d.Month, d.Day, d.Hours, d.Minutes, d.Seconds, d.Milliseconds,
-				//         new TimeSpan(d.TimeZone.Hours, d.TimeZone.Minutes, d.TimeZone.Seconds)));
-
-				var p = Expression.Parameter(_npgsqlTimeStampTZ, "p");
-
-				MappingSchema.SetConvertExpression(_npgsqlTimeStampTZ, typeof(DateTimeOffset),
-					Expression.Lambda(
-						Expression.New(
-							MemberHelper.ConstructorOf(() => new DateTimeOffset(0L, new TimeSpan())),
-							Expression.PropertyOrField(p, "Ticks"),
-							Expression.New(
-								MemberHelper.ConstructorOf(() => new TimeSpan(0, 0, 0)),
-								Expression.PropertyOrField(Expression.PropertyOrField(p, "TimeZone"), "Hours"),
-								Expression.PropertyOrField(Expression.PropertyOrField(p, "TimeZone"), "Minutes"),
-								Expression.PropertyOrField(Expression.PropertyOrField(p, "TimeZone"), "Seconds"))),
-						p
-					));
-			}
-
-			if (_npgsqlDateTime != null)
-			{
-				var p  = Expression.Parameter(_npgsqlDateTime, "p");
-				var pi = p.Type.GetPropertyEx("DateTime");
-
-				Expression expr;
-
-				if (pi != null)
-					expr = Expression.Property(p, pi);
-				else
-					expr = Expression.Call(p, "ToDateTime", null);
-
-				MappingSchema.SetConvertExpression(_npgsqlDateTime, typeof(DateTimeOffset),
-					Expression.Lambda(
-						Expression.New(
-							MemberHelper.ConstructorOf(() => new DateTimeOffset(new DateTime())),
-							expr),p));
+				if (Adapter.IsDbTypeSupported(type))
+				{
+					_npgsqlTypeMap.Add(dbType, type);
+					return true;
+				}
+				return false;
 			}
 		}
 
-		public    override string ConnectionNamespace { get { return "Npgsql";                          } }
-		protected override string ConnectionTypeName  { get { return "Npgsql.NpgsqlConnection, Npgsql"; } }
-		protected override string DataReaderTypeName  { get { return "Npgsql.NpgsqlDataReader, Npgsql"; } }
-
-		public override ISqlBuilder CreateSqlBuilder()
+		protected override string? NormalizeTypeName(string? typeName)
 		{
-			return new PostgreSQLSqlBuilder(GetSqlOptimizer(), SqlProviderFlags, MappingSchema.ValueToSqlConverter);
+			if (typeName == null)
+				return null;
+
+			if (typeName.StartsWith("character("))
+				return "character";
+
+			return typeName;
+		}
+
+		public PostgreSQLVersion Version { get; }
+
+		internal bool HasMacAddr8 => Adapter.IsDbTypeSupported(NpgsqlProviderAdapter.NpgsqlDbType.MacAddr8);
+
+		/// <summary>
+		/// Map of canonical PostgreSQL type name to NpgsqlDbType enumeration value.
+		/// This map shouldn't be used directly, you should resolve PostgreSQL types using
+		/// <see cref="GetNativeType(string, bool)"/> method, which takes into account different type aliases.
+		/// </summary>
+		private readonly IDictionary<string, NpgsqlProviderAdapter.NpgsqlDbType> _npgsqlTypeMap = new Dictionary<string, NpgsqlProviderAdapter.NpgsqlDbType>();
+
+		private static string GetProviderName(PostgreSQLVersion version)
+		{
+			return version switch
+			{
+				PostgreSQLVersion.v92 => ProviderName.PostgreSQL92,
+				PostgreSQLVersion.v93 => ProviderName.PostgreSQL93,
+				_                     => ProviderName.PostgreSQL95,
+			};
+		}
+
+		public override TableOptions SupportedTableOptions =>
+			TableOptions.IsTemporary                |
+			TableOptions.IsLocalTemporaryStructure  |
+			TableOptions.IsLocalTemporaryData       |
+			TableOptions.IsTransactionTemporaryData |
+			TableOptions.CreateIfNotExists          |
+			TableOptions.DropIfExists;
+
+		public override ISqlBuilder CreateSqlBuilder(MappingSchema mappingSchema)
+		{
+			return new PostgreSQLSqlBuilder(this, mappingSchema, GetSqlOptimizer(), SqlProviderFlags);
 		}
 
 		readonly ISqlOptimizer _sqlOptimizer;
 
-		public override ISqlOptimizer GetSqlOptimizer()
-		{
-			return _sqlOptimizer;
-		}
+		public override ISqlOptimizer GetSqlOptimizer() => _sqlOptimizer;
 
-#if !NETSTANDARD1_6
 		public override SchemaProvider.ISchemaProvider GetSchemaProvider()
 		{
-			return new PostgreSQLSchemaProvider();
+			return new PostgreSQLSchemaProvider(this);
 		}
-#endif
 
-#if NETSTANDARD2_0
+#if !NETFRAMEWORK
 		public override bool? IsDBNullAllowed(IDataReader reader, int idx)
 		{
 			return true;
 		}
 #endif
 
-		static Action<IDbDataParameter> _setMoney;
-		static Action<IDbDataParameter> _setVarBinary;
-		static Action<IDbDataParameter> _setBoolean;
-		static Action<IDbDataParameter> _setXml;
-		static Action<IDbDataParameter> _setText;
-		static Action<IDbDataParameter> _setBit;
-		static Action<IDbDataParameter> _setHstore;
-		static Action<IDbDataParameter> _setJsonb;
-		static Action<IDbDataParameter> _setJson;
-
-		public override void SetParameter(IDbDataParameter parameter, string name, DataType dataType, object value)
+		public override void SetParameter(DataConnection dataConnection, IDbDataParameter parameter, string name, DbDataType dataType, object? value)
 		{
-			if (value is IDictionary && dataType == DataType.Undefined)
+			if (value is IDictionary && dataType.DataType == DataType.Undefined)
 			{
-				dataType = DataType.Dictionary;
+				dataType = dataType.WithDataType(DataType.Dictionary);
 			}
 
-			base.SetParameter(parameter, name, dataType, value);
+			base.SetParameter(dataConnection, parameter, name, dataType, value);
 		}
 
-		protected override void SetParameterType(IDbDataParameter parameter, DataType dataType)
+		protected override void SetParameterType(DataConnection dataConnection, IDbDataParameter parameter, DbDataType dataType)
 		{
-			switch (dataType)
+			// didn't tried to detect and cleanup unnecessary type mappings, as npgsql develops rapidly and
+			// it doesn't pay efforts to track changes for each version in this area
+			NpgsqlProviderAdapter.NpgsqlDbType? type = null;
+			switch (dataType.DataType)
 			{
-				case DataType.SByte      : parameter.DbType = DbType.Int16;            break;
-				case DataType.UInt16     : parameter.DbType = DbType.Int32;            break;
-				case DataType.UInt32     : parameter.DbType = DbType.Int64;            break;
-				case DataType.UInt64     : parameter.DbType = DbType.Decimal;          break;
-				case DataType.DateTime2  : parameter.DbType = DbType.DateTime;         break;
-				case DataType.VarNumeric : parameter.DbType = DbType.Decimal;          break;
-				case DataType.Decimal    : parameter.DbType = DbType.Decimal;          break;
-				case DataType.Money      : _setMoney(parameter);                       break;
-				case DataType.Image      :
-				case DataType.Binary     :
-				case DataType.VarBinary  : _setVarBinary(parameter);                   break;
-				case DataType.Boolean    : _setBoolean  (parameter);                   break;
-				case DataType.Xml        : _setXml      (parameter);                   break;
-				case DataType.Text       :
-				case DataType.NText      : _setText     (parameter);                   break;
-				case DataType.BitArray   : _setBit      (parameter);                   break;
-				case DataType.Dictionary : _setHstore(parameter);                      break;
-				case DataType.Json       : _setJson(parameter);                        break;
-				case DataType.BinaryJson : _setJsonb(parameter);                       break;
-				default                  : base.SetParameterType(parameter, dataType); break;
+				case DataType.Money     : type = NpgsqlProviderAdapter.NpgsqlDbType.Money  ; break;
+				case DataType.Image     :
+				case DataType.Binary    :
+				case DataType.VarBinary : type = NpgsqlProviderAdapter.NpgsqlDbType.Bytea  ; break;
+				case DataType.Boolean   : type = NpgsqlProviderAdapter.NpgsqlDbType.Boolean; break;
+				case DataType.Xml       : type = NpgsqlProviderAdapter.NpgsqlDbType.Xml    ; break;
+				case DataType.Text      :
+				case DataType.NText     : type = NpgsqlProviderAdapter.NpgsqlDbType.Text   ; break;
+				case DataType.BitArray  : type = NpgsqlProviderAdapter.NpgsqlDbType.Bit    ; break;
+				case DataType.Dictionary: type = NpgsqlProviderAdapter.NpgsqlDbType.Hstore ; break;
+				case DataType.Json      : type = NpgsqlProviderAdapter.NpgsqlDbType.Json   ; break;
+				case DataType.BinaryJson: type = NpgsqlProviderAdapter.NpgsqlDbType.Jsonb  ; break;
+				case DataType.Interval  : type = NpgsqlProviderAdapter.NpgsqlDbType.Interval ; break;
+				case DataType.Int64     : type = NpgsqlProviderAdapter.NpgsqlDbType.Bigint ; break;
 			}
-		}
 
-		public override CommandBehavior GetCommandBehavior(CommandBehavior commandBehavior)
-		{
-			return commandBehavior | _commandBehavior;
+			if (!string.IsNullOrEmpty(dataType.DbType))
+			{
+				type = GetNativeType(dataType.DbType);
+			}
+
+			if (type != null)
+			{
+				var param = TryGetProviderParameter(parameter, dataConnection.MappingSchema);
+				if (param != null)
+				{
+					Adapter.SetDbType(param, type.Value);
+					return;
+				}
+			}
+
+			switch (dataType.DataType)
+			{
+				case DataType.SByte     : parameter.DbType = DbType.Int16     ; return;
+				case DataType.UInt16    : parameter.DbType = DbType.Int32     ; return;
+				case DataType.UInt32    : parameter.DbType = DbType.Int64     ; return;
+				case DataType.UInt64    :
+				case DataType.VarNumeric: parameter.DbType = DbType.Decimal   ; return;
+				case DataType.DateTime2 : parameter.DbType = DbType.DateTime  ; return;
+				// fallback mappings
+				case DataType.Money     : parameter.DbType = DbType.Currency  ; break;
+				case DataType.Xml       : parameter.DbType = DbType.Xml       ; break;
+				case DataType.Text      : parameter.DbType = DbType.AnsiString; break;
+				case DataType.NText     : parameter.DbType = DbType.String    ; break;
+				case DataType.Image     :
+				case DataType.Binary    :
+				case DataType.VarBinary : parameter.DbType = DbType.Binary    ; break;
+				// those types doesn't have fallback DbType
+				case DataType.BitArray  : parameter.DbType = DbType.Binary    ; break;
+				case DataType.Dictionary: parameter.DbType = DbType.Object    ; break;
+				case DataType.Json      : parameter.DbType = DbType.String    ; break;
+				case DataType.BinaryJson: parameter.DbType = DbType.String    ; break;
+			}
+
+			base.SetParameterType(dataConnection, parameter, dataType);
 		}
 
 		#region BulkCopy
 
 		public override BulkCopyRowsCopied BulkCopy<T>(
-			[JetBrains.Annotations.NotNull] DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+			ITable<T> table, BulkCopyOptions options, IEnumerable<T> source)
 		{
-			return new PostgreSQLBulkCopy().BulkCopy(
+			return new PostgreSQLBulkCopy(this).BulkCopy(
 				options.BulkCopyType == BulkCopyType.Default ? PostgreSQLTools.DefaultBulkCopyType : options.BulkCopyType,
-				dataConnection,
+				table,
 				options,
 				source);
 		}
 
-#endregion
+		public override Task<BulkCopyRowsCopied> BulkCopyAsync<T>(
+			ITable<T> table, BulkCopyOptions options, IEnumerable<T> source, CancellationToken cancellationToken)
+		{
+			return new PostgreSQLBulkCopy(this).BulkCopyAsync(
+				options.BulkCopyType == BulkCopyType.Default ? PostgreSQLTools.DefaultBulkCopyType : options.BulkCopyType,
+				table,
+				options,
+				source,
+				cancellationToken);
+		}
+
+#if NATIVE_ASYNC
+		public override Task<BulkCopyRowsCopied> BulkCopyAsync<T>(
+			ITable<T> table, BulkCopyOptions options, IAsyncEnumerable<T> source, CancellationToken cancellationToken)
+		{
+			return new PostgreSQLBulkCopy(this).BulkCopyAsync(
+				options.BulkCopyType == BulkCopyType.Default ? PostgreSQLTools.DefaultBulkCopyType : options.BulkCopyType,
+				table,
+				options,
+				source,
+				cancellationToken);
+		}
+#endif
+
+		#endregion
+
+		/// <summary>
+		/// Returns <see cref="NpgsqlProviderAdapter.NpgsqlDbType"/> enumeration value for requested postgresql type or null if type cannot be resolved.
+		/// This method expects correct PostgreSQL type as input.
+		/// Custom types not supported. Also could fail on some types as PostgreSQL have a lot of ways to write same
+		/// type.
+		/// </summary>
+		/// <remarks>
+		/// Returned value could be invalid for <see cref="NpgsqlProviderAdapter.NpgsqlDbType"/> type, if range/array flags
+		/// were applied. Don't try to use results of this function for anything except passing it directly to npgsql.
+		/// </remarks>
+		internal NpgsqlProviderAdapter.NpgsqlDbType? GetNativeType(string? dbType, bool convertAlways = false)
+		{
+			if (string.IsNullOrWhiteSpace(dbType))
+				return null;
+
+			dbType = dbType!.ToLower();
+
+			// detect arrays
+			var isArray = false;
+			var idx = dbType.IndexOf("array");
+
+			if (idx == -1)
+				idx = dbType.IndexOf("[");
+
+			if (idx != -1)
+			{
+				isArray = true;
+				dbType = dbType.Substring(0, idx);
+			}
+
+			var isRange = false;
+
+			dbType = dbType.Trim();
+
+			// normalize synonyms and parameterized type names
+			switch (dbType)
+			{
+				case "int4range":
+					dbType  = "integer";
+					isRange = true;
+					break;
+				case "int8range":
+					dbType  = "bigint";
+					isRange = true;
+					break;
+				case "numrange":
+					dbType  = "numeric";
+					isRange = true;
+					break;
+				case "tsrange":
+					dbType  = "timestamp";
+					isRange = true;
+					break;
+				case "tstzrange":
+					dbType  = "timestamp with time zone";
+					isRange = true;
+					break;
+				case "timestamptz":
+					dbType = "timestamp with time zone";
+					break;
+				case "daterange":
+					dbType  = "date";
+					isRange = true;
+					break;
+				case "int2":
+				case "smallserial":
+				case "serial2":
+					dbType = "smallint";
+					break;
+				case "int":
+				case "int4":
+				case "serial":
+				case "serial4":
+					dbType = "integer";
+					break;
+				case "int8":
+				case "bigserial":
+				case "serial8":
+					dbType = "bigint";
+					break;
+				case "float":
+					dbType = "double precision";
+					break;
+				case "varchar":
+					dbType = "character varying";
+					break;
+				case "varbit":
+					dbType = "bit varying";
+					break;
+			}
+
+			if (dbType.StartsWith("float(") && dbType.EndsWith(")"))
+			{
+				if (int.TryParse(dbType.Substring("float(".Length, dbType.Length - "float(".Length - 1), out var precision))
+				{
+					if (precision >= 1 && precision <= 24)
+						dbType = "real";
+					else if (precision >= 25 && precision <= 53)
+						dbType = "real";
+					// else bad type
+				}
+			}
+
+			if (dbType.StartsWith("numeric(") || dbType.StartsWith("decimal"))
+				dbType = "numeric";
+
+			if (dbType.StartsWith("varchar(") || dbType.StartsWith("character varying("))
+				dbType = "character varying";
+
+			if (dbType.StartsWith("char(") || dbType.StartsWith("character("))
+				dbType = "character";
+
+			if (dbType.StartsWith("interval"))
+				dbType = "interval";
+
+			if (dbType.StartsWith("timestamp"))
+				dbType = dbType.Contains("with time zone") ? "timestamp with time zone" : "timestamp";
+
+			if (dbType.StartsWith("time(") || dbType.StartsWith("time "))
+				dbType = dbType.Contains("with time zone") ? "time with time zone" : "time";
+
+			if (dbType.StartsWith("bit("))
+				dbType = "bit";
+
+			if (dbType.StartsWith("bit varying("))
+				dbType = "bit varying";
+
+			if (_npgsqlTypeMap.ContainsKey(dbType))
+			{
+				var result = _npgsqlTypeMap[dbType];
+
+				// because NpgsqlDbType fields numeric values changed in npgsql4,
+				// applying flag-like array/range bits is not straightforward process
+				result = Adapter.ApplyDbTypeFlags(result, isArray, isRange, convertAlways);
+
+				return result;
+			}
+
+			return null;
+		}
+
+		private static MappingSchema GetMappingSchema(PostgreSQLVersion version, MappingSchema providerSchema)
+		{
+			return version switch
+			{
+				PostgreSQLVersion.v92 => new PostgreSQL92MappingSchema(providerSchema),
+				PostgreSQLVersion.v93 => new PostgreSQL93MappingSchema(providerSchema),
+				_                     => new PostgreSQL95MappingSchema(providerSchema),
+			};
+		}
 	}
 }

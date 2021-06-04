@@ -13,9 +13,10 @@ using NUnit.Framework;
 
 namespace Tests.Samples
 {
+	using System.Threading.Tasks;
 	using Model;
 	/// <summary>
-	/// This sample demonstrates how can we use <see cref="IDataContext"/> decoration 
+	/// This sample demonstrates how can we use <see cref="IDataContext"/> decoration
 	/// to deal with different <see cref="MappingSchema"/> objects in one <see cref="IDbConnection"/>
 	/// </summary>
 	[TestFixture]
@@ -31,14 +32,15 @@ namespace Tests.Samples
 				MappingSchema = mappingSchema;
 			}
 
-			public string              ContextID         => _context.ContextID;
-			public Func<ISqlOptimizer> GetSqlOptimizer   => _context.GetSqlOptimizer;
-			public Type                DataReaderType    => _context.DataReaderType;
-			public Func<ISqlBuilder>   CreateSqlProvider => _context.CreateSqlProvider;
-			public List<string>        NextQueryHints    => _context.NextQueryHints;
-			public List<string>        QueryHints        => _context.QueryHints;
-			public SqlProviderFlags    SqlProviderFlags  => _context.SqlProviderFlags;
-			
+			public string              ContextID             => _context.ContextID;
+			public Func<ISqlOptimizer> GetSqlOptimizer       => _context.GetSqlOptimizer;
+			public Type                DataReaderType        => _context.DataReaderType;
+			public Func<ISqlBuilder>   CreateSqlProvider     => _context.CreateSqlProvider;
+			public List<string>        NextQueryHints        => _context.NextQueryHints;
+			public List<string>        QueryHints            => _context.QueryHints;
+			public SqlProviderFlags    SqlProviderFlags      => _context.SqlProviderFlags;
+			public TableOptions        SupportedTableOptions => _context.SupportedTableOptions;
+
 			public MappingSchema       MappingSchema { get; }
 			public bool                CloseAfterUse { get; set; }
 
@@ -48,9 +50,11 @@ namespace Tests.Samples
 				set => _context.InlineParameters = value;
 			}
 
-#pragma warning disable 0067
-			public event EventHandler OnClosing;
-#pragma warning restore 0067
+			event EventHandler? IDataContext.OnClosing
+			{
+				add { }
+				remove { }
+			}
 
 			public IDataContext Clone(bool forNestedQuery)
 			{
@@ -62,31 +66,43 @@ namespace Tests.Samples
 				_context.Close();
 			}
 
+			public Task CloseAsync()
+			{
+				return _context.CloseAsync();
+			}
+
 			public void Dispose()
 			{
 				_context.Dispose();
 			}
 
-			public IQueryRunner GetQueryRunner(Query query, int queryNumber, Expression expression, object[] parameters)
+			public ValueTask DisposeAsync()
 			{
-				return _context.GetQueryRunner(query, queryNumber, expression, parameters);
+				return _context.DisposeAsync();
 			}
 
-			public Expression GetReaderExpression(MappingSchema mappingSchema, IDataReader reader, int idx, Expression readerExpression, Type toType)
+			public IQueryRunner GetQueryRunner(Query query, int queryNumber, Expression expression, object?[]? parameters, object?[]? preambles)
 			{
-				return _context.GetReaderExpression(mappingSchema, reader, idx, readerExpression, toType);
+				return _context.GetQueryRunner(query, queryNumber, expression, parameters, preambles);
+			}
+
+			public Expression GetReaderExpression(IDataReader reader, int idx, Expression readerExpression, Type toType)
+			{
+				return _context.GetReaderExpression(reader, idx, readerExpression, toType);
 			}
 
 			public bool? IsDBNullAllowed(IDataReader reader, int idx)
 			{
 				return _context.IsDBNullAllowed(reader, idx);
 			}
+
+			public Action<EntityCreatedEventArgs>? OnEntityCreated { get; set; }
 		}
 
 		public class Entity
 		{
-			public int    Id;
-			public string Name;
+			public int     Id;
+			public string? Name;
 		}
 
 //		[Test]
@@ -103,7 +119,7 @@ namespace Tests.Samples
 					.Property(_ => _.Name).HasColumnName("EntityName");
 
 				var q1 = db.GetTable<Entity>().Select(_ => _).ToString();
-				var q2 = dc.GetTable<Entity>().Select(_ => _).ToString();
+				var q2 = dc.GetTable<Entity>().Select(_ => _).ToString()!;
 
 				Assert.AreNotEqual(q1, q2);
 				Assert.That(q2.Contains("EntityId"));

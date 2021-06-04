@@ -1,9 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-
-using JetBrains.Annotations;
 
 namespace LinqToDB.Reflection
 {
@@ -14,9 +12,9 @@ namespace LinqToDB.Reflection
 
 		protected void AddMember(MemberAccessor member)
 		{
-			if (member == null) throw new ArgumentNullException("member");
+			if (member == null) throw new ArgumentNullException(nameof(member));
 
-			_members.Add(member);
+			Members.Add(member);
 			_membersByName[member.MemberInfo.Name] = member;
 		}
 
@@ -40,62 +38,43 @@ namespace LinqToDB.Reflection
 
 		#region Public Members
 
-		public IObjectFactory          ObjectFactory               { get; set; }
-		public abstract Type           Type                        { get; }
-
-		/// <summary>
-		/// Gets the dynamic columns store accessor.
-		/// </summary>
-		public abstract MemberAccessor DynamicColumnsStoreAccessor { get; }
+		public IObjectFactory?         ObjectFactory { get; set; }
+		public abstract Type           Type          { get; }
 
 		#endregion
 
 		#region Items
 
-		readonly List<MemberAccessor> _members = new List<MemberAccessor>();
-		public   List<MemberAccessor>  Members
-		{
-			get { return _members; }
-		}
+		public List<MemberAccessor>    Members       { get; } = new();
 
-		readonly ConcurrentDictionary<string,MemberAccessor> _membersByName = new ConcurrentDictionary<string,MemberAccessor>();
+		readonly ConcurrentDictionary<string,MemberAccessor> _membersByName = new();
 
-		public MemberAccessor this[string memberName]
-		{
-			get
+		public MemberAccessor this[string memberName] =>
+			_membersByName.GetOrAdd(memberName, name =>
 			{
-				return _membersByName.GetOrAdd(memberName, name =>
-				{
-					var ma = new MemberAccessor(this, name);
-					Members.Add(ma);
-					return ma;
-				});
-			}
-		}
+				var ma = new MemberAccessor(this, name, null);
+				Members.Add(ma);
+				return ma;
+			});
 
-		public MemberAccessor this[int index]
-		{
-			get { return _members[index]; }
-		}
+		public MemberAccessor this[int index] => Members[index];
 
 		#endregion
 
 		#region Static Members
 
-		static readonly ConcurrentDictionary<Type,TypeAccessor> _accessors = new ConcurrentDictionary<Type,TypeAccessor>();
+		static readonly ConcurrentDictionary<Type,TypeAccessor> _accessors = new();
 
-		public static TypeAccessor GetAccessor([NotNull] Type type)
+		public static TypeAccessor GetAccessor(Type type)
 		{
-			if (type == null) throw new ArgumentNullException("type");
+			if (type == null) throw new ArgumentNullException(nameof(type));
 
-			TypeAccessor accessor;
-
-			if (_accessors.TryGetValue(type, out accessor))
+			if (_accessors.TryGetValue(type, out var accessor))
 				return accessor;
 
 			var accessorType = typeof(TypeAccessor<>).MakeGenericType(type);
 
-			accessor = (TypeAccessor)Activator.CreateInstance(accessorType, true);
+			accessor = (TypeAccessor)Activator.CreateInstance(accessorType, true)!;
 
 			_accessors[type] = accessor;
 
@@ -104,11 +83,8 @@ namespace LinqToDB.Reflection
 
 		public static TypeAccessor<T> GetAccessor<T>()
 		{
-			TypeAccessor accessor;
-
-			if (_accessors.TryGetValue(typeof(T), out accessor))
+			if (_accessors.TryGetValue(typeof(T), out var accessor))
 				return (TypeAccessor<T>)accessor;
-
 			return (TypeAccessor<T>)(_accessors[typeof(T)] = new TypeAccessor<T>());
 		}
 

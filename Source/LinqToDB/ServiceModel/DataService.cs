@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NETFRAMEWORK
+using System;
 using System.Collections.Generic;
 using System.Data.Services.Providers;
 using System.Linq;
@@ -7,33 +8,35 @@ using System.Linq.Expressions;
 namespace LinqToDB.ServiceModel
 {
 	using Extensions;
+	using Expressions;
 	using Linq;
 	using Mapping;
 	using SqlQuery;
+	using LinqToDB.Common;
 
 	public class DataService<T> : System.Data.Services.DataService<T>, IServiceProvider
 		where T : IDataContext
 	{
-		#region Init
+#region Init
 
 		public DataService()
 		{
 			if (_defaultMetadata == null)
-				_defaultMetadata = Tuple.Create(default(T), new MetadataInfo(MappingSchema.Default));
+				_defaultMetadata = Tuple.Create(default(T)!, new MetadataInfo(MappingSchema.Default));
 
 			_metadata = new MetadataProvider(_defaultMetadata.Item2);
 			_query    = new QueryProvider   (_defaultMetadata.Item2);
 			_update   = new UpdateProvider  (_defaultMetadata.Item2, _metadata, _query);
 		}
 
-		static Tuple<T,MetadataInfo> _defaultMetadata;
+		static Tuple<T,MetadataInfo>? _defaultMetadata;
 
 		public DataService(MappingSchema mappingSchema)
 		{
 			lock (_cache)
 			{
 				if (!_cache.TryGetValue(mappingSchema, out var data))
-					data = Tuple.Create(default(T), new MetadataInfo(mappingSchema));
+					data = Tuple.Create(default(T)!, new MetadataInfo(mappingSchema));
 
 				_metadata = new MetadataProvider(data.Item2);
 				_query    = new QueryProvider   (data.Item2);
@@ -48,11 +51,11 @@ namespace LinqToDB.ServiceModel
 		readonly QueryProvider    _query;
 		readonly UpdateProvider   _update;
 
-		#endregion
+#endregion
 
-		#region Public Members
+#region Public Members
 
-		public object GetService(Type serviceType)
+		public object? GetService(Type serviceType)
 		{
 			if (serviceType == typeof(IDataServiceMetadataProvider)) return _metadata;
 			if (serviceType == typeof(IDataServiceQueryProvider))    return _query;
@@ -61,15 +64,15 @@ namespace LinqToDB.ServiceModel
 			return null;
 		}
 
-		#endregion
+#endregion
 
-		#region MetadataInfo
+#region MetadataInfo
 
 		class TypeInfo
 		{
-			public ResourceType     Type;
-			public SqlTable         Table;
-			public EntityDescriptor Mapper;
+			public ResourceType     Type   = null!;
+			public SqlTable         Table  = null!;
+			public EntityDescriptor Mapper = null!;
 		}
 
 		class MetadataInfo
@@ -82,10 +85,10 @@ namespace LinqToDB.ServiceModel
 
 			readonly MappingSchema _mappingSchema;
 
-			public readonly Dictionary<Type,TypeInfo>                  TypeDic     = new Dictionary<Type,TypeInfo>();
-			public readonly Dictionary<string,ResourceType>            Types       = new Dictionary<string,ResourceType>();
-			public readonly Dictionary<string,ResourceSet>             Sets        = new Dictionary<string,ResourceSet>();
-			public readonly Dictionary<string,Func<object,IQueryable>> RootGetters = new Dictionary<string,Func<object,IQueryable>>();
+			public readonly Dictionary<Type,TypeInfo>                   TypeDic     = new Dictionary<Type,TypeInfo>();
+			public readonly Dictionary<string,ResourceType>             Types       = new Dictionary<string,ResourceType>();
+			public readonly Dictionary<string,ResourceSet>              Sets        = new Dictionary<string,ResourceSet>();
+			public readonly Dictionary<string,Func<object?,IQueryable>> RootGetters = new Dictionary<string,Func<object?,IQueryable>>();
 
 			void LoadMetadata()
 			{
@@ -97,7 +100,7 @@ namespace LinqToDB.ServiceModel
 					where typeof(ITable<>).IsSameOrParentOf(t)
 					let tt  = t.GetGenericArguments()[0]
 					let tbl = new SqlTable(_mappingSchema, tt)
-					where tbl.Fields.Values.Any(f => f.IsPrimaryKey)
+					where tbl.Fields.Any(f => f.IsPrimaryKey)
 					let m   = _mappingSchema.GetEntityDescriptor(tt)
 					select new
 					{
@@ -176,13 +179,13 @@ namespace LinqToDB.ServiceModel
 						Mapper = mapper,
 					};
 
-					foreach (var field in table.Fields.Values)
+					foreach (var field in table.Fields)
 					{
-						if (baseType != null && baseInfo.Table.Fields.ContainsKey(field.Name))
+						if (baseType != null && baseInfo!.Table[field.Name] != null)
 							continue;
 
 						var kind  = ResourcePropertyKind.Primitive;
-						var ptype = ResourceType.GetPrimitiveResourceType(field.SystemType);
+						var ptype = ResourceType.GetPrimitiveResourceType(field.Type!.Value.SystemType);
 
 						if (baseType == null && field.IsPrimaryKey)
 							kind |= ResourcePropertyKind.Key;
@@ -207,9 +210,9 @@ namespace LinqToDB.ServiceModel
 			}
 		}
 
-		#endregion
+#endregion
 
-		#region MetadataProvider
+#region MetadataProvider
 
 		class MetadataProvider : IDataServiceMetadataProvider
 		{
@@ -245,7 +248,7 @@ namespace LinqToDB.ServiceModel
 				return _data.TypeDic[resourceType.InstanceType].Mapper.InheritanceMapping.Count > 0;
 			}
 
-			public bool TryResolveServiceOperation(string name, out ServiceOperation serviceOperation)
+			public bool TryResolveServiceOperation(string name, out ServiceOperation? serviceOperation)
 			{
 				serviceOperation = null;
 				return false;
@@ -258,9 +261,9 @@ namespace LinqToDB.ServiceModel
 			public IEnumerable<ServiceOperation> ServiceOperations  => Enumerable.Empty<ServiceOperation>();
 		}
 
-		#endregion
+#endregion
 
-		#region QueryProvider
+#region QueryProvider
 
 		class QueryProvider : IDataServiceQueryProvider
 		{
@@ -273,20 +276,20 @@ namespace LinqToDB.ServiceModel
 
 			public IQueryable GetQueryRootForResourceSet(ResourceSet resourceSet)
 			{
-				Func<object,IQueryable> func;
+				Func<object?,IQueryable> func;
 
 				lock (_data.RootGetters)
 				{
 					if (!_data.RootGetters.TryGetValue(resourceSet.Name, out func))
 					{
 						var p = Expression.Parameter(typeof(object), "p");
-						var l = Expression.Lambda<Func<object,IQueryable>>(
-							Expression.PropertyOrField(
+						var l = Expression.Lambda<Func<object?,IQueryable>>(
+							ExpressionHelper.PropertyOrField(
 								Expression.Convert(p, typeof(T)),
 								resourceSet.Name),
 							p);
 
-						func = l.Compile();
+						func = l.CompileExpression();
 
 						_data.RootGetters.Add(resourceSet.Name, func);
 					}
@@ -320,17 +323,17 @@ namespace LinqToDB.ServiceModel
 				throw new NotImplementedException();
 			}
 
-			public object CurrentDataSource         { get; set; }
-			public bool   IsNullPropagationRequired => true;
+			public object? CurrentDataSource         { get; set; }
+			public bool    IsNullPropagationRequired => true;
 		}
 
-		#endregion
+#endregion
 
-		#region UpdateProvider
+#region UpdateProvider
 
 		abstract class ResourceAction
 		{
-			public object Resource;
+			public object Resource = null!;
 
 			public class Create : ResourceAction {}
 			public class Delete : ResourceAction {}
@@ -338,14 +341,14 @@ namespace LinqToDB.ServiceModel
 
 			public class Update : ResourceAction
 			{
-				public string Property;
-				public object Value;
+				public string  Property = null!;
+				public object? Value;
 			}
 		}
 
 		class UpdateProvider : IDataServiceUpdateProvider
 		{
-			#region Init
+#region Init
 
 			public UpdateProvider(MetadataInfo data, MetadataProvider metadata, QueryProvider query)
 			{
@@ -359,9 +362,9 @@ namespace LinqToDB.ServiceModel
 			readonly QueryProvider        _query;
 			readonly List<ResourceAction> _actions = new List<ResourceAction>();
 
-			#endregion
+#endregion
 
-			#region IDataServiceUpdateProvider
+#region IDataServiceUpdateProvider
 
 			public void SetConcurrencyValues(object resourceCookie, bool? checkForEquality, IEnumerable<KeyValuePair<string,object>> concurrencyValues)
 			{
@@ -387,7 +390,7 @@ namespace LinqToDB.ServiceModel
 					return resource;
 				}
 
-				throw new Exception($"Type '{fullTypeName}' not found");
+				throw new LinqException($"Type '{fullTypeName}' not found");
 			}
 
 			public void DeleteResource(object targetResource)
@@ -395,9 +398,9 @@ namespace LinqToDB.ServiceModel
 				_actions.Add(new ResourceAction.Delete { Resource = targetResource });
 			}
 
-			public object GetResource(IQueryable query, string fullTypeName)
+			public object? GetResource(IQueryable query, string fullTypeName)
 			{
-				object resource = null;
+				object? resource = null;
 
 				foreach (var item in query)
 				{
@@ -409,10 +412,10 @@ namespace LinqToDB.ServiceModel
 				return resource;
 			}
 
-			public object GetValue(object targetResource, string propertyName)
+			public object? GetValue(object targetResource, string propertyName)
 			{
 				var m = _data.TypeDic[targetResource.GetType()].Mapper;
-				return m[propertyName].MemberAccessor.GetValue(targetResource);
+				return m[propertyName]!.MemberAccessor.GetValue(targetResource);
 			}
 
 			public void RemoveReferenceFromCollection(object targetResource, string propertyName, object resourceToBeRemoved)
@@ -436,23 +439,24 @@ namespace LinqToDB.ServiceModel
 				throw new NotImplementedException();
 			}
 
-			public void SetReference(object targetResource, string propertyName, object propertyValue)
+			public void SetReference(object targetResource, string propertyName, object? propertyValue)
 			{
 				throw new NotImplementedException();
 			}
 
-			public void SetValue(object targetResource, string propertyName, object propertyValue)
+			public void SetValue(object targetResource, string propertyName, object? propertyValue)
 			{
 				var m = _data.TypeDic[targetResource.GetType()].Mapper;
 
-				m[propertyName].MemberAccessor.SetValue(targetResource, propertyValue);
+				m[propertyName]!.MemberAccessor.SetValue(targetResource, propertyValue);
 
 				_actions.Add(new ResourceAction.Update { Resource = targetResource, Property = propertyName, Value = propertyValue });
 			}
 
-			#endregion
+#endregion
 		}
 
-		#endregion
+#endregion
 	}
 }
+#endif

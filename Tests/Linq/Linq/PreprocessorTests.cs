@@ -1,13 +1,16 @@
 ﻿using System.Linq;
 using System.Linq.Expressions;
+
 using LinqToDB.Data;
 using LinqToDB.Expressions;
 using LinqToDB.Linq;
+
 using NUnit.Framework;
-using Tests.Model;
 
 namespace Tests.Linq
 {
+	using Model;
+
 	[TestFixture]
 	public class PreprocessorTests : TestBase
 	{
@@ -19,7 +22,7 @@ namespace Tests.Linq
 
 			public Expression ProcessExpression(Expression expression)
 			{
-				var result = expression.Transform(e =>
+				var result = expression.Transform<object?>(null, static (_, e) =>
 				{
 					if (e.NodeType == ExpressionType.Constant)
 					{
@@ -37,8 +40,8 @@ namespace Tests.Linq
 		}
 
 
-		[Test, DataContextSource(false)]
-		public void Test(string context)
+		[Test]
+		public void Test([DataSources(false)] string context)
 		{
 			using (var db = new PostProcessorDataConnection(context))
 			{

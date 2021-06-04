@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -12,7 +12,14 @@ namespace LinqToDB.DataProvider.DB2
 
 	class DB2LUWSchemaProvider : SchemaProviderBase
 	{
-		readonly HashSet<string> _systemSchemas =
+		private readonly DB2DataProvider _provider;
+
+		public DB2LUWSchemaProvider(DB2DataProvider provider)
+		{
+			_provider = provider;
+		}
+
+		readonly HashSet<string?> _systemSchemas =
 			GetHashSet(new [] {"SYSCAT", "SYSFUN", "SYSIBM", "SYSIBMADM", "SYSPROC", "SYSPUBLIC", "SYSSTAT", "SYSTOOLS" },
 				StringComparer.OrdinalIgnoreCase);
 
@@ -35,9 +42,9 @@ namespace LinqToDB.DataProvider.DB2
 				.ToList();
 		}
 
-		protected string CurrentSchema { get; private set; }
+		protected string? CurrentSchema { get; private set; }
 
-		protected override List<TableInfo> GetTables(DataConnection dataConnection)
+		protected override List<TableInfo> GetTables(DataConnection dataConnection, GetSchemaOptions options)
 		{
 			LoadCurrentSchema(dataConnection);
 
@@ -73,26 +80,28 @@ namespace LinqToDB.DataProvider.DB2
 				CurrentSchema = dataConnection.Execute<string>("select current_schema from sysibm.sysdummy1");
 		}
 
-		protected override List<PrimaryKeyInfo> GetPrimaryKeys(DataConnection dataConnection)
+		protected override IReadOnlyCollection<PrimaryKeyInfo> GetPrimaryKeys(DataConnection dataConnection,
+			IEnumerable<TableSchema> tables, GetSchemaOptions options)
 		{
 			return
 			(
 				from pk in dataConnection.Query(
 					rd => new
 					{
+						// IMPORTANT: reader calls must be ordered to support SequentialAccess
 						id   = dataConnection.Connection.Database + "." + rd.ToString(0) + "." + rd.ToString(1),
 						name = rd.ToString(2),
-						cols = rd.ToString(3).Split('+').Skip(1).ToArray(),
+						cols = rd.ToString(3)!.Split('+').Skip(1).ToArray(),
 					},@"
-					SELECT
-						TABSCHEMA,
-						TABNAME,
-						INDNAME,
-						COLNAMES
-					FROM
-						SYSCAT.INDEXES
-					WHERE
-						UNIQUERULE = 'P' AND " + GetSchemaFilter("TABSCHEMA"))
+SELECT
+	TABSCHEMA,
+	TABNAME,
+	INDNAME,
+	COLNAMES
+FROM
+	SYSCAT.INDEXES
+WHERE
+	UNIQUERULE = 'P' AND " + GetSchemaFilter("TABSCHEMA"))
 				from col in pk.cols.Select((c,i) => new { c, i })
 				select new PrimaryKeyInfo
 				{
@@ -104,48 +113,57 @@ namespace LinqToDB.DataProvider.DB2
 			).ToList();
 		}
 
-		List<ColumnInfo> _columns;
+		List<ColumnInfo>? _columns;
 
-		protected override List<ColumnInfo> GetColumns(DataConnection dataConnection)
+		protected override List<ColumnInfo> GetColumns(DataConnection dataConnection, GetSchemaOptions options)
 		{
 			var sql = @"
-				SELECT
-					TABSCHEMA,
-					TABNAME,
-					COLNAME,
-					LENGTH,
-					SCALE,
-					NULLS,
-					IDENTITY,
-					COLNO,
-					TYPENAME,
-					REMARKS,
-					CODEPAGE
-				FROM
-					SYSCAT.COLUMNS
-				WHERE
-					" + GetSchemaFilter("TABSCHEMA");
+SELECT
+	TABSCHEMA,
+	TABNAME,
+	COLNAME,
+	LENGTH,
+	SCALE,
+	NULLS,
+	IDENTITY,
+	COLNO,
+	TYPENAME,
+	REMARKS,
+	CODEPAGE
+FROM
+	SYSCAT.COLUMNS
+WHERE
+	" + GetSchemaFilter("TABSCHEMA");
 
 			return _columns = dataConnection.Query(rd =>
 				{
-					var typeName = rd.ToString(8);
-					var cp   = Converter.ChangeTypeTo<int>(rd[10]);
+					// IMPORTANT: reader calls must be ordered to support SequentialAccess
+					var tableId     = dataConnection.Connection.Database + "." + rd.ToString(0) + "." + rd.ToString(1);
+					var name        = rd.ToString(2)!;
+					var size        = Converter.ChangeTypeTo<long?>(rd[3]);
+					var scale       = Converter.ChangeTypeTo<int?>(rd[4]);
+					var isNullable  = rd.ToString(5) == "Y";
+					var isIdentity  = rd.ToString(6) == "Y";
+					var ordinal     = Converter.ChangeTypeTo<int>(rd[7]);
+					var typeName    = rd.ToString(8);
+					var description = rd.ToString(9);
+					var cp          = Converter.ChangeTypeTo<int>(rd[10]);
 
 					     if (typeName == "CHARACTER" && cp == 0) typeName = "CHAR () FOR BIT DATA";
 					else if (typeName == "VARCHAR"   && cp == 0) typeName = "VARCHAR () FOR BIT DATA";
 
 					var ci = new ColumnInfo
 					{
-						TableID     = dataConnection.Connection.Database + "." + rd.GetString(0) + "." + rd.GetString(1),
-						Name        = rd.ToString(2),
-						IsNullable  = rd.ToString(5) == "Y",
-						IsIdentity  = rd.ToString(6) == "Y",
-						Ordinal     = Converter.ChangeTypeTo<int>(rd[7]),
+						TableID     = tableId,
+						Name        = name,
+						IsNullable  = isNullable,
+						IsIdentity  = isIdentity,
+						Ordinal     = ordinal,
 						DataType    = typeName,
-						Description = rd.ToString(9),
+						Description = description,
 					};
 
-					SetColumnParameters(ci, Converter.ChangeTypeTo<long?>(rd[3]), Converter.ChangeTypeTo<int?> (rd[4]));
+					SetColumnParameters(ci, size, scale);
 
 					return ci;
 				},
@@ -158,8 +176,8 @@ namespace LinqToDB.DataProvider.DB2
 			{
 				case "DECIMAL"                   :
 				case "DECFLOAT"                  :
-					if ((size  ?? 0) > 0) ci.Precision = (int?)size.Value;
-					if ((scale ?? 0) > 0) ci.Scale     = scale;
+					if (size  > 0) ci.Precision = (int?)size;
+					if (scale > 0) ci.Scale     = scale;
 					break;
 
 				case "DBCLOB"                    :
@@ -182,33 +200,35 @@ namespace LinqToDB.DataProvider.DB2
 			}
 		}
 
-		protected override List<ForeignKeyInfo> GetForeignKeys(DataConnection dataConnection)
+		protected override IReadOnlyCollection<ForeignKeyInfo> GetForeignKeys(DataConnection dataConnection,
+			IEnumerable<TableSchema> tables, GetSchemaOptions options)
 		{
 			return dataConnection
 				.Query(rd => new
 				{
-					name         = rd.ToString(0),
+					// IMPORTANT: reader calls must be ordered to support SequentialAccess
+					name         = rd.ToString(0)!,
 					thisTable    = dataConnection.Connection.Database + "." + rd.ToString(1)  + "." + rd.ToString(2),
-					thisColumns  = rd.ToString(3),
+					thisColumns  = rd.ToString(3)!,
 					otherTable   = dataConnection.Connection.Database + "." + rd.ToString(4)  + "." + rd.ToString(5),
-					otherColumns = rd.ToString(6),
+					otherColumns = rd.ToString(6)!,
 				},@"
-					SELECT
-						CONSTNAME,
-						TABSCHEMA,
-						TABNAME,
-						FK_COLNAMES,
-						REFTABSCHEMA,
-						REFTABNAME,
-						PK_COLNAMES
-					FROM
-						SYSCAT.REFERENCES
-					WHERE
-						" + GetSchemaFilter("TABSCHEMA"))
+SELECT
+	CONSTNAME,
+	TABSCHEMA,
+	TABNAME,
+	FK_COLNAMES,
+	REFTABSCHEMA,
+	REFTABNAME,
+	PK_COLNAMES
+FROM
+	SYSCAT.REFERENCES
+WHERE
+	" + GetSchemaFilter("TABSCHEMA"))
 				.SelectMany(fk =>
 				{
-					var thisTable    = _columns.Where(c => c.TableID == fk.thisTable). OrderByDescending(c => c.Length).ToList();
-					var otherTable   = _columns.Where(c => c.TableID == fk.otherTable).OrderByDescending(c => c.Length).ToList();
+					var thisTable    = _columns.Where(c => c.TableID == fk.thisTable). OrderByDescending(c => c.Name.Length).ToList();
+					var otherTable   = _columns.Where(c => c.TableID == fk.otherTable).OrderByDescending(c => c.Name.Length).ToList();
 					var thisColumns  = fk.thisColumns. Trim();
 					var otherColumns = fk.otherColumns.Trim();
 
@@ -217,13 +237,10 @@ namespace LinqToDB.DataProvider.DB2
 					for (var i = 0; thisColumns.Length > 0; i++)
 					{
 						var thisColumn  = thisTable. FirstOrDefault(c => thisColumns. StartsWith(c.Name));
-						if (thisColumn  == null)
-							continue;
-
 						var otherColumn = otherTable.FirstOrDefault(c => otherColumns.StartsWith(c.Name));
-						if (otherColumn == null)
-							continue;
 
+						if (thisColumn == null || otherColumn == null)
+							break;
 
 						list.Add(new ForeignKeyInfo
 						{
@@ -244,18 +261,18 @@ namespace LinqToDB.DataProvider.DB2
 				.ToList();
 		}
 
-		protected override string GetDbType(string columnType, DataTypeInfo dataType, long? length, int? prec, int? scale)
+		protected override string? GetDbType(GetSchemaOptions options, string? columnType, DataTypeInfo? dataType, long? length, int? precision, int? scale, string? udtCatalog, string? udtSchema, string? udtName)
 		{
-			var type = DataTypes.FirstOrDefault(dt => dt.TypeName == columnType);
+			var type = GetDataType(columnType, options);
 
 			if (type != null)
 			{
 				if (type.CreateParameters == null)
-					length = prec = scale = 0;
+					length = precision = scale = 0;
 				else
 				{
 					if (type.CreateParameters == "LENGTH")
-						prec = scale = 0;
+						precision = scale = 0;
 					else
 						length = 0;
 
@@ -270,8 +287,7 @@ namespace LinqToDB.DataProvider.DB2
 							var format = string.Join(",",
 								type.CreateParameters
 									.Split(',')
-									.Select((p,i) => "{" + i + "}")
-									.ToArray());
+									.Select((p,i) => "{" + i + "}"));
 
 							type.CreateFormat = type.TypeName + "(" + format + ")";
 						}
@@ -279,132 +295,132 @@ namespace LinqToDB.DataProvider.DB2
 				}
 			}
 
-			return base.GetDbType(columnType, dataType, length, prec, scale);
+			return base.GetDbType(options, columnType, dataType, length, precision, scale, udtCatalog, udtSchema, udtName);
 		}
 
-		protected override DataType GetDataType(string dataType, string columnType, long? length, int? prec, int? scale)
+		protected override DataType GetDataType(string? dataType, string? columnType, long? length, int? prec, int? scale)
 		{
-			switch (dataType)
+			return dataType switch
 			{
-				case "XML"                       : return DataType.Xml;       // Xml             System.String
-				case "DECFLOAT"                  : return DataType.Decimal;   // DecimalFloat    System.Decimal
-				case "DBCLOB"                    : return DataType.Text;      // DbClob          System.String
-				case "CLOB"                      : return DataType.Text;      // Clob            System.String
-				case "BLOB"                      : return DataType.Blob;      // Blob            System.Byte[]
-				case "LONG VARGRAPHIC"           : return DataType.Text;      // LongVarGraphic  System.String
-				case "VARGRAPHIC"                : return DataType.Text;      // VarGraphic      System.String
-				case "GRAPHIC"                   : return DataType.Text;      // Graphic         System.String
-				case "BIGINT"                    : return DataType.Int64;     // BigInt          System.Int64
-				case "LONG VARCHAR FOR BIT DATA" : return DataType.VarBinary; // LongVarBinary   System.Byte[]
-				case "VARCHAR () FOR BIT DATA"   : return DataType.VarBinary; // VarBinary       System.Byte[]
-				case "VARBIN"                    : return DataType.VarBinary; // VarBinary       System.Byte[]
-				case "BINARY"                    : return DataType.Binary;    // Binary          System.Byte[]
-				case "CHAR () FOR BIT DATA"      : return DataType.Binary;    // Binary          System.Byte[]
-				case "LONG VARCHAR"              : return DataType.VarChar;   // LongVarChar     System.String
-				case "CHARACTER"                 : return DataType.Char;      // Char            System.String
-				case "CHAR"                      : return DataType.Char;      // Char            System.String
-				case "DECIMAL"                   : return DataType.Decimal;   // Decimal         System.Decimal
-				case "INTEGER"                   : return DataType.Int32;     // Integer         System.Int32
-				case "SMALLINT"                  : return DataType.Int16;     // SmallInt        System.Int16
-				case "REAL"                      : return DataType.Single;    // Real            System.Single
-				case "DOUBLE"                    : return DataType.Double;    // Double          System.Double
-				case "VARCHAR"                   : return DataType.VarChar;   // VarChar         System.String
-				case "DATE"                      : return DataType.Date;      // Date            System.DateTime
-				case "TIME"                      : return DataType.Time;      // Time            System.TimeSpan
-				case "TIMESTAMP"                 : return DataType.Timestamp; // Timestamp       System.DateTime
-				case "TIMESTMP"                  : return DataType.Timestamp; // Timestamp       System.DateTime
-				case "ROWID"                     : return DataType.Undefined; // RowID           System.Byte[]
-			}
-
-			return DataType.Undefined;
+				"XML"                       => DataType.Xml,       // Xml             System.String
+				"DECFLOAT"                  => DataType.Decimal,   // DecimalFloat    System.Decimal
+				"DBCLOB"                    => DataType.Text,      // DbClob          System.String
+				"CLOB"                      => DataType.Text,      // Clob            System.String
+				"BLOB"                      => DataType.Blob,      // Blob            System.Byte[]
+				"LONG VARGRAPHIC"           => DataType.Text,      // LongVarGraphic  System.String
+				"VARGRAPHIC"                => DataType.Text,      // VarGraphic      System.String
+				"GRAPHIC"                   => DataType.Text,      // Graphic         System.String
+				"BIGINT"                    => DataType.Int64,     // BigInt          System.Int64
+				"LONG VARCHAR FOR BIT DATA" => DataType.VarBinary, // LongVarBinary   System.Byte[]
+				"VARCHAR () FOR BIT DATA"   => DataType.VarBinary, // VarBinary       System.Byte[]
+				"VARBIN"                    => DataType.VarBinary, // VarBinary       System.Byte[]
+				"BINARY"                    => DataType.Binary,    // Binary          System.Byte[]
+				"CHAR () FOR BIT DATA"      => DataType.Binary,    // Binary          System.Byte[]
+				"LONG VARCHAR"              => DataType.VarChar,   // LongVarChar     System.String
+				"CHARACTER"                 => DataType.Char,      // Char            System.String
+				"CHAR"                      => DataType.Char,      // Char            System.String
+				"DECIMAL"                   => DataType.Decimal,   // Decimal         System.Decimal
+				"INTEGER"                   => DataType.Int32,     // Integer         System.Int32
+				"SMALLINT"                  => DataType.Int16,     // SmallInt        System.Int16
+				"REAL"                      => DataType.Single,    // Real            System.Single
+				"DOUBLE"                    => DataType.Double,    // Double          System.Double
+				"VARCHAR"                   => DataType.VarChar,   // VarChar         System.String
+				"DATE"                      => DataType.Date,      // Date            System.DateTime
+				"TIME"                      => DataType.Time,      // Time            System.TimeSpan
+				"TIMESTAMP"                 => DataType.Timestamp, // Timestamp       System.DateTime
+				"TIMESTMP"                  => DataType.Timestamp, // Timestamp       System.DateTime
+				"ROWID"                     => DataType.Undefined, // RowID           System.Byte[]
+				_                           => DataType.Undefined,
+			};
 		}
 
 		protected override string GetProviderSpecificTypeNamespace()
 		{
-			return "IBM.Data.DB2Types";
+			return _provider.Adapter.ProviderTypesNamespace;
 		}
 
-		protected override string GetProviderSpecificType(string dataType)
+		protected override string? GetProviderSpecificType(string? dataType)
 		{
 			switch (dataType)
 			{
-				case "XML"                       : return "DB2Xml";
-				case "DECFLOAT"                  : return "DB2DecimalFloat";
+				case "XML"                       : return _provider.Adapter.DB2XmlType         .Name;
+				case "DECFLOAT"                  : return _provider.Adapter.DB2DecimalFloatType.Name;
 				case "DBCLOB"                    :
-				case "CLOB"                      : return "DB2Clob";
-				case "BLOB"                      : return "DB2Blob";
-				case "BIGINT"                    : return "DB2Int64";
+				case "CLOB"                      : return _provider.Adapter.DB2ClobType        .Name;
+				case "BLOB"                      : return _provider.Adapter.DB2BlobType        .Name;
+				case "BIGINT"                    : return _provider.Adapter.DB2Int64Type       .Name;
 				case "LONG VARCHAR FOR BIT DATA" :
 				case "VARCHAR () FOR BIT DATA"   :
 				case "VARBIN"                    :
 				case "BINARY"                    :
-				case "CHAR () FOR BIT DATA"      : return "DB2Binary";
+				case "CHAR () FOR BIT DATA"      : return _provider.Adapter.DB2BinaryType      .Name;
 				case "LONG VARGRAPHIC"           :
 				case "VARGRAPHIC"                :
 				case "GRAPHIC"                   :
 				case "LONG VARCHAR"              :
 				case "CHARACTER"                 :
 				case "VARCHAR"                   :
-				case "CHAR"                      : return "DB2String";
-				case "DECIMAL"                   : return "DB2Decimal";
-				case "INTEGER"                   : return "DB2Int32";
-				case "SMALLINT"                  : return "DB2Int16";
-				case "REAL"                      : return "DB2Real";
-				case "DOUBLE"                    : return "DB2Double";
-				case "DATE"                      : return "DB2Date";
-				case "TIME"                      : return "DB2Time";
+				case "CHAR"                      : return _provider.Adapter.DB2StringType      .Name;
+				case "DECIMAL"                   : return _provider.Adapter.DB2DecimalType     .Name;
+				case "INTEGER"                   : return _provider.Adapter.DB2Int32Type       .Name;
+				case "SMALLINT"                  : return _provider.Adapter.DB2Int16Type       .Name;
+				case "REAL"                      : return _provider.Adapter.DB2RealType        .Name;
+				case "DOUBLE"                    : return _provider.Adapter.DB2DoubleType      .Name;
+				case "DATE"                      : return _provider.Adapter.DB2DateType        .Name;
+				case "TIME"                      : return _provider.Adapter.DB2TimeType        .Name;
 				case "TIMESTMP"                  :
-				case "TIMESTAMP"                 : return "DB2TimeStamp";
-				case "ROWID"                     : return "DB2RowId";
+				case "TIMESTAMP"                 : return _provider.Adapter.DB2TimeStampType   .Name;
+				case "ROWID"                     : return _provider.Adapter.DB2RowIdType       .Name;
 			}
 
 			return base.GetProviderSpecificType(dataType);
 		}
 
-		protected override string GetDataSourceName(DbConnection dbConnection)
+		protected override string GetDataSourceName(DataConnection dbConnection)
 		{
-			var str = dbConnection.ConnectionString;
+			var str = ((DbConnection)dbConnection.Connection).ConnectionString;
 
-			if (str != null)
-			{
-				var host = str.Split(';')
-					.Select(s =>
-					{
-						var ss = s.Split('=');
-						return new { key = ss.Length == 2 ? ss[0] : "", value = ss.Length == 2 ? ss[1] : "" };
-					})
-					.Where (s => s.key.ToUpper() == "SERVER")
-					.Select(s => s.value)
-					.FirstOrDefault();
+			var host = str?.Split(';')
+				.Select(s =>
+				{
+					var ss = s.Split('=');
+					return new { key = ss.Length == 2 ? ss[0] : "", value = ss.Length == 2 ? ss[1] : "" };
+				})
+				.Where (s => s.key.ToUpper() == "SERVER")
+				.Select(s => s.value)
+				.FirstOrDefault();
 
-				if (host != null)
-					return host;
-			}
+			if (host != null)
+				return host;
 
 			return base.GetDataSourceName(dbConnection);
 		}
 
-		protected override List<ProcedureInfo> GetProcedures(DataConnection dataConnection)
+		protected override List<ProcedureInfo>? GetProcedures(DataConnection dataConnection, GetSchemaOptions options)
 		{
 			LoadCurrentSchema(dataConnection);
 
 			var sql = @"
-				SELECT
-					PROCSCHEMA,
-					PROCNAME
-				FROM
-					SYSCAT.PROCEDURES
-				WHERE
-					" + GetSchemaFilter("PROCSCHEMA");
+SELECT
+	PROCSCHEMA,
+	PROCNAME
+FROM
+	SYSCAT.PROCEDURES
+WHERE
+	" + GetSchemaFilter("PROCSCHEMA");
 
 			if (IncludedSchemas.Count == 0)
-				sql += " AND PROCSCHEMA NOT IN ('SYSPROC', 'SYSIBMADM', 'SQLJ', 'ADMINISTRATOR', 'SYSIBM')";
+				sql += " AND PROCSCHEMA NOT IN ('SYSPROC', 'SYSIBMADM', 'SQLJ', 'SYSIBM')";
+
+			sql += @"
+ORDER BY PROCSCHEMA, PROCNAME";
 
 			return dataConnection
 				.Query(rd =>
 					{
+						// IMPORTANT: reader calls must be ordered to support SequentialAccess
 						var schema = rd.ToString(0);
-						var name   = rd.ToString(1);
+						var name   = rd.ToString(1)!;
 
 						return new ProcedureInfo
 						{
@@ -419,26 +435,31 @@ namespace LinqToDB.DataProvider.DB2
 				.ToList();
 		}
 
-		protected override List<ProcedureParameterInfo> GetProcedureParameters(DataConnection dataConnection)
+		protected override List<ProcedureParameterInfo> GetProcedureParameters(DataConnection dataConnection, IEnumerable<ProcedureInfo> procedures, GetSchemaOptions options)
 		{
 			return dataConnection
 				.Query(rd =>
 				{
+					// IMPORTANT: reader calls must be ordered to support SequentialAccess
 					var schema   = rd.ToString(0);
 					var procname = rd.ToString(1);
-					var length   = ConvertTo<long?>.From(rd["LENGTH"]);
-					var scale    = ConvertTo<int?>. From(rd["SCALE"]);
+					var pName    = rd.ToString(2);
+					var dataType = rd.ToString(3);
 					var mode     = ConvertTo<string>.From(rd[4]);
+					var ordinal  = ConvertTo<int>.From(rd[5]);
+					var length   = ConvertTo<long?>.From(rd[6]);
+					var scale    = ConvertTo<int?>. From(rd[7]);
 
 					var ppi = new ProcedureParameterInfo
 					{
 						ProcedureID   = dataConnection.Connection.Database + "." + schema + "." + procname,
-						ParameterName = rd.ToString(2),
-						DataType      = rd.ToString(3),
-						Ordinal       = ConvertTo<int>.From(rd["ORDINAL"]),
+						ParameterName = pName,
+						DataType      = dataType,
+						Ordinal       = ordinal,
 						IsIn          = mode.Contains("IN"),
 						IsOut         = mode.Contains("OUT"),
-						IsResult      = false
+						IsResult      = false,
+						IsNullable    = true
 					};
 
 					var ci = new ColumnInfo { DataType = ppi.DataType };
@@ -451,20 +472,20 @@ namespace LinqToDB.DataProvider.DB2
 
 					return ppi;
 				},@"
-					SELECT
-						PROCSCHEMA,
-						PROCNAME,
-						PARMNAME,
-						TYPENAME,
-						PARM_MODE,
+SELECT
+	PROCSCHEMA,
+	PROCNAME,
+	PARMNAME,
+	TYPENAME,
+	PARM_MODE,
 
-						ORDINAL,
-						LENGTH,
-						SCALE
-					FROM
-						SYSCAT.PROCPARMS
-					WHERE
-						" + GetSchemaFilter("PROCSCHEMA"))
+	ORDINAL,
+	LENGTH,
+	SCALE
+FROM
+	SYSCAT.PROCPARMS
+WHERE
+	" + GetSchemaFilter("PROCSCHEMA"))
 				.ToList();
 		}
 
@@ -476,27 +497,27 @@ namespace LinqToDB.DataProvider.DB2
 
 				if (IncludedSchemas.Count != 0)
 				{
-					sql += string.Format(" IN ({0})", IncludedSchemas.Select(n => '\'' + n + '\'') .Aggregate((s1,s2) => s1 + ',' + s2));
+					sql += string.Format(" IN ({0})", string.Join(", ", IncludedSchemas.Select(n => '\'' + n + '\'')));
 
 					if (ExcludedSchemas.Count != 0)
 						sql += " AND " + schemaNameField;
 				}
 
 				if (ExcludedSchemas.Count != 0)
-					sql += string.Format(" NOT IN ({0})", ExcludedSchemas.Select(n => '\'' + n + '\'') .Aggregate((s1,s2) => s1 + ',' + s2));
+					sql += string.Format(" NOT IN ({0})", string.Join(", ", ExcludedSchemas.Select(n => '\'' + n + '\'')));
 
 				return sql;
 			}
 
-			return string.Format("{0} = '{1}'", schemaNameField, CurrentSchema);
+			return $"{schemaNameField} = '{CurrentSchema}'";
 		}
 	}
 
 	static class DB2Extensions
 	{
-		public static string ToString(this IDataReader reader, int i)
+		public static string? ToString(this IDataReader reader, int i)
 		{
-			var value = Converter.ChangeTypeTo<string>(reader[i]);
+			var value = Converter.ChangeTypeTo<string?>(reader[i]);
 			return value?.TrimEnd();
 		}
 	}

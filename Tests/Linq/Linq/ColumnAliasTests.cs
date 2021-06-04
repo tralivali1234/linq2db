@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 using LinqToDB.Mapping;
@@ -33,7 +32,7 @@ namespace Tests.Linq
 		{
 			using (var db = new TestDataConnection())
 			{
-				var count = db.GetTable<TestParent>().Count(t => t.ID > 0);
+				var _ = db.GetTable<TestParent>().Count(t => t.ID > 0);
 			}
 		}
 
@@ -51,8 +50,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ProjectionTest1(string context)
+		[Test]
+		public void ProjectionTest1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -72,8 +71,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ProjectionTest2(string context)
+		[Test]
+		public void ProjectionTest2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -93,8 +92,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void UnionTest1(string context)
+		[Test]
+		public void UnionTest1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -121,8 +120,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void UnionTest2(string context)
+		[Test]
+		public void UnionTest2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -137,8 +136,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void UnionTest3(string context)
+		[Test]
+		public void UnionTest3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 
 using LinqToDB;
@@ -18,14 +17,14 @@ namespace Tests.UserTests
 		class A
 		{
 			[PrimaryKey, Identity] public int       ID       { get; set; }
-			[Column,     NotNull ] public string    Value    { get; set; }
+			[Column,     NotNull ] public string    Value    { get; set; } = null!;
 			[Column,     NotNull ] public DateTime  DateTime { get; set; }
 		}
 
 		class B
 		{
-			public int    ID;
-			public string Name;
+			public int     ID;
+			public string? Name;
 		}
 
 		static IQueryable<B> GenerateQuery(ITestDataContext db, DateTime? asOfDate = null)
@@ -51,20 +50,20 @@ namespace Tests.UserTests
 				var matchSymbolIds = new List<int>();
 
 				var queryable = GenerateQuery(db, new DateTime(2010, 3, 5)).Where(x => matchSymbolIds.Contains(x.ID));
-				return queryable.ToString();
+				return queryable.ToString()!;
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SQLiteClassic)]
-		public void TestSql(string context)
+		[Test]
+		public void TestSql([IncludeDataSources(TestProvName.AllSQLiteClassic)] string context)
 		{
 			var query1 = GetSql(context);
 			var query2 = GetSql(context);
 			var query3 = GetSql(context);
 
-			Debug.WriteLine(query1);
-			Debug.WriteLine(query2);
-			Debug.WriteLine(query3);
+			TestContext.WriteLine(query1);
+			TestContext.WriteLine(query2);
+			TestContext.WriteLine(query3);
 
 			Assert.AreEqual(query1, query2);
 		}

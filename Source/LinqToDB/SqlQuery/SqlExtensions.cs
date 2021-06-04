@@ -1,46 +1,87 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace LinqToDB.SqlQuery
+﻿namespace LinqToDB.SqlQuery
 {
-	static class SqlExtensions
+	/// <summary>
+	/// This is internal API and is not intended for use by Linq To DB applications.
+	/// It may change or be removed without further notice.
+	/// </summary>
+	public static class SqlExtensions
 	{
+
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
 		public static bool IsInsert(this SqlStatement statement)
 		{
 			return
 				statement.QueryType == QueryType.Insert ||
-				statement.QueryType == QueryType.InsertOrUpdate;
+				statement.QueryType == QueryType.InsertOrUpdate ||
+				statement.QueryType == QueryType.MultiInsert;
 		}
 
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
 		public static bool NeedsIdentity(this SqlStatement statement)
 		{
-			return
-				statement.QueryType == QueryType.Insert && ((SqlInsertStatement)statement).Insert.WithIdentity ||
-				statement.QueryType == QueryType.InsertOrUpdate;
+			return statement.QueryType == QueryType.Insert && ((SqlInsertStatement)statement).Insert.WithIdentity;
 		}
 
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
 		public static bool IsUpdate(this SqlStatement statement)
 		{
 			return statement != null && statement.QueryType == QueryType.Update;
 		}
 
-		public static SqlField GetIdentityField(this SqlStatement statement)
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
+		public static bool IsDelete(this SqlStatement statement)
 		{
-			return statement.GetInsertClause()?.Into.GetIdentityField();
+			return statement != null && statement.QueryType == QueryType.Delete;
 		}
 
-		public static SqlInsertClause GetInsertClause(this SqlStatement statement)
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
+		public static SqlField? GetIdentityField(this SqlStatement statement)
 		{
-			switch (statement)
+			return statement.GetInsertClause()?.Into!.GetIdentityField();
+		}
+
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
+		public static SqlInsertClause? GetInsertClause(this SqlStatement statement)
+		{
+			return statement switch
 			{
-				case SqlInsertStatement insert:
-					return insert.Insert;
-				case SqlInsertOrUpdateStatement update:
-					return update.Insert;
-			}
-			return null;
+				SqlInsertStatement insert         => insert.Insert,
+				SqlInsertOrUpdateStatement update => update.Insert,
+				_                                 => null,
+			};
 		}
 
+		public static SqlWithClause? GetWithClause(this SqlStatement statement)
+		{
+			return statement switch
+			{
+				SqlStatementWithQueryBase query => query.With,
+				_                               => null,
+			};
+		}
+
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
 		public static SqlInsertClause RequireInsertClause(this SqlStatement statement)
 		{
 			var result = statement.GetInsertClause();
@@ -49,18 +90,24 @@ namespace LinqToDB.SqlQuery
 			return result;
 		}
 
-		public static SqlUpdateClause GetUpdateClause(this SqlStatement statement)
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
+		public static SqlUpdateClause? GetUpdateClause(this SqlStatement statement)
 		{
-			switch (statement)
-		{
-				case SqlUpdateStatement update:
-					return update.Update;
-				case SqlInsertOrUpdateStatement insertOrUpdate:
-					return insertOrUpdate.Update;
-			}
-			return null;
+			return statement switch
+			{
+				SqlUpdateStatement update                 => update.Update,
+				SqlInsertOrUpdateStatement insertOrUpdate => insertOrUpdate.Update,
+				_                                         => null,
+			};
 		}
 
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
 		public static SqlUpdateClause RequireUpdateClause(this SqlStatement statement)
 		{
 			var result = statement.GetUpdateClause();
@@ -69,24 +116,31 @@ namespace LinqToDB.SqlQuery
 			return result;
 		}
 
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
+		public static SqlOutputClause? GetOutputClause(this SqlStatement statement)
+		{
+			return statement switch
+			{
+				SqlInsertStatement insert => insert.Output,
+				SqlUpdateStatement update => update.Output,
+				SqlDeleteStatement delete => delete.Output,
+				_ => null,
+			};
+		}
+
+		/// <summary>
+		/// This is internal API and is not intended for use by Linq To DB applications.
+		/// It may change or be removed without further notice.
+		/// </summary>
 		public static SelectQuery EnsureQuery(this SqlStatement statement)
 		{
 			var selectQuery = statement.SelectQuery;
 			if (selectQuery == null)
 				throw new LinqToDBException("Sqlect Query required");
 				return selectQuery;
-		}
-
-		public static T Clone<T>(this T cloneable)
-			where T: ICloneableElement
-		{
-			return (T)cloneable.Clone(new Dictionary<ICloneableElement,ICloneableElement>(), _ => true);
-		}
-
-		public static T Clone<T>(this T cloneable, Predicate<ICloneableElement> doClone)
-			where T: ICloneableElement
-		{
-			return (T)cloneable.Clone(new Dictionary<ICloneableElement,ICloneableElement>(), doClone);
 		}
 	}
 }

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 namespace LinqToDB.SqlQuery
@@ -10,13 +9,17 @@ namespace LinqToDB.SqlQuery
 		public override QueryType QueryType          => QueryType.Update;
 		public override QueryElementType ElementType => QueryElementType.UpdateStatement;
 
-		private SqlUpdateClause _update;
+		public SqlOutputClause? Output { get; set; }
+
+		private SqlUpdateClause? _update;
 
 		public SqlUpdateClause Update
 		{
-			get => _update ?? (_update = new SqlUpdateClause());
+			get => _update ??= new SqlUpdateClause();
 			set => _update = value;
 		}
+
+		internal bool HasUpdate => _update != null;
 
 		public SqlUpdateStatement(SelectQuery selectQuery) : base(selectQuery)
 		{
@@ -24,45 +27,69 @@ namespace LinqToDB.SqlQuery
 
 		public override StringBuilder ToString(StringBuilder sb, Dictionary<IQueryElement, IQueryElement> dic)
 		{
+			sb.AppendLine("UPDATE");
+
 			((IQueryElement)Update).ToString(sb, dic);
+
+			sb.AppendLine();
+
+			SelectQuery.ToString(sb, dic);
+
 			return sb;
 		}
 
-		public override ISqlExpression Walk(bool skipColumns, Func<ISqlExpression, ISqlExpression> func)
+		public override ISqlExpression? Walk(WalkOptions options, Func<ISqlExpression, ISqlExpression> func)
 		{
-			((ISqlExpressionWalkable)_update)?.Walk(skipColumns, func);
+			With?.Walk(options, func);
+			((ISqlExpressionWalkable?)_update)?.Walk(options, func);
+			((ISqlExpressionWalkable?)Output)?.Walk(options, func);
 
-			SelectQuery = (SelectQuery)SelectQuery.Walk(skipColumns, func);
+			SelectQuery = (SelectQuery)SelectQuery.Walk(options, func);
 
 			return null;
 		}
 
-		public override ICloneableElement Clone(Dictionary<ICloneableElement, ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
+		public override ISqlTableSource? GetTableSource(ISqlTableSource table)
 		{
-			var clone = new SqlUpdateStatement((SelectQuery)SelectQuery.Clone(objectTree, doClone));
+			var result = SelectQuery.GetTableSource(table);
 
-			if (_update != null)
-				clone._update = (SqlUpdateClause)_update.Clone(objectTree, doClone);
-			
-			clone.Parameters.AddRange(Parameters.Select(p => (SqlParameter)p.Clone(objectTree, doClone)));
+			if (result != null)
+				return result;
 
-			objectTree.Add(this, clone);
+			if (table == _update?.Table)
+				return _update.Table;
 
-			return clone;
+			if (Update != null)
+			{
+				foreach (var item in Update.Items)
+				{
+					if (item.Expression is SelectQuery q)
+					{
+						result = q.GetTableSource(table);
+						if (result != null)
+							return result;
+					}
+				}
+			}
+
+			return result;
 		}
 
-		public override IEnumerable<IQueryElement> EnumClauses()
+		public override bool IsDependedOn(SqlTable table)
 		{
-			if (_update != null)
-				yield return _update;
-		}
+			// do not allow to optimize out Update table
+			if (Update == null)
+				return false;
 
-		public override ISqlTableSource GetTableSource(ISqlTableSource table)
-		{
-			if (_update?.Table == table)
-				return table;
-
-			return SelectQuery.GetTableSource(table);
+			return null != Update.Find(table, static (table, e) =>
+			{
+				return e switch
+				{
+					SqlTable t => QueryHelper.IsEqualTables(t, table),
+					SqlField f => QueryHelper.IsEqualTables(f.Table as SqlTable, table),
+					_          => false,
+				};
+			});
 		}
 
 	}

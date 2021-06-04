@@ -1,17 +1,17 @@
 ﻿using System.Linq;
 
 using NUnit.Framework;
-using Tests.Model;
 
 namespace Tests.UserTests
 {
+	using Model;
 
 	[TestFixture]
 	public class Issue475Tests : TestBase
 	{
 
-		[Test, NorthwindDataContext]
-		public void Test(string context)
+		[Test]
+		public void Test([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{

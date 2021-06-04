@@ -9,11 +9,7 @@ namespace SqlServerTypes
 	/// </summary>
 	public class Utilities
 	{
-#if NETSTANDARD1_6
 		[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-#else
-		[DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-#endif
 		private static extern IntPtr LoadLibrary(string libname);
 
 		/// <summary>
@@ -39,7 +35,7 @@ namespace SqlServerTypes
 			var ptr = LoadLibrary(path);
 			if (ptr == IntPtr.Zero)
 			{
-				throw new Exception(string.Format(
+				throw new InvalidOperationException(string.Format(
 					"Error loading {0} (ErrorCode: {1})",
 					assemblyName,
 					Marshal.GetLastWin32Error()));

@@ -8,11 +8,20 @@ namespace LinqToDB.Linq.Builder
 
 	class AllJoinsBuilder : MethodCallBuilder
 	{
+		private static readonly string[] RightNullableOnlyMethodNames    = { "RightJoin", "FullJoin" };
+		private static readonly string[] NotRightNullableOnlyMethodNames = { "InnerJoin", "LeftJoin", "RightJoin", "FullJoin" };
+
 		protected override bool CanBuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
+			return IsMatchingMethod(methodCall, false);
+		}
+
+		internal static bool IsMatchingMethod(MethodCallExpression methodCall, bool rightNullableOnly)
+		{
 			return
-				methodCall.IsQueryable("Join") && methodCall.Arguments.Count == 3 ||
-				methodCall.IsQueryable("InnerJoin", "LeftJoin", "RightJoin", "FullJoin");
+				methodCall.IsQueryable("Join") && methodCall.Arguments.Count == 3
+				|| !rightNullableOnly && methodCall.IsQueryable(NotRightNullableOnlyMethodNames) && methodCall.Arguments.Count == 2
+				|| rightNullableOnly  && methodCall.IsQueryable(RightNullableOnlyMethodNames)    && methodCall.Arguments.Count == 2;
 		}
 
 		protected override IBuildContext BuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
@@ -31,30 +40,26 @@ namespace LinqToDB.Linq.Builder
 				default:
 					conditionIndex = 2;
 
-					var joinValue = (SqlJoinType) methodCall.Arguments[1].EvaluateExpression();
-
-					switch (joinValue)
+					joinType = (SqlJoinType) methodCall.Arguments[1].EvaluateExpression()! switch
 					{
-						case SqlJoinType.Inner : joinType = JoinType.Inner; break;
-						case SqlJoinType.Left  : joinType = JoinType.Left;  break;
-						case SqlJoinType.Right : joinType = JoinType.Right; break;
-						case SqlJoinType.Full  : joinType = JoinType.Full;  break;
-						default                : throw new ArgumentOutOfRangeException();
-					}
-
+						SqlJoinType.Inner => JoinType.Inner,
+						SqlJoinType.Left  => JoinType.Left,
+						SqlJoinType.Right => JoinType.Right,
+						SqlJoinType.Full  => JoinType.Full,
+						_                 => throw new InvalidOperationException($"Unexpected join type: {(SqlJoinType)methodCall.Arguments[1].EvaluateExpression()!}")
+					};
 					break;
 			}
 
 			buildInfo.JoinType = joinType;
 
+			if (joinType == JoinType.Left || joinType == JoinType.Full)
+				sequence = new DefaultIfEmptyBuilder.DefaultIfEmptyContext(buildInfo.Parent, sequence, null);
+			sequence = new SubQueryContext(sequence);
+
 			if (methodCall.Arguments[conditionIndex] != null)
 			{
 				var condition = (LambdaExpression)methodCall.Arguments[conditionIndex].Unwrap();
-
-				if (sequence.SelectQuery.Select.IsDistinct ||
-					sequence.SelectQuery.Select.TakeValue != null ||
-					sequence.SelectQuery.Select.SkipValue != null)
-					sequence = new SubQueryContext(sequence);
 
 				var result = builder.BuildWhere(buildInfo.Parent, sequence, condition, false, false);
 
@@ -65,35 +70,9 @@ namespace LinqToDB.Linq.Builder
 			return sequence;
 		}
 
-		// Method copied from WhereBuilder
-		protected override SequenceConvertInfo Convert(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo,
-			ParameterExpression param)
+		protected override SequenceConvertInfo? Convert(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo,
+			ParameterExpression? param)
 		{
-			var predicate = (LambdaExpression)methodCall.Arguments[2].Unwrap();
-			var info      = builder.ConvertSequence(new BuildInfo(buildInfo, methodCall.Arguments[0]), predicate.Parameters[0], true);
-
-			if (info != null)
-			{
-				info.Expression = methodCall.Transform(ex => ConvertMethod(methodCall, 0, info, predicate.Parameters[0], ex));
-
-				if (param != null)
-				{
-					if (param.Type != info.Parameter.Type)
-						param = Expression.Parameter(info.Parameter.Type, param.Name);
-
-					if (info.ExpressionsToReplace != null)
-						foreach (var path in info.ExpressionsToReplace)
-						{
-							path.Path = path.Path.Transform(e => e == info.Parameter ? param : e);
-							path.Expr = path.Expr.Transform(e => e == info.Parameter ? param : e);
-						}
-				}
-
-				info.Parameter = param;
-
-				return info;
-			}
-
 			return null;
 		}
 	}

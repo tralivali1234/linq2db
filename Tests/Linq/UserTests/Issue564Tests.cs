@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Linq;
 using LinqToDB;
 using LinqToDB.Mapping;
 using NUnit.Framework;
@@ -22,7 +18,7 @@ namespace Tests.UserTests
 			public int Id;
 
 			[Column(IsDiscriminator = true)]
-			public string Type;
+			public string? Type;
 		}
 
 		public class Child564A : Parent564
@@ -33,7 +29,7 @@ namespace Tests.UserTests
 			}
 
 			[Column(Length = 20)]
-			public string StringValue { get; set; }
+			public string? StringValue { get; set; }
 		}
 
 		public class Child564B : Parent564
@@ -47,11 +43,11 @@ namespace Tests.UserTests
 			public int IntValue { get; set; }
 		}
 
-		[Test, DataContextSource(false)]
-		public void Test(string context)
+		[Test]
+		public void Test([DataSources(false)] string context)
 		{
 			using (var db = new TestDataConnection(context))
-			using (new LocalTable<Parent564>(db))
+			using (db.CreateLocalTable<Parent564>())
 			{
 				db.Insert(new Child564A() {StringValue = "SomeValue"});
 				db.Insert(new Child564B() {IntValue    = 911});

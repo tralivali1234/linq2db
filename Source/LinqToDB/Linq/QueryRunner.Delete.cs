@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -8,20 +7,28 @@ using System.Threading.Tasks;
 namespace LinqToDB.Linq
 {
 	using SqlQuery;
+	using Common.Internal.Cache;
 
 	static partial class QueryRunner
 	{
 		public static class Delete<T>
 		{
-			static readonly ConcurrentDictionary<object,Query<int>> _queryCache = new ConcurrentDictionary<object,Query<int>>();
-
-			static Query<int> CreateQuery(IDataContext dataContext, string tableName, string databaseName, string schemaName, Type type)
+			static Query<int> CreateQuery(
+				IDataContext dataContext,
+				string?      tableName,
+				string?      serverName,
+				string?      databaseName,
+				string?      schemaName,
+				TableOptions tableOptions,
+				Type         type)
 			{
 				var sqlTable = new SqlTable(dataContext.MappingSchema, type);
 
 				if (tableName    != null) sqlTable.PhysicalName = tableName;
+				if (serverName   != null) sqlTable.Server       = serverName;
 				if (databaseName != null) sqlTable.Database     = databaseName;
 				if (schemaName   != null) sqlTable.Schema       = schemaName;
+				if (tableOptions.IsSet()) sqlTable.TableOptions = tableOptions;
 
 				var deleteStatement = new SqlDeleteStatement();
 
@@ -41,7 +48,7 @@ namespace LinqToDB.Linq
 				{
 					var param = GetParameter(type, dataContext, field);
 
-					ei.Queries[0].Parameters.Add(param);
+					ei.Queries[0].AddParameterAccessor(param);
 
 					deleteStatement.SelectQuery.Where.Field(field).Equal.Expr(param.SqlParameter);
 
@@ -54,31 +61,61 @@ namespace LinqToDB.Linq
 				return ei;
 			}
 
-			public static int Query(IDataContext dataContext, T obj, string tableName, string databaseName = null, string schemaName = null)
+			public static int Query(
+				IDataContext dataContext,
+				T            obj,
+				string?      tableName,
+				string?      serverName,
+				string?      databaseName,
+				string?      schemaName,
+				TableOptions tableOptions)
 			{
 				if (Equals(default(T), obj))
 					return 0;
 
-                var type = obj.GetType();
-				var key = new { dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, type };
-				var ei = _queryCache.GetOrAdd(key, o => CreateQuery(dataContext, tableName, databaseName, schemaName, type));
+				var type = GetType<T>(obj!, dataContext);
+				var ei   = Common.Configuration.Linq.DisableQueryCache
+					? CreateQuery(dataContext, tableName, serverName, databaseName, schemaName, tableOptions, type)
+					: Cache<T>.QueryCache.GetOrCreate(
+						(operation: 'D', dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, serverName, tableOptions, type),
+						dataContext,
+						static (entry, key, context) =>
+						{
+							entry.SlidingExpiration = Common.Configuration.Linq.CacheSlidingExpiration;
+							return CreateQuery(context, key.tableName, key.serverName, key.databaseName, key.schemaName, key.tableOptions, key.type);
+						});
 
-				return ei == null ? 0 : (int)ei.GetElement(dataContext, Expression.Constant(obj), null);
+				return (int)ei.GetElement(dataContext, Expression.Constant(obj), null, null)!;
 			}
 
-			public static async Task<int> QueryAsync(IDataContext dataContext, T obj, string tableName = null,
-				string databaseName = null, string schemaName = null, CancellationToken token = default)
+			public static async Task<int> QueryAsync(
+				IDataContext      dataContext,
+				T                 obj,
+				string?           tableName,
+				string?           serverName,
+				string?           databaseName,
+				string?           schemaName,
+				TableOptions      tableOptions,
+				CancellationToken token)
 			{
 				if (Equals(default(T), obj))
 					return 0;
 
-				var type = obj.GetType();
-				var key = new { dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, type };
-				var ei = _queryCache.GetOrAdd(key, o => CreateQuery(dataContext, tableName, databaseName, schemaName, type));
+				var type = GetType<T>(obj!, dataContext);
+				var ei   = Common.Configuration.Linq.DisableQueryCache
+					? CreateQuery(dataContext, tableName, serverName, databaseName, schemaName, tableOptions, type)
+					: Cache<T>.QueryCache.GetOrCreate(
+						(operation: 'D', dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, serverName, tableOptions, type),
+						dataContext,
+						static (entry, key, context) =>
+						{
+							entry.SlidingExpiration = Common.Configuration.Linq.CacheSlidingExpiration;
+							return CreateQuery(context, key.tableName, key.serverName, key.databaseName, key.schemaName, key.tableOptions, key.type);
+						});
 
-				var result = ei == null ? 0 : await ei.GetElementAsync(dataContext, Expression.Constant(obj), null, token);
+				var result = await ei.GetElementAsync(dataContext, Expression.Constant(obj), null, null, token).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 
-				return (int)result;
+				return (int)result!;
 			}
 		}
 	}

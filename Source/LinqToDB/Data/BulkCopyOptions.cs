@@ -2,17 +2,40 @@
 
 namespace LinqToDB.Data
 {
+	/// <summary>
+	/// Defines behavior of <see cref="DataConnectionExtensions.BulkCopy{T}(DataConnection, BulkCopyOptions, System.Collections.Generic.IEnumerable{T})"/> method.
+	/// </summary>
 	public class BulkCopyOptions
 	{
+		public BulkCopyOptions()
+		{
+		}
+
+		public BulkCopyOptions(BulkCopyOptions options)
+		{
+			MaxBatchSize           = options.MaxBatchSize;
+			BulkCopyTimeout        = options.BulkCopyTimeout;
+			BulkCopyType           = options.BulkCopyType;
+			CheckConstraints       = options.CheckConstraints;
+			KeepIdentity           = options.KeepIdentity;
+			TableLock              = options.TableLock;
+			KeepNulls              = options.KeepNulls;
+			FireTriggers           = options.FireTriggers;
+			UseInternalTransaction = options.UseInternalTransaction;
+			ServerName             = options.ServerName;
+			DatabaseName           = options.DatabaseName;
+			SchemaName             = options.SchemaName;
+			TableName              = options.TableName;
+			TableOptions           = options.TableOptions;
+			NotifyAfter            = options.NotifyAfter;
+			RowsCopiedCallback     = options.RowsCopiedCallback;
+		}
+
 		/// <summary>Number of rows in each batch. At the end of each batch, the rows in the batch are sent to the server.</summary>
-		/// <returns>The integer value of the <see cref="P:MaxBatchSize"></see> property, or zero if no value has been set.</returns>
+		/// <returns>The integer value of the <see cref="MaxBatchSize"></see> property, or zero if no value has been set.</returns>
 		public int?         MaxBatchSize           { get; set; }
 		public int?         BulkCopyTimeout        { get; set; }
 		public BulkCopyType BulkCopyType           { get; set; }
-		[Obsolete("Use the Tools.RetrieveIdentity method instead.")]
-		public bool         RetrieveSequence       { get; set; }
-		[Obsolete]
-		public bool?        IgnoreSkipOnInsert     { get; set; }
 		public bool?        CheckConstraints       { get; set; }
 
 		/// <summary>
@@ -27,12 +50,55 @@ namespace LinqToDB.Data
 		public bool?        FireTriggers           { get; set; }
 		public bool?        UseInternalTransaction { get; set; }
 
-		public string       DatabaseName           { get; set; }
-		public string       SchemaName             { get; set; }
-		public string       TableName              { get; set; }
+		/// <summary>
+		/// Gets or sets explicit name of target server instead of one, configured for copied entity in mapping schema.
+		/// See <see cref="LinqExtensions.ServerName{T}(ITable{T}, string)"/> method for support information per provider.
+		/// Also note that it is not supported by provider-specific insert method.
+		/// </summary>
+		public string?      ServerName             { get; set; }
+		/// <summary>
+		/// Gets or sets explicit name of target database instead of one, configured for copied entity in mapping schema.
+		/// See <see cref="LinqExtensions.DatabaseName{T}(ITable{T}, string)"/> method for support information per provider.
+		/// </summary>
+		public string?      DatabaseName           { get; set; }
+		/// <summary>
+		/// Gets or sets explicit name of target schema/owner instead of one, configured for copied entity in mapping schema.
+		/// See <see cref="LinqExtensions.SchemaName{T}(ITable{T}, string)"/> method for support information per provider.
+		/// </summary>
+		public string?      SchemaName             { get; set; }
+		/// <summary>
+		/// Gets or sets explicit name of target table instead of one, configured for copied entity in mapping schema.
+		/// </summary>
+		public string?      TableName              { get; set; }
+		/// <summary>
+		/// Gets or sets <see cref="LinqToDB.TableOptions"/> flags overrides instead of configured for copied entity in mapping schema.
+		/// See <see cref="TableExtensions.IsTemporary{T}(ITable{T}, bool)"/> method for support information per provider.
+		/// </summary>
+		public TableOptions TableOptions           { get; set; }
 
+		/// <summary>
+		/// Gets or sets counter after how many copied records <see cref="RowsCopiedCallback"/> should be called.
+		/// E.g. if you set it to 10, callback will be called after each 10 copied records.
+		/// To disable callback, set this option to 0 (default value).
+		/// </summary>
 		public int          NotifyAfter            { get; set; }
 
-		public Action<BulkCopyRowsCopied> RowsCopiedCallback { get; set; }
+		/// <summary>
+		/// Gets or sets callback method that will be called by BulkCopy operation after each <see cref="NotifyAfter"/> rows copied.
+		/// This callback will not be used if <see cref="NotifyAfter"/> set to 0.
+		/// </summary>
+		public Action<BulkCopyRowsCopied>? RowsCopiedCallback { get; set; }
+
+		/// <summary>
+		/// Gets or sets whether to Always use Parameters for MultipleRowsCopy. Default is false.
+		/// If True, provider's override for <see cref="LinqToDB.DataProvider.BasicBulkCopy.MaxParameters"/> will be used to determine the maximum number of rows per insert,
+		/// Unless overridden by <see cref="MaxParametersForBatch"/>.
+		/// </summary>
+		public bool UseParameters { get; set; }
+		
+		/// <summary>
+		/// If set, will override the Maximum parameters per batch statement from <see cref="LinqToDB.DataProvider.BasicBulkCopy.MaxParameters"/>.
+		/// </summary>
+		public int? MaxParametersForBatch { get; set; }
 	}
 }

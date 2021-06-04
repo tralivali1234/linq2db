@@ -14,10 +14,9 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue533Tests : TestBase
 	{
-
 		public class MyString
 		{
-			public string Value;
+			public string Value = null!;
 		}
 
 
@@ -28,17 +27,19 @@ namespace Tests.UserTests
 			[Column("PersonID"), Identity, PrimaryKey]
 			public int      ID         { get; set; }
 
-			[Column]public Gender   Gender     { get; set; }
-			[Column]public MyString FirstName  { get; set; }
-			[Column]public MyString MiddleName { get; set; }
-			[Column]public MyString LastName   { get; set; }
+			[Column]public Gender    Gender     { get; set; }
+			[Column]public MyString  FirstName  { get; set; } = null!;
+			[Column]public MyString  MiddleName { get; set; } = null!;
+			[Column]public MyString? LastName   { get; set; }
 		}
 
-		[Test, DataContextSource]
-		public void Issue533Test(string context)
+		[Test]
+		public void Issue533Test([DataSources] string context)
 		{
+			ResetPersonIdentity(context);
+			
 			var ms = new MappingSchema();
-			ms.SetConverter<MyString, string>((obj) =>
+			ms.SetConverter<MyString, string?>((obj) =>
 			{
 				if (obj == null) return null;
 				                 return obj.Value;
@@ -48,7 +49,7 @@ namespace Tests.UserTests
 				if (obj == null) return new DataParameter {                    DataType = DataType.NVarChar };
 				                 return new DataParameter { Value = obj.Value, DataType = DataType.NVarChar };
 			});
-			ms.SetConverter<string, MyString>((txt) =>
+			ms.SetConverter<string, MyString?>((txt) =>
 			{
 				if (string.IsNullOrEmpty(txt)) return null;
 				                               return new MyString { Value = txt };

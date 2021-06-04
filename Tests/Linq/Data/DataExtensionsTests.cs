@@ -2,6 +2,7 @@
 using System.Linq;
 
 using LinqToDB;
+using LinqToDB.Common;
 using LinqToDB.Data;
 using LinqToDB.Mapping;
 
@@ -13,8 +14,8 @@ namespace Tests.Data
 	[TestFixture]
 	public class DataExtensionsTests : TestBase
 	{
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestScalar1(string context)
+		[Test]
+		public void TestScalar1([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn = new DataConnection(context))
 			{
@@ -24,8 +25,8 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestScalar2(string context)
+		[Test]
+		public void TestScalar2([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn = new DataConnection(context))
 			{
@@ -35,8 +36,8 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestScalar3(string context)
+		[Test]
+		public void TestScalar3([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn = new DataConnection(context))
 			{
@@ -52,8 +53,8 @@ namespace Tests.Data
 			public DateTime Column2;
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestObject1(string context)
+		[Test]
+		public void TestObject1([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn = new DataConnection(context))
 			{
@@ -63,8 +64,8 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestObject2(string context)
+		[Test]
+		public void TestObject2([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn = new DataConnection(context))
 			{
@@ -119,15 +120,101 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, DataContextSource(false)]
-		public void TestObject51(string context)
+		[Test]
+		public void TestObject51([DataSources(false)] string context)
 		{
 			using (var conn = new TestDataConnection(context))
 			{
-				var sql = conn.Person.Where(p => p.ID == 1).Select(p => p.Name).Take(1).ToString().Replace("-- Access", "");
+				conn.InlineParameters = true;
+				var sql = conn.Person.Where(p => p.ID == 1).Select(p => p.Name).Take(1).ToString()!;
+				sql = string.Join(Environment.NewLine, sql.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+					.Where(line => !line.StartsWith("--")));
 				var res = conn.Execute<string>(sql);
 
 				Assert.That(res, Is.EqualTo("John"));
+			}
+		}
+
+		[Test]
+		public void TestObjectProjection([DataSources(false)] string context)
+		{
+			using (var conn = GetDataContext(context))
+			{
+				var result = conn.Person.Where(p => p.ID == 1).Select(p => new { p.ID, p.Name })
+					.Take(1)
+					.ToArray();
+
+				var expected = Person.Where(p => p.ID == 1).Select(p => new { p.ID, p.Name })
+					.Take(1)
+					.ToArray();
+
+				AreEqual(expected, result);
+			}
+		}
+
+		[Test]
+		public void TestObjectLeftJoinProjection([IncludeDataSources(TestProvName.AllSQLite)] string context)
+		{
+			using (var conn = GetDataContext(context))
+			{
+				var result =
+					from p in conn.Person
+					from pp in conn.Person.LeftJoin(pp => pp.ID + 1 == p.ID)
+					select new { p.ID, pp.Name };
+
+				var expected =
+					from p in Person
+					join pp in Person on p.ID equals pp.ID + 1 into j
+					from pp in j.DefaultIfEmpty()
+					select new { p.ID, pp?.Name };
+
+				AreEqual(expected, result);
+			}
+		}
+
+		[Test]
+		public void TestGrouping1([IncludeDataSources(TestProvName.AllSQLite)] string context)
+		{
+			using (new GuardGrouping(false))
+			using (new PreloadGroups(false))
+			{
+				using (var dc = new DataContext(context))
+				{
+					var dictionary = dc.GetTable<Person>()
+						.GroupBy(p => p.FirstName)
+						.ToDictionary(p => p.Key);
+
+					var tables = dictionary.ToDictionary(p => p.Key, p => p.Value.ToList());
+				}
+			}
+		}
+
+		[Test]
+		public void TestGrouping2([IncludeDataSources(TestProvName.AllSQLite)] string context)
+		{
+			using (new GuardGrouping(false))
+			using (new PreloadGroups(false))
+			{
+				using (var dc = new DataContext(context))
+				{
+					var query =
+						from p in dc.GetTable<Person>()
+						group p by new { p.FirstName } into g
+						select new
+						{
+							g.Key.FirstName,
+							List = g.Select(k => k.ID),
+						};
+
+					var array = query.ToArray();
+					Assert.IsTrue(array.Length > 0);
+
+					foreach (var row in array)
+					{
+						var ids = row.List.ToArray();
+						Assert.IsTrue(ids.Length > 0);
+					}
+				}
 			}
 		}
 
@@ -153,8 +240,8 @@ namespace Tests.Data
 			public DateTime Column2;
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestStruct1(string context)
+		[Test]
+		public void TestStruct1([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn = new DataConnection(context))
 			{
@@ -164,8 +251,8 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer)]
-		public void TestDataReader(string context)
+		[Test]
+		public void TestDataReader([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var conn   = new DataConnection(context))
 			using (var reader = conn.ExecuteReader("SELECT 1; SELECT '2'"))
@@ -187,14 +274,14 @@ namespace Tests.Data
 			public int Value2;
 		}
 
-#pragma warning disable 675
-
 		[Test]
 		public void TestDataParameterMapping1()
 		{
 			var ms = new MappingSchema();
 
+#pragma warning disable CS0675 // strange math here: Bitwise-or operator used on a sign-extended operand; consider casting to a smaller unsigned type first
 			ms.SetConvertExpression<TwoValues,DataParameter>(tv => new DataParameter { Value = (long)tv.Value1 << 16 | tv.Value2 });
+#pragma warning restore CS0675
 
 			using (var conn = new DataConnection().AddMappingSchema(ms))
 			{
@@ -204,44 +291,48 @@ namespace Tests.Data
 			}
 		}
 
-		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
-		public void TestDataParameterMapping2(string context)
+		[Test]
+		public void TestDataParameterMapping2([IncludeDataSources(TestProvName.AllSQLite)] string context)
 		{
 			var ms = new MappingSchema();
 
+#pragma warning disable CS0675 // strange math here: Bitwise-or operator used on a sign-extended operand; consider casting to a smaller unsigned type first
 			ms.SetConvertExpression<TwoValues,DataParameter>(tv => new DataParameter { Value = (long)tv.Value1 << 32 | tv.Value2 });
+#pragma warning restore CS0675
 
 			using (var conn = (DataConnection)GetDataContext(context, ms))
 			{
-				var n = conn.Execute<long?>("SELECT @p", new { p = (TwoValues)null });
+				var n = conn.Execute<long?>("SELECT @p", new { p = (TwoValues?)null });
 
 				Assert.AreEqual(null, n);
 			}
 		}
 
-		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
-		public void TestDataParameterMapping3(string context)
+		[Test]
+		public void TestDataParameterMapping3([IncludeDataSources(TestProvName.AllSQLite)] string context)
 		{
 			var ms = new MappingSchema();
 
 			ms.SetConvertExpression<TwoValues,DataParameter>(tv =>
 				new DataParameter
 				{
-					Value    = tv == null ? (long?)null : (long)tv.Value1 << 32 | tv.Value2,
+#pragma warning disable CS0675 // strange math here: Bitwise-or operator used on a sign-extended operand; consider casting to a smaller unsigned type first
+					Value = tv == null ? (long?)null : (long)tv.Value1 << 32 | tv.Value2,
+#pragma warning restore CS0675
 					DataType = DataType.Int64
 				},
 				false);
 
 			using (var conn = (DataConnection)GetDataContext(context, ms))
 			{
-				var n = conn.Execute<long?>("SELECT @p", new { p = (TwoValues)null });
+				var n = conn.Execute<long?>("SELECT @p", new { p = (TwoValues?)null });
 
 				Assert.AreEqual(null, n);
 			}
 		}
 
-		[Test, IncludeDataContextSourceAttribute(TestProvName.Northwind)]
-		public void CacheTest(string context)
+		[Test]
+		public void CacheTest([IncludeDataSources(TestProvName.Northwind)] string context)
 		{
 			using (var dc= new DataConnection(context))
 			{

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,49 +6,61 @@ using System.Threading.Tasks;
 namespace LinqToDB.Linq
 {
 	using SqlQuery;
+	using Mapping;
+	using Common.Internal.Cache;
+	using System.Linq;
 
 	static partial class QueryRunner
 	{
 		public static class InsertWithIdentity<T>
 		{
-			static readonly ConcurrentDictionary<object,Query<object>> _queryCache = new ConcurrentDictionary<object,Query<object>>();
-
-			static Query<object> CreateQuery(IDataContext dataContext, string tableName, string databaseName, string schemaName, Type type)
+			static Query<object> CreateQuery(
+				IDataContext           dataContext,
+				EntityDescriptor       descriptor,
+				T                      obj,
+				InsertColumnFilter<T>? columnFilter,
+				string?                tableName,
+				string?                serverName,
+				string?                databaseName,
+				string?                schemaName,
+				TableOptions           tableOptions,
+				Type                   type)
 			{
 				var sqlTable = new SqlTable(dataContext.MappingSchema, type);
 
 				if (tableName    != null) sqlTable.PhysicalName = tableName;
+				if (serverName   != null) sqlTable.Server       = serverName;
 				if (databaseName != null) sqlTable.Database     = databaseName;
 				if (schemaName   != null) sqlTable.Schema       = schemaName;
+				if (tableOptions.IsSet()) sqlTable.TableOptions = tableOptions;
 
 				var sqlQuery        = new SelectQuery();
-				var insertStatement = new SqlInsertStatement(sqlQuery);
-
-				insertStatement.Insert.Into         = sqlTable;
-				insertStatement.Insert.WithIdentity = true;
+				var insertStatement = new SqlInsertStatement(sqlQuery)
+				{
+					Insert = { Into = sqlTable, WithIdentity = true }
+				};
 
 				var ei = new Query<object>(dataContext, null)
 				{
 					Queries = { new QueryInfo { Statement = insertStatement, } }
 				};
 
-				foreach (var field in sqlTable.Fields)
+				foreach (var field in sqlTable.Fields.Where(x => columnFilter == null || columnFilter(obj, x.ColumnDescriptor)))
 				{
-					if (field.Value.IsInsertable)
+					if (field.IsInsertable && !field.ColumnDescriptor.ShouldSkip(obj!, descriptor, SkipModification.Insert))
 					{
-						var param = GetParameter(type, dataContext, field.Value);
+						var param = GetParameter(type, dataContext, field);
+						ei.Queries[0].AddParameterAccessor(param);
 
-						ei.Queries[0].Parameters.Add(param);
-
-						insertStatement.Insert.Items.Add(new SqlSetExpression(field.Value, param.SqlParameter));
+						insertStatement.Insert.Items.Add(new SqlSetExpression(field, param.SqlParameter));
 					}
-					else if (field.Value.IsIdentity)
+					else if (field.IsIdentity)
 					{
 						var sqlb = dataContext.CreateSqlProvider();
 						var expr = sqlb.GetIdentityExpression(sqlTable);
 
 						if (expr != null)
-							insertStatement.Insert.Items.Add(new SqlSetExpression(field.Value, expr));
+							insertStatement.Insert.Items.Add(new SqlSetExpression(field, expr));
 					}
 				}
 
@@ -58,29 +69,63 @@ namespace LinqToDB.Linq
 				return ei;
 			}
 
-			public static object Query(IDataContext dataContext, T obj, string tableName, string databaseName = null, string schemaName = null)
+			public static object Query(
+				IDataContext           dataContext,
+				T                      obj,
+				InsertColumnFilter<T>? columnFilter,
+				string?                tableName,
+				string?                serverName,
+				string?                databaseName,
+				string?                schemaName,
+				TableOptions           tableOptions)
 			{
 				if (Equals(default(T), obj))
 					return 0;
 
-				var type = obj.GetType();
-				var key = new { dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, type };
-				var ei = _queryCache.GetOrAdd(key, o => CreateQuery(dataContext, tableName, databaseName, schemaName, type));
+				var type             = GetType<T>(obj!, dataContext);
+				var entityDescriptor = dataContext.MappingSchema.GetEntityDescriptor(type);
+				var ei               = Common.Configuration.Linq.DisableQueryCache || entityDescriptor.SkipModificationFlags.HasFlag(SkipModification.Insert) || columnFilter != null
+					? CreateQuery(dataContext, entityDescriptor, obj!, columnFilter, tableName, serverName, databaseName, schemaName, tableOptions, type)
+					: Cache<T>.QueryCache.GetOrCreate(
+						(operation: "II", dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, serverName, tableOptions, type),
+						new { dataContext, entityDescriptor, obj },
+						static (entry, key, context) =>
+						{
+							entry.SlidingExpiration = Common.Configuration.Linq.CacheSlidingExpiration;
+							return CreateQuery(context.dataContext, context.entityDescriptor, context.obj, null, key.tableName, key.serverName, key.databaseName, key.schemaName, key.tableOptions, key.type);
+						});
 
-				return ei.GetElement(dataContext, Expression.Constant(obj), null);
+				return ei.GetElement(dataContext, Expression.Constant(obj), null, null)!;
 			}
 
-			public static async Task<object> QueryAsync(IDataContext dataContext, T obj, string tableName = null,
-				string databaseName = null, string schemaName = null, CancellationToken token = default)
+			public static async Task<object> QueryAsync(
+				IDataContext           dataContext,
+				T                      obj,
+				InsertColumnFilter<T>? columnFilter,
+				string?                tableName,
+				string?                serverName,
+				string?                databaseName,
+				string?                schemaName,
+				TableOptions           tableOptions,
+				CancellationToken      token)
 			{
 				if (Equals(default(T), obj))
 					return 0;
 
-				var type = obj.GetType();
-				var key = new { dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, type };
-				var ei  = _queryCache.GetOrAdd(key, o => CreateQuery(dataContext, tableName, databaseName, schemaName, type));
+				var type             = GetType<T>(obj!, dataContext);
+				var entityDescriptor = dataContext.MappingSchema.GetEntityDescriptor(type);
+				var ei               = Common.Configuration.Linq.DisableQueryCache || entityDescriptor.SkipModificationFlags.HasFlag(SkipModification.Insert) || columnFilter != null
+					? CreateQuery(dataContext, entityDescriptor, obj!, columnFilter, tableName, serverName, databaseName, schemaName, tableOptions, type)
+					: Cache<T>.QueryCache.GetOrCreate(
+						(operation: "II", dataContext.MappingSchema.ConfigurationID, dataContext.ContextID, tableName, schemaName, databaseName, serverName, tableOptions, type),
+						new { dataContext, entityDescriptor, obj },
+						static (entry, key, context) =>
+						{
+							entry.SlidingExpiration = Common.Configuration.Linq.CacheSlidingExpiration;
+							return CreateQuery(context.dataContext, context.entityDescriptor, context.obj, null, key.tableName, key.serverName, key.databaseName, key.schemaName, key.tableOptions, key.type);
+						});
 
-				return await ei.GetElementAsync(dataContext, Expression.Constant(obj), null, token);
+				return await ((Task<object>)ei.GetElementAsync(dataContext, Expression.Constant(obj), null, null, token)!).ConfigureAwait(Common.Configuration.ContinueOnCapturedContext);
 			}
 		}
 	}

@@ -1,4 +1,4 @@
-﻿using System;
+﻿#if NET472
 using System.Data.Services.Providers;
 
 using LinqToDB.ServiceModel;
@@ -12,13 +12,12 @@ namespace Tests.Linq
 	[TestFixture]
 	public class DataServiceTests
 	{
-#if	!MONO
 		[Test]
 		public void Test1()
 		{
 			var ds = new DataService<NorthwindDB>();
 			var mp = ds.GetService(typeof(IDataServiceMetadataProvider));
 		}
-#endif
 	}
 }
+#endif

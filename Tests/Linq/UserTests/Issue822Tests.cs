@@ -2,7 +2,6 @@
 using System.Linq;
 
 using LinqToDB;
-using LinqToDB.Data;
 
 using NUnit.Framework;
 
@@ -13,17 +12,17 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue822Tests : TestBase
 	{
-		private int? ID1;
+		int? ID1;
 
-		private int? ID2;
+		int? ID2;
 
-		[Test, DataContextSource]
-		public void TestWrongValue(string context)
+		[Test]
+		public void TestWrongValue([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var query = db.GetTable<LinqDataTypes2>()
-					.Where(_ => GetSource(db, ID1.Value).Select(r => r.ID).Contains(_.ID));
+					.Where(_ => GetSource(db, ID1!.Value).Select(r => r.ID).Contains(_.ID));
 
 				ID1 = 3;
 				var result = query.ToList();
@@ -31,7 +30,7 @@ namespace Tests.UserTests
 				Assert.AreEqual(3, result[0].ID);
 
 				query = db.GetTable<LinqDataTypes2>()
-					.Where(_ => GetSource(db, ID2.Value).Select(r => r.ID).Contains(_.ID));
+					.Where(_ => GetSource(db, ID2!.Value).Select(r => r.ID).Contains(_.ID));
 
 				ID1 = 2;
 				ID2 = 4;
@@ -41,13 +40,13 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestNullValue(string context)
+		[Test]
+		public void TestNullValue([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var query = db.GetTable<LinqDataTypes2>()
-					.Where(_ => GetSource(db, ID1.Value).Select(r => r.ID).Contains(_.ID));
+					.Where(_ => GetSource(db, ID1!.Value).Select(r => r.ID).Contains(_.ID));
 
 				ID1 = 3;
 				var result = query.ToList();
@@ -55,7 +54,7 @@ namespace Tests.UserTests
 				Assert.AreEqual(3, result[0].ID);
 
 				query = db.GetTable<LinqDataTypes2>()
-					.Where(_ => GetSource(db, ID2.Value).Select(r => r.ID).Contains(_.ID));
+					.Where(_ => GetSource(db, ID2!.Value).Select(r => r.ID).Contains(_.ID));
 
 				ID1 = null;
 				ID2 = 4;
@@ -65,7 +64,7 @@ namespace Tests.UserTests
 			}
 		}
 
-		private IQueryable<LinqDataTypes2> GetSource(ITestDataContext db, int id)
+		IQueryable<LinqDataTypes2> GetSource(ITestDataContext db, int id)
 		{
 			return db.GetTable<LinqDataTypes2>().Where(_ => _.ID == id);
 		}

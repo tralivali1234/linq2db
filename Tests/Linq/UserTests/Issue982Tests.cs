@@ -27,7 +27,7 @@ namespace Tests.UserTests
 				return statement;
 			}
 
-			private object GetMaxValue(DataType type)
+			private object? GetMaxValue(DataType type)
 			{
 				switch (type)
 				{
@@ -68,7 +68,7 @@ namespace Tests.UserTests
 
 				foreach (var key in keys.OfType<SqlField>())
 				{
-					var maxValue = GetMaxValue(key.DataType);
+					var maxValue = GetMaxValue(key.Type!.Value.DataType);
 					if (maxValue == null)
 						continue;
 
@@ -92,7 +92,7 @@ namespace Tests.UserTests
 			{
 				statement.WalkQueries(query =>
 				{
-					new QueryVisitor().Visit(query, e =>
+					query.Visit(this, static (optimizer, e) =>
 					{
 						if (e.ElementType != QueryElementType.SqlQuery)
 							return;
@@ -102,10 +102,10 @@ namespace Tests.UserTests
 						foreach (var source in q.From.Tables)
 						{
 							if (source.Joins.Any())
-								AddConditions(q.Select.Where, source);
+								optimizer.AddConditions(q.Select.Where, source);
 
 							foreach (var join in source.Joins)
-								AddConditions(q.Select.Where, join.Table);
+								optimizer.AddConditions(q.Select.Where, join.Table);
 						}
 					});
 
@@ -114,15 +114,14 @@ namespace Tests.UserTests
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.Firebird, TestProvName.Firebird3)]
-		public void Test(string context)
+		[Test]
+		public void Test([IncludeDataSources(TestProvName.AllFirebird)] string context)
 		{
 			var connectionString = DataConnection.GetConnectionString(context);
-			var oldProvider = DataConnection.GetDataProvider(context);
+			var oldProvider      = DataConnection.GetDataProvider(context);
 
 			try
 			{
-				
 				DataConnection.AddConfiguration(
 					context,
 					connectionString,
@@ -145,9 +144,9 @@ namespace Tests.UserTests
 									c
 								};
 
-					var str = query.ToString();
+					var str = query.ToString()!;
 					Assert.True(str.Contains("2147483647"));
-					var values = query.ToArray();
+					var _ = query.ToArray();
 				}
 			}
 			finally

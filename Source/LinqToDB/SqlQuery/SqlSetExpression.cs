@@ -4,9 +4,9 @@ using System.Text;
 
 namespace LinqToDB.SqlQuery
 {
-	public class SqlSetExpression : IQueryElement, ISqlExpressionWalkable, ICloneableElement
+	public class SqlSetExpression : IQueryElement, ISqlExpressionWalkable
 	{
-		public SqlSetExpression(ISqlExpression column, ISqlExpression expression)
+		public SqlSetExpression(ISqlExpression column, ISqlExpression? expression)
 		{
 			Column     = column;
 			Expression = expression;
@@ -15,22 +15,26 @@ namespace LinqToDB.SqlQuery
 			{
 				if (column is SqlField field)
 				{
-					if (field.ColumnDescriptor != null)
+					if (field.ColumnDescriptor != null && p.Type.SystemType != typeof(object))
 					{
-						if (field.ColumnDescriptor.DataType != DataType.Undefined && p.DataType == DataType.Undefined)
-							p.DataType = field.ColumnDescriptor.DataType;
-//							if (field.ColumnDescriptorptor.MapMemberInfo.IsDbTypeSet)
-//								p.DbType = field.ColumnDescriptorptor.MapMemberInfo.DbType;
-//
-//							if (field.ColumnDescriptorptor.MapMemberInfo.IsDbSizeSet)
-//								p.DbSize = field.ColumnDescriptor.MapMemberInfo.DbSize;
+						if (field.ColumnDescriptor.DataType  != DataType.Undefined && p.Type.DataType == DataType.Undefined)
+							p.Type = p.Type.WithDataType(field.ColumnDescriptor.DataType);
+
+						if (field.ColumnDescriptor.DbType    != null && p.Type.DbType == null)
+							p.Type = p.Type.WithDbType(field.ColumnDescriptor.DbType);
+						if (field.ColumnDescriptor.Length    != null && p.Type.Length == null)
+							p.Type = p.Type.WithLength(field.ColumnDescriptor.Length);
+						if (field.ColumnDescriptor.Precision != null && p.Type.Precision == null)
+							p.Type = p.Type.WithPrecision(field.ColumnDescriptor.Precision);
+						if (field.ColumnDescriptor.Scale     != null && p.Type.Scale == null)
+							p.Type = p.Type.WithScale(field.ColumnDescriptor.Scale);
 					}
 				}
 			}
 		}
 
-		public ISqlExpression Column     { get; set; }
-		public ISqlExpression Expression { get; set; }
+		public ISqlExpression  Column     { get; set; }
+		public ISqlExpression? Expression { get; set; }
 
 		#region Overrides
 
@@ -45,31 +49,12 @@ namespace LinqToDB.SqlQuery
 
 		#endregion
 
-		#region ICloneableElement Members
-
-		public ICloneableElement Clone(Dictionary<ICloneableElement, ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
-		{
-			if (!doClone(this))
-				return this;
-
-			if (!objectTree.TryGetValue(this, out var clone))
-			{
-				objectTree.Add(this, clone = new SqlSetExpression(
-					(ISqlExpression)Column.    Clone(objectTree, doClone),
-					(ISqlExpression)Expression.Clone(objectTree, doClone)));
-			}
-
-			return clone;
-		}
-
-		#endregion
-
 		#region ISqlExpressionWalkable Members
 
-		ISqlExpression ISqlExpressionWalkable.Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> func)
+		ISqlExpression? ISqlExpressionWalkable.Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 		{
-			Column     = Column.    Walk(skipColumns, func);
-			Expression = Expression.Walk(skipColumns, func);
+			Column     = Column.     Walk(options, func)!;
+			Expression = Expression?.Walk(options, func);
 			return null;
 		}
 
@@ -83,7 +68,7 @@ namespace LinqToDB.SqlQuery
 		{
 			Column.ToString(sb, dic);
 			sb.Append(" = ");
-			Expression.ToString(sb, dic);
+			Expression?.ToString(sb, dic);
 
 			return sb;
 		}

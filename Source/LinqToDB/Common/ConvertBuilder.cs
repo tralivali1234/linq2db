@@ -14,27 +14,23 @@ namespace LinqToDB.Common
 
 	static class ConvertBuilder
 	{
-		static readonly MethodInfo _defaultConverter = MemberHelper.MethodOf(() => ConvertDefault(null, typeof(int)));
+		static readonly MethodInfo _defaultConverter = MemberHelper.MethodOf(() => ConvertDefault(null!, typeof(int)));
 
 		static object ConvertDefault(object value, Type conversionType)
 		{
 			try
 			{
-				return Convert.ChangeType(value, conversionType
-#if !NETSTANDARD1_6
-					, Thread.CurrentThread.CurrentCulture
-#endif
-					);
+				return Convert.ChangeType(value, conversionType, Thread.CurrentThread.CurrentCulture);
 			}
 			catch (Exception ex)
 			{
-				throw new LinqToDBConvertException(string.Format("Cannot convert value '{0}' to type '{1}'", value, conversionType.FullName), ex);
+				throw new LinqToDBConvertException($"Cannot convert value '{value}' to type '{conversionType.FullName}'", ex);
 			}
 		}
 
-		static Expression GetCtor(Type from, Type to, Expression p)
+		static Expression? GetCtor(Type from, Type to, Expression p)
 		{
-			var ctor = to.GetConstructorEx(new[] { from });
+			var ctor = to.GetConstructor(new[] { from });
 
 			if (ctor == null)
 				return null;
@@ -44,16 +40,16 @@ namespace LinqToDB.Common
 			if (ptype != from)
 				p = Expression.Convert(p, ptype);
 
-			return Expression.New(ctor, new[] { p });
+			return Expression.New(ctor, p);
 		}
 
-		static Expression GetValue(Type from, Type to, Expression p)
+		static Expression? GetValue(Type from, Type to, Expression p)
 		{
-			var pi = from.GetPropertyEx("Value");
+			var pi = from.GetProperty("Value");
 
 			if (pi == null)
 			{
-				var fi = from.GetFieldEx("Value");
+				var fi = from.GetField("Value");
 
 				if (fi != null && fi.FieldType == to)
 					return Expression.Field(p, fi);
@@ -64,18 +60,44 @@ namespace LinqToDB.Common
 			return pi.PropertyType == to ? Expression.Property(p, pi) : null;
 		}
 
-		static Expression GetOperator(Type from, Type to, Expression p)
+		static Expression? GetOperator(Type from, Type to, Expression p)
 		{
 			var op =
 				to.GetMethodEx("op_Implicit", from) ??
 				to.GetMethodEx("op_Explicit", from);
 
-			return op != null ? Expression.Convert(p, to, op) : null;
+			if (op != null)
+			{
+				Type oppt = op.GetParameters()[0].ParameterType;
+				Type pt   = p.Type;
+
+				if (oppt.IsNullable() && !pt.IsNullable())
+					p = GetCtor(pt, oppt, p)!;
+
+				return Expression.Convert(p, to, op);
+			}
+
+			op =
+				from.GetMethodEx(to, "op_Implicit", from) ??
+				from.GetMethodEx(to, "op_Explicit", from);
+
+			if (op != null)
+			{
+				Type oppt = op.GetParameters()[0].ParameterType;
+				Type pt   = p.Type;
+
+				if (oppt.IsNullable() && !pt.IsNullable())
+					p = GetCtor(pt, oppt, p)!;
+
+				return Expression.Convert(p, to, op);
+			}
+
+			return null;
 		}
 
 		static bool IsConvertible(Type type)
 		{
-			if (type.IsEnumEx())
+			if (type.IsEnum)
 				return false;
 
 			switch (type.GetTypeCodeEx())
@@ -97,16 +119,16 @@ namespace LinqToDB.Common
 			}
 		}
 
-		static Expression GetConvertion(Type from, Type to, Expression p)
+		static Expression? GetConvertion(Type from, Type to, Expression p)
 		{
 			if (IsConvertible(from) && IsConvertible(to) && to != typeof(bool) ||
-				from.IsAssignableFromEx(to) && to.IsAssignableFromEx(from))
+				from.IsAssignableFrom(to) && to.IsAssignableFrom(from))
 				return Expression.ConvertChecked(p, to);
 
 		 	return null;
 		}
 
-		static Expression GetParse(Type from, Type to, Expression p)
+		static Expression? GetParse(Type from, Type to, Expression p)
 		{
 			if (from == typeof(string))
 			{
@@ -121,7 +143,7 @@ namespace LinqToDB.Common
 
 				if (mi != null)
 				{
-					p = GetCtor(from, typeof(SqlString), p);
+					p = GetCtor(from, typeof(SqlString), p)!;
 					return Expression.Convert(p, to, mi);
 				}
 
@@ -131,20 +153,20 @@ namespace LinqToDB.Common
 			return null;
 		}
 
-		static Expression GetToString(Type from, Type to, Expression p)
+		static Expression? GetToString(Type from, Type to, Expression p)
 		{
 			if (to == typeof(string) && !from.IsNullable())
 			{
-				var mi = from.GetMethodEx("ToString", new Type[0]);
+				var mi = from.GetMethodEx("ToString", Array<Type>.Empty);
 				return mi != null ? Expression.Call(p, mi) : null;
 			}
 
 			return null;
 		}
 
-		static Expression GetParseEnum(Type from, Type to, Expression p)
+		static Expression? GetParseEnum(Type from, Type to, Expression p)
 		{
-			if (from == typeof(string) && to.IsEnumEx())
+			if (from == typeof(string) && to.IsEnum)
 			{
 				var values = Enum.GetValues(to);
 				var names  = Enum.GetNames (to);
@@ -153,12 +175,8 @@ namespace LinqToDB.Common
 
 				for (var i = 0; i < values.Length; i++)
 				{
-					var val = values.GetValue(i);
-					var lv  = (long)Convert.ChangeType(val, typeof(long)
-#if !NETSTANDARD1_6
-						, Thread.CurrentThread.CurrentCulture
-#endif
-						);
+					var val = values.GetValue(i)!;
+					var lv  = (long)Convert.ChangeType(val, typeof(long), Thread.CurrentThread.CurrentCulture)!;
 
 					dic[lv.ToString()] = val;
 
@@ -167,10 +185,10 @@ namespace LinqToDB.Common
 				}
 
 				for (var i = 0; i < values.Length; i++)
-					dic[names[i].ToLowerInvariant()] = values.GetValue(i);
+					dic[names[i].ToLowerInvariant()] = values.GetValue(i)!;
 
 				for (var i = 0; i < values.Length; i++)
-					dic[names[i]] = values.GetValue(i);
+					dic[names[i]] = values.GetValue(i)!;
 
 				var cases =
 					from v in dic
@@ -200,18 +218,18 @@ namespace LinqToDB.Common
 			throw new LinqToDBConvertException(text);
 		}
 
-		static readonly MethodInfo _throwLinqToDBConvertException = MemberHelper.MethodOf(() => ThrowLinqToDBException(null));
+		static readonly MethodInfo _throwLinqToDBConvertException = MemberHelper.MethodOf(() => ThrowLinqToDBException(null!));
 
-		static Expression GetToEnum(Type @from, Type to, Expression expression, MappingSchema mappingSchema)
+		static Expression? GetToEnum(Type from, Type to, Expression expression, MappingSchema mappingSchema)
 		{
-			if (to.IsEnumEx())
+			if (to.IsEnum)
 			{
 				var toFields = mappingSchema.GetMapValues(to);
 
 				if (toFields == null)
 					return null;
 
-				var fromType = @from;
+				var fromType = from;
 				if (fromType.IsNullable())
 					fromType = fromType.ToNullableUnderlying();
 
@@ -227,7 +245,7 @@ namespace LinqToDB.Common
 								value = f.OrigValue,
 								attrs = f.attrs
 									.Where (a => a.Configuration == f.attrs[0].Configuration)
-									.Select(a => a.Value ?? mappingSchema.GetDefaultValue(@from))
+									.Select(a => a.Value ?? mappingSchema.GetDefaultValue(from))
 									.ToList()
 							})
 						.ToList();
@@ -243,7 +261,7 @@ namespace LinqToDB.Common
 
 					if (ambiguityMapping != null)
 					{
-						var enums = ambiguityMapping.ToArray();
+						var enums = ambiguityMapping.ToList();
 
 						return Expression.Convert(
 							Expression.Call(
@@ -264,13 +282,13 @@ namespace LinqToDB.Common
 							.Select(f =>
 								Expression.SwitchCase(
 									Expression.Constant(f.value),
-									(IEnumerable<Expression>)f.attrs.Select(a => Expression.Constant(a, @from))))
+									f.attrs.Select(a => Expression.Constant(a, from))))
 							.ToArray());
 
 					return expr;
 				}
 
-				if (fromTypeFields.Any(f => f.attrs.Count(a => a.Value != null) != 0))
+				if (fromTypeFields.Any(f => f.attrs.Any(a => a.Value != null)))
 				{
 					var field = fromTypeFields.First(f => f.attrs.Count == 0);
 
@@ -288,15 +306,15 @@ namespace LinqToDB.Common
 
 		class EnumValues
 		{
-			public FieldInfo           Field;
-			public MapValueAttribute[] Attrs;
+			public FieldInfo           Field = null!;
+			public MapValueAttribute[] Attrs = null!;
 		}
 
-		static Expression GetFromEnum(Type @from, Type to, Expression expression, MappingSchema mappingSchema)
+		static Expression? GetFromEnum(Type from, Type to, Expression expression, MappingSchema mappingSchema)
 		{
-			if (from.IsEnumEx())
+			if (from.IsEnum)
 			{
-				var fromFields = @from.GetFieldsEx()
+				var fromFields = from.GetFields()
 					.Where (f => (f.Attributes & EnumField) == EnumField)
 					.Select(f => new EnumValues { Field = f, Attrs = mappingSchema.GetAttributes<MapValueAttribute>(from, f, a => a.Configuration) })
 					.ToList();
@@ -325,7 +343,7 @@ namespace LinqToDB.Common
 					{
 						var cases = toTypeFields.Select(f => Expression.SwitchCase(
 							Expression.Constant(f.Attrs.Value ?? mappingSchema.GetDefaultValue(to), to),
-							Expression.Constant(Enum.Parse(@from, f.Field.Name, false))));
+							Expression.Constant(Enum.Parse(from, f.Field.Name, false))));
 
 						var expr = Expression.Switch(
 							expression,
@@ -347,20 +365,20 @@ namespace LinqToDB.Common
 							Expression.Call(
 								_throwLinqToDBConvertException,
 								Expression.Constant(
-									$"Inconsistent mapping. '{@from.FullName}.{field.Field.Name}' does not have MapValue(<{to.FullName}>) attribute.")),
+									$"Inconsistent mapping. '{from.FullName}.{field.Field.Name}' does not have MapValue(<{to.FullName}>) attribute.")),
 								to);
 					}
 				}
 
-				if (to.IsEnumEx())
+				if (to.IsEnum)
 				{
-					var toFields = to.GetFieldsEx()
+					var toFields = to.GetFields()
 						.Where (f => (f.Attributes & EnumField) == EnumField)
 						.Select(f => new EnumValues { Field = f, Attrs = mappingSchema.GetAttributes<MapValueAttribute>(to, f, a => a.Configuration) })
 						.ToList();
 
 					var dic = new Dictionary<EnumValues,EnumValues>();
-					var cl  = mappingSchema.ConfigurationList.Concat(new[] { "", null }).Select((c,i) => new { c, i }).ToArray();
+					var cl  = mappingSchema.ConfigurationList.Concat(new[] { "", null }).Select((c,i) => (c, i)).ToArray();
 
 					foreach (var toField in toFields)
 					{
@@ -372,7 +390,7 @@ namespace LinqToDB.Common
 						toAttr = toField.Attrs.FirstOrDefault(a => a.Configuration == toAttr.Configuration && a.IsDefault) ?? toAttr;
 
 						var fromAttrs = fromFields.Where(f => f.Attrs.Any(a =>
-							a.Value == null ? toAttr.Value == null : a.Value.Equals(toAttr.Value))).ToList();
+							a.Value?.Equals(toAttr.Value) ?? toAttr.Value == null)).ToList();
 
 						if (fromAttrs.Count == 0)
 							return null;
@@ -383,7 +401,7 @@ namespace LinqToDB.Common
 								from f in fromAttrs
 								select new {
 									f,
-									a = f.Attrs.First(a => a.Value == null ? toAttr.Value == null : a.Value.Equals(toAttr.Value))
+									a = f.Attrs.First(a => a.Value?.Equals(toAttr.Value) ?? toAttr.Value == null)
 								} into fa
 								from c in cl
 								where fa.a.Configuration == c.c
@@ -418,8 +436,8 @@ namespace LinqToDB.Common
 					if (dic.Count > 0)
 					{
 						var cases = dic.Select(f => Expression.SwitchCase(
-							Expression.Constant(Enum.Parse(@to,   f.Key.  Field.Name, false)),
-							Expression.Constant(Enum.Parse(@from, f.Value.Field.Name, false))));
+							Expression.Constant(Enum.Parse(to,   f.Key.  Field.Name, false)),
+							Expression.Constant(Enum.Parse(from, f.Value.Field.Name, false))));
 
 						var expr = Expression.Switch(
 							expression,
@@ -438,7 +456,7 @@ namespace LinqToDB.Common
 			return null;
 		}
 
-		static Tuple<Expression,bool> GetConverter(MappingSchema mappingSchema, Expression expr, Type from, Type to)
+		static Tuple<Expression,bool>? GetConverter(MappingSchema mappingSchema, Expression expr, Type from, Type to)
 		{
 			if (from == to)
 				return Tuple.Create(expr, false);
@@ -477,13 +495,13 @@ namespace LinqToDB.Common
 			return ex != null ? Tuple.Create(ex, false) : null;
 		}
 
-		static Tuple<Expression,bool> ConvertUnderlying(
+		static Tuple<Expression,bool>? ConvertUnderlying(
 			MappingSchema mappingSchema,
 			Expression    expr,
 			Type from, Type ufrom,
 			Type to,   Type uto)
 		{
-			Tuple<Expression,bool> ex = null;
+			Tuple<Expression,bool>? ex = null;
 
 			if (from != ufrom)
 			{
@@ -494,7 +512,7 @@ namespace LinqToDB.Common
 
 			if (ex == null && to != uto)
 			{
-				ex = GetConverter(mappingSchema, expr, @from, uto);
+				ex = GetConverter(mappingSchema, expr, from, uto);
 
 				if (ex != null)
 					ex = Tuple.Create(Expression.Convert(ex.Item1, to) as Expression, ex.Item2);
@@ -513,7 +531,7 @@ namespace LinqToDB.Common
 			return ex;
 		}
 
-		public static Tuple<LambdaExpression,LambdaExpression,bool> GetConverter(MappingSchema mappingSchema, Type from, Type to)
+		public static Tuple<LambdaExpression,LambdaExpression?,bool> GetConverter(MappingSchema? mappingSchema, Type from, Type to)
 		{
 			if (mappingSchema == null)
 				mappingSchema = MappingSchema.Default;
@@ -528,9 +546,9 @@ namespace LinqToDB.Common
 				return Tuple.Create(Expression.Lambda(Expression.Convert(p, typeof(object)), p), ne, false);
 
 			var ex =
-				GetConverter     (mappingSchema, p, @from, to) ??
-				ConvertUnderlying(mappingSchema, p, @from, @from.ToNullableUnderlying(), to, to.ToNullableUnderlying()) ??
-				ConvertUnderlying(mappingSchema, p, @from, @from.ToUnderlying(),         to, to.ToUnderlying());
+				GetConverter     (mappingSchema, p, from, to) ??
+				ConvertUnderlying(mappingSchema, p, from, from.ToNullableUnderlying(), to, to.ToNullableUnderlying()) ??
+				ConvertUnderlying(mappingSchema, p, from, from.ToUnderlying(),         to, to.ToUnderlying());
 
 			if (ex != null)
 			{
@@ -538,9 +556,9 @@ namespace LinqToDB.Common
 
 				if (from.IsNullable())
 					ex = Tuple.Create(
-						Expression.Condition(Expression.PropertyOrField(p, "HasValue"), ex.Item1, new DefaultValueExpression(mappingSchema, to)) as Expression,
+						Expression.Condition(ExpressionHelper.Property(p, nameof(Nullable<int>.HasValue)), ex.Item1, new DefaultValueExpression(mappingSchema, to)) as Expression,
 						ex.Item2);
-				else if (from.IsClassEx())
+				else if (from.IsClass)
 					ex = Tuple.Create(
 						Expression.Condition(Expression.NotEqual(p, Expression.Constant(null, from)), ex.Item1, new DefaultValueExpression(mappingSchema, to)) as Expression,
 						ex.Item2);
@@ -560,7 +578,7 @@ namespace LinqToDB.Common
 				if (defex.Type != uto)
 					defex = Expression.Convert(defex, uto);
 
-				defex = GetCtor(uto, to, defex);
+				defex = GetCtor(uto, to, defex)!;
 
 				return Tuple.Create(Expression.Lambda(defex, p), ne, false);
 			}
@@ -579,16 +597,16 @@ namespace LinqToDB.Common
 
 		#region Default Enum Mapping Type
 
-		public static Type GetDefaultMappingFromEnumType(MappingSchema mappingSchema, Type enumType)
+		public static Type? GetDefaultMappingFromEnumType(MappingSchema mappingSchema, Type enumType)
 		{
 			var type = enumType.ToNullableUnderlying();
 
-			if (!type.IsEnumEx())
+			if (!type.IsEnum)
 				return null;
 
 			var fields =
 			(
-				from f in type.GetFieldsEx()
+				from f in type.GetFields()
 				where (f.Attributes & EnumField) == EnumField
 				let attrs = mappingSchema.GetAttributes<MapValueAttribute>(type, f, a => a.Configuration)
 				select
@@ -600,7 +618,7 @@ namespace LinqToDB.Common
 				).ToList()
 			).ToList();
 
-			Type defaultType = null;
+			Type? defaultType = null;
 
 			if (fields.All(attrs => attrs.Count != 0))
 			{
@@ -608,9 +626,9 @@ namespace LinqToDB.Common
 
 				if (attr != null)
 				{
-					var valueType = attr[0].Value.GetType();
+					var valueType = attr[0].Value!.GetType();
 
-					if (fields.All(attrs => attrs[0].Value == null || attrs[0].Value.GetType() == valueType))
+					if (fields.All(attrs => attrs[0].Value == null || attrs[0].Value!.GetType() == valueType))
 						defaultType = valueType;
 				}
 			}
@@ -621,7 +639,7 @@ namespace LinqToDB.Common
 					?? mappingSchema.GetDefaultFromEnumType(typeof(Enum))
 					?? Enum.GetUnderlyingType(type);
 
-			if ((enumType.IsNullable() || fields.Any(attrs => attrs.Count != 0 && attrs[0].Value == null)) && !defaultType.IsClassEx() && !defaultType.IsNullable())
+			if ((enumType.IsNullable() || fields.Any(attrs => attrs.Count != 0 && attrs[0].Value == null)) && !defaultType.IsClass && !defaultType.IsNullable())
 				defaultType = typeof(Nullable<>).MakeGenericType(defaultType);
 
 			return defaultType;

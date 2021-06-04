@@ -1,16 +1,29 @@
-<#@ include file="LinqToDB.ttinclude" #>
+<#@ include file="T4Model.ttinclude"  once="true"      #>
+<#@ include file="LinqToDB.ttinclude" once="true"      #>
+<#@ import namespace="LinqToDB.DataProvider.SqlServer" #>
 <#
 	{
+		GenerateProcedureDbType = p => p.DataType == "Structured" && p.SchemaType != null;
+
 		var afterGenerateLinqToDBModel = AfterGenerateLinqToDBModel;
 		AfterGenerateLinqToDBModel = () =>
 		{
 			afterGenerateLinqToDBModel();
 			DoGenerateSqlServerFreeText();
 		};
+
+		var buildColumnComparison = BuildColumnComparison;
+		BuildColumnComparison = (c, padding1, padding2, last) =>
+		{
+			if (c.BuildType() == "SqlHierarchyId")
+				return string.Format("\t(bool)(t.{0}{1} == {0}{3}){2}", c.MemberName, padding1, last ? ");" : " &&", last ? "" : padding2);
+			else
+				return buildColumnComparison(c, padding1, padding2, last);
+		};
 	}
 #>
 <#+
-bool GenerateSqlServerFreeText = true; // Defines whether to generate extensions for Free Text search, or not
+bool GenerateSqlServerFreeText = false; // Defines whether to generate extensions for Free Text search, or not
 
 void DoGenerateSqlServerFreeText()
 {
@@ -30,101 +43,66 @@ void DoGenerateSqlServerFreeText()
 			Region  = "FreeTextTable",
 			Members =
 			{
-				new Class("FreeTextKey<T>",
-					new MemberGroup
+				new Method(() => "IQueryable<SqlServerExtensions.FreeTextKey<TKey>>", "FreeTextTable",
+					new Func<string>[] { () => "ITable<TTable> table", () => string.Format("Expression<Func<TTable,{0}>> columns", ModelType.Create<object>(true).ToTypeName()), () => "string search" },
+					() => new[]
 					{
-						IsCompact = true,
-						Members   =
-						{
-							new Field("T",   "Key"),
-							new Field("int", "Rank")
-						}
+						"return Sql.Ext.SqlServer().FreeTextTable<TTable, TKey>(table, columns, search);"
 					})
 				{
-					IsPartial = false
-				},
-
-				new Field("MethodInfo", "_freeTextTableMethod1")
-				{
-					AccessModifier = AccessModifier.Private,
-					IsStatic       = true,
-					InitValue      = "typeof(" + DataContextObject.Name + ").GetMethod(\"FreeTextTable\", new Type[] { typeof(string), typeof(string) })"
-				},
-
-				new Method("ITable<FreeTextKey<TKey>>", "FreeTextTable<TTable,TKey>",
-					new[] { "string field", "string text" },
-					new[]
-					{
-						"return this.GetTable<FreeTextKey<TKey>>(",
-						"	this,",
-						"	_freeTextTableMethod1,",
-						"	field,",
-						"	text);",
-					})
-				{
-					Attributes = { new Attribute("FreeTextTableExpression") }
-				},
-
-				new Field("MethodInfo", "_freeTextTableMethod2")
-				{
-					AccessModifier = AccessModifier.Private,
-					IsStatic       = true,
-					InitValue      =                                                                                                                                                      Environment.NewLine +
-					"	typeof(" + DataContextObject.Name + ").GetMethods()"                                                                                                            + Environment.NewLine +
-					"		.Where(m => m.Name == \"FreeTextTable\" &&  m.IsGenericMethod && m.GetParameters().Length == 2)"                                                            + Environment.NewLine +
-					"		.Where(m => m.GetParameters()[0].ParameterType.IsGenericTypeEx() && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>))" + Environment.NewLine +
-					"		.Where(m => m.GetParameters()[1].ParameterType == typeof(string))"                                                                                          + Environment.NewLine +
-					"		.Single()"
-				},
-
-				new Method("ITable<FreeTextKey<TKey>>", "FreeTextTable<TTable,TKey>",
-					new[] { "Expression<Func<TTable,string>> fieldSelector", "string text" },
-					new[]
-					{
-						"return this.GetTable<FreeTextKey<TKey>>(",
-						"	this,",
-						"	_freeTextTableMethod2,",
-						"	fieldSelector,",
-						"	text);",
-					})
-				{
-					Attributes = { new Attribute("FreeTextTableExpression") }
+					GenericArguments = { "TTable", "TKey" },
+					AfterSignature   = !EnableNullableReferenceTypes ? new List<string>() : new List<string>() { "where TTable : notnull" }
 				},
 			}
 		}
 	);
 }
 
-LinqToDB.Data.DataConnection GetSqlServerConnection(string connectionString)
+LinqToDB.Data.DataConnection GetSqlServerConnection(
+	string connectionString,
+	SqlServerVersion  version  = SqlServerVersion.v2008,
+	SqlServerProvider provider = SqlServerProvider.SystemDataSqlClient)
 {
-	return LinqToDB.DataProvider.SqlServer.SqlServerTools.CreateDataConnection(connectionString);
+	return LinqToDB.DataProvider.SqlServer.SqlServerTools.CreateDataConnection(connectionString, version, provider);
 }
 
-LinqToDB.Data.DataConnection GetSqlServerConnection(string server, string database)
+LinqToDB.Data.DataConnection GetSqlServerConnection(
+	string server,
+	string database,
+	SqlServerVersion  version  = SqlServerVersion.v2008,
+	SqlServerProvider provider = SqlServerProvider.SystemDataSqlClient)
 {
-	return GetSqlServerConnection(string.Format("Data Source={0};Database={1};Integrated Security=SSPI", server, database));
+	return GetSqlServerConnection(string.Format("Data Source={0};Database={1};Integrated Security=SSPI", server, database), version, provider);
 }
 
-LinqToDB.Data.DataConnection GetSqlServerConnection(string server, string database, string user, string password)
+LinqToDB.Data.DataConnection GetSqlServerConnection(string server, string database, string user, string password,
+	SqlServerVersion  version  = SqlServerVersion.v2008,
+	SqlServerProvider provider = SqlServerProvider.SystemDataSqlClient)
 {
-	return GetSqlServerConnection(string.Format("Server={0};Database={1};User Id={2};Password={3};", server, database, user, password));
+	return GetSqlServerConnection(string.Format("Server={0};Database={1};User Id={2};Password={3};", server, database, user, password), version, provider);
 }
 
-void LoadSqlServerMetadata(string connectionString)
+public void LoadSqlServerMetadata(string connectionString,
+	SqlServerVersion  version  = SqlServerVersion.v2008,
+	SqlServerProvider provider = SqlServerProvider.SystemDataSqlClient)
 {
-	var dataConnection = GetSqlServerConnection(connectionString);
-	LoadMetadata(dataConnection);
+	using (var dataConnection = GetSqlServerConnection(connectionString, version, provider))
+		LoadMetadata(dataConnection);
 }
 
-void LoadSqlServerMetadata(string server, string database)
+public void LoadSqlServerMetadata(string server, string database,
+	SqlServerVersion  version  = SqlServerVersion.v2008,
+	SqlServerProvider provider = SqlServerProvider.SystemDataSqlClient)
 {
-	var dataConnection = GetSqlServerConnection(server, database);
-	LoadMetadata(dataConnection);
+	using (var dataConnection = GetSqlServerConnection(server, database, version, provider))
+		LoadMetadata(dataConnection);
 }
 
-void LoadSqlServerMetadata(string server, string database, string user, string password)
+public void LoadSqlServerMetadata(string server, string database, string user, string password,
+	SqlServerVersion  version  = SqlServerVersion.v2008,
+	SqlServerProvider provider = SqlServerProvider.SystemDataSqlClient)
 {
-	var dataConnection = GetSqlServerConnection(server, database, user, password);
-	LoadMetadata(dataConnection);
+	using (var dataConnection = GetSqlServerConnection(server, database, user, password, version, provider))
+		LoadMetadata(dataConnection);
 }
 #>

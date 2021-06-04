@@ -2,18 +2,21 @@
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Collections.Generic;
 
 namespace LinqToDB.Mapping
 {
 	using Expressions;
 	using Extensions;
 	using SqlQuery;
+	using Common;
 
 	/// <summary>
 	/// Column or association fluent mapping builder.
 	/// </summary>
-	/// <typeparam name="T">Column or asociation member type.</typeparam>
-	public class PropertyMappingBuilder<T>
+	/// <typeparam name="TEntity">Entity type.</typeparam>
+	/// <typeparam name="TProperty">Column or association member type.</typeparam>
+	public class PropertyMappingBuilder<TEntity, TProperty>
 	{
 		#region Init
 
@@ -23,23 +26,20 @@ namespace LinqToDB.Mapping
 		/// <param name="entity">Entity fluent mapping builder.</param>
 		/// <param name="memberGetter">Column or association member getter expression.</param>
 		public PropertyMappingBuilder(
-			[JetBrains.Annotations.NotNull] EntityMappingBuilder<T>    entity,
-			[JetBrains.Annotations.NotNull] Expression<Func<T,object>> memberGetter)
+			EntityMappingBuilder<TEntity>       entity,
+			Expression<Func<TEntity,TProperty>> memberGetter)
 		{
-			if (entity       == null) throw new ArgumentNullException("entity");
-			if (memberGetter == null) throw new ArgumentNullException("memberGetter");
-
-			_entity       = entity;
-			_memberGetter = memberGetter;
+			_entity       = entity       ?? throw new ArgumentNullException(nameof(entity));
+			_memberGetter = memberGetter ?? throw new ArgumentNullException(nameof(memberGetter));
 			_memberInfo   = MemberHelper.MemberOf(memberGetter);
 
-			if (_memberInfo.ReflectedTypeEx() != typeof(T))
-				_memberInfo = typeof(T).GetMemberEx(_memberInfo) ?? _memberInfo;
+			if (_memberInfo.ReflectedType != typeof(TEntity))
+				_memberInfo = typeof(TEntity).GetMemberEx(_memberInfo) ?? _memberInfo;
 		}
 
-		readonly Expression<Func<T,object>> _memberGetter;
-		readonly MemberInfo                 _memberInfo;
-		readonly EntityMappingBuilder<T>    _entity;
+		readonly Expression<Func<TEntity,TProperty>> _memberGetter;
+		readonly MemberInfo                          _memberInfo;
+		readonly EntityMappingBuilder<TEntity>       _entity;
 
 		#endregion
 		/// <summary>
@@ -47,7 +47,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="attribute">Mapping attribute to add to specified member.</param>
 		/// <returns>Returns current column or association mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasAttribute(Attribute attribute)
+		public PropertyMappingBuilder<TEntity, TProperty> HasAttribute(Attribute attribute)
 		{
 			_entity.HasAttribute(_memberInfo, attribute);
 			return this;
@@ -60,7 +60,7 @@ namespace LinqToDB.Mapping
 		/// <param name="configuration">Optional mapping schema configuration name, for which this entity builder should be taken into account.
 		/// <see cref="ProviderName"/> for standard configuration names.</param>
 		/// <returns>Returns entity mapping builder.</returns>
-		public EntityMappingBuilder<TE> Entity<TE>(string configuration = null)
+		public EntityMappingBuilder<TE> Entity<TE>(string? configuration = null)
 		{
 			return _entity.Entity<TE>(configuration);
 		}
@@ -70,27 +70,123 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="func">Column mapping property or field getter expression.</param>
 		/// <returns>Returns property mapping builder.</returns>
-		public PropertyMappingBuilder<T> Property(Expression<Func<T,object>> func)
+		public PropertyMappingBuilder<TEntity, TMember> Property<TMember>(Expression<Func<TEntity, TMember>> func)
 		{
 			return _entity.Property(func);
 		}
 
 		/// <summary>
+		/// Adds member mapping to current entity.
+		/// </summary>
+		/// <param name="func">Column mapping property or field getter expression.</param>
+		/// <returns>Returns fluent property mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TMember> Member<TMember>(Expression<Func<TEntity,TMember>> func)
+		{
+			return _entity.Member(func);
+		}
+
+		/// <summary>
 		/// Adds association mapping to current column's entity.
 		/// </summary>
-		/// <typeparam name="S">Association member type.</typeparam>
-		/// <typeparam name="ID1">This association side key type.</typeparam>
-		/// <typeparam name="ID2">Other association side key type.</typeparam>
+		/// <typeparam name="TOther">Association member type.</typeparam>
+		/// <typeparam name="TThisKey">This association side key type.</typeparam>
+		/// <typeparam name="TOtherKey">Other association side key type.</typeparam>
 		/// <param name="prop">Association member getter expression.</param>
 		/// <param name="thisKey">This association key getter expression.</param>
 		/// <param name="otherKey">Other association key getter expression.</param>
+		/// <param name="canBeNull">Defines type of join. True - left join, False - inner join.</param>
 		/// <returns>Returns association mapping builder.</returns>
-		public PropertyMappingBuilder<T> Association<S, ID1, ID2>(
-			Expression<Func<T, S>> prop,
-			Expression<Func<T, ID1>> thisKey,
-			Expression<Func<S, ID2>> otherKey)
+		public PropertyMappingBuilder<TEntity, TOther> Association<TOther, TThisKey, TOtherKey>(
+			Expression<Func<TEntity, TOther>>   prop,
+			Expression<Func<TEntity, TThisKey>> thisKey,
+			Expression<Func<TOther, TOtherKey>> otherKey,
+			bool                                canBeNull = true)
 		{
-			return _entity.Association( prop, thisKey, otherKey );
+			return _entity.Association(prop, thisKey, otherKey, canBeNull);
+		}
+
+		/// <summary>
+		/// Adds association mapping to current column's entity.
+		/// </summary>
+		/// <typeparam name="TPropElement">Association member type.</typeparam>
+		/// <typeparam name="TThisKey">This association side key type.</typeparam>
+		/// <typeparam name="TOtherKey">Other association side key type.</typeparam>
+		/// <param name="prop">Association member getter expression.</param>
+		/// <param name="thisKey">This association key getter expression.</param>
+		/// <param name="otherKey">Other association key getter expression.</param>
+		/// <param name="canBeNull">Defines type of join. True - left join, False - inner join.</param>
+		/// <returns>Returns fluent property mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, IEnumerable<TPropElement>> Association<TPropElement, TThisKey, TOtherKey>(
+			Expression<Func<TEntity, IEnumerable<TPropElement>>> prop,
+			Expression<Func<TEntity, TThisKey>>                  thisKey,
+			Expression<Func<TPropElement, TOtherKey>>            otherKey,
+			bool                                                 canBeNull = true)
+		{
+			return _entity.Association(prop, thisKey, otherKey, canBeNull);
+		}
+
+		/// <summary>
+		/// Adds association mapping to current column's entity.
+		/// </summary>
+		/// <typeparam name="TOther">Other association side type</typeparam>
+		/// <param name="prop">Association member getter expression.</param>
+		/// <param name="predicate">Predicate expression.</param>
+		/// <param name="canBeNull">Defines type of join. True - left join, False - inner join.</param>
+		/// <returns>Returns fluent property mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, IEnumerable<TOther>> Association<TOther>(
+			Expression<Func<TEntity, IEnumerable<TOther>>> prop,
+			Expression<Func<TEntity, TOther, bool>>        predicate,
+			bool                                           canBeNull = true)
+		{
+			return _entity.Association(prop, predicate, canBeNull);
+		}
+
+		/// <summary>
+		/// Adds association mapping to current column's entity.
+		/// </summary>
+		/// <typeparam name="TOther">Other association side type</typeparam>
+		/// <param name="prop">Association member getter expression.</param>
+		/// <param name="predicate">Predicate expression</param>
+		/// <param name="canBeNull">Defines type of join. True - left join, False - inner join.</param>
+		/// <returns>Returns fluent property mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TOther> Association<TOther>(
+			Expression<Func<TEntity, TOther>>       prop,
+			Expression<Func<TEntity, TOther, bool>> predicate,
+			bool                                    canBeNull = true)
+		{
+			return _entity.Association(prop, predicate, canBeNull);
+		}
+
+		/// <summary>
+		/// Adds association mapping to current column's entity.
+		/// </summary>
+		/// <typeparam name="TOther">Other association side type</typeparam>
+		/// <param name="prop">Association member getter expression.</param>
+		/// <param name="queryExpression">Query expression.</param>
+		/// <param name="canBeNull">Defines type of join. True - left join, False - inner join.</param>
+		/// <returns>Returns fluent property mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, IEnumerable<TOther>> Association<TOther>(
+			Expression<Func<TEntity, IEnumerable<TOther>>>              prop,
+			Expression<Func<TEntity, IDataContext, IQueryable<TOther>>> queryExpression,
+			bool                                                        canBeNull = true)
+		{
+			return _entity.Association(prop, queryExpression, canBeNull);
+		}
+
+		/// <summary>
+		/// Adds association mapping to current column's entity.
+		/// </summary>
+		/// <typeparam name="TOther">Other association side type</typeparam>
+		/// <param name="prop">Association member getter expression.</param>
+		/// <param name="queryExpression">Query expression.</param>
+		/// <param name="canBeNull">Defines type of join. True - left join, False - inner join.</param>
+		/// <returns>Returns fluent property mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TOther> Association<TOther>(
+			Expression<Func<TEntity, TOther>>                           prop,
+			Expression<Func<TEntity, IDataContext, IQueryable<TOther>>> queryExpression,
+			bool                                                        canBeNull = true)
+		{
+			return _entity.Association(prop, queryExpression, canBeNull);
 		}
 
 		/// <summary>
@@ -98,7 +194,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="order">Order of property in primary key.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> IsPrimaryKey(int order = -1)
+		public PropertyMappingBuilder<TEntity, TProperty> IsPrimaryKey(int order = -1)
 		{
 			_entity.HasPrimaryKey(_memberGetter, order);
 			return this;
@@ -108,13 +204,13 @@ namespace LinqToDB.Mapping
 		/// Marks current column as identity column.
 		/// </summary>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> IsIdentity()
+		public PropertyMappingBuilder<TEntity, TProperty> IsIdentity()
 		{
 			_entity.HasIdentity(_memberGetter);
 			return this;
 		}
 
-		PropertyMappingBuilder<T> SetColumn(Action<ColumnAttribute> setColumn)
+		PropertyMappingBuilder<TEntity, TProperty> SetColumn(Action<ColumnAttribute> setColumn)
 		{
 			var getter     = _memberGetter;
 			var memberName = null as string;
@@ -122,7 +218,7 @@ namespace LinqToDB.Mapping
 
 			if (me != null && me.Expression is MemberExpression)
 			{
-				for (var m = me; m != null; m = m.Expression as MemberExpression)
+				for (MemberExpression? m = me; m != null; m = m.Expression as MemberExpression)
 				{
 					memberName = m.Member.Name + (memberName != null ? "." + memberName : "");
 				}
@@ -163,7 +259,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="columnName">Column name.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasColumnName(string columnName)
+		public PropertyMappingBuilder<TEntity, TProperty> HasColumnName(string columnName)
 		{
 			return SetColumn(a => a.Name = columnName);
 		}
@@ -173,7 +269,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="dataType">Data type.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasDataType(DataType dataType)
+		public PropertyMappingBuilder<TEntity, TProperty> HasDataType(DataType dataType)
 		{
 			return SetColumn(a => a.DataType = dataType);
 		}
@@ -183,7 +279,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="dbType">Column type.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasDbType(string dbType)
+		public PropertyMappingBuilder<TEntity, TProperty> HasDbType(string dbType)
 		{
 			return SetColumn(a => a.DbType = dbType);
 		}
@@ -193,7 +289,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="format">
 		/// Custom template for column definition in create table SQL expression, generated using
-		/// <see cref="DataExtensions.CreateTable{T}(IDataContext, string, string, string, string, string, DefaultNullable)"/> methods.
+		/// <see cref="DataExtensions.CreateTable{T}(IDataContext, string?, string?, string?, string?, string?, DefaultNullable, string?, TableOptions)"/> methods.
 		/// Template accepts following string parameters:
 		/// - {0} - column name;
 		/// - {1} - column type;
@@ -201,7 +297,7 @@ namespace LinqToDB.Mapping
 		/// - {3} - identity specification.
 		/// </param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasCreateFormat(string format)
+		public PropertyMappingBuilder<TEntity, TProperty> HasCreateFormat(string format)
 		{
 			return SetColumn(a => a.CreateFormat = format);
 		}
@@ -211,7 +307,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="storage">Name of storage property or field for current column.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasStorage(string storage)
+		public PropertyMappingBuilder<TEntity, TProperty> HasStorage(string storage)
 		{
 			return SetColumn(a => a.Storage = storage);
 		}
@@ -221,20 +317,30 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="isDiscriminator">If <c>true</c> - column is used as inheritance mapping discriminator.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> IsDiscriminator(bool isDiscriminator = true)
+		public PropertyMappingBuilder<TEntity, TProperty> IsDiscriminator(bool isDiscriminator = true)
 		{
 			return SetColumn(a => a.IsDiscriminator = isDiscriminator);
 		}
 
 		/// <summary>
+		/// Marks current column to be skipped by default during a full entity fetch
+		/// </summary>
+		/// <param name="skipOnEntityFetch">If <c>true</c>, column won't be fetched unless explicity selected in a Linq query.</param>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> SkipOnEntityFetch(bool skipOnEntityFetch = true)
+		{
+			return SetColumn(a => a.SkipOnEntityFetch = skipOnEntityFetch);
+		}
+
+		/// <summary>
 		/// Sets whether a column is insertable.
 		/// This flag will affect only insert operations with implicit columns specification like
-		/// <see cref="DataExtensions.Insert{T}(IDataContext, T, string, string, string)"/>
+		/// <see cref="DataExtensions.Insert{T}(IDataContext, T, string?, string?, string?, string?, TableOptions)"/>
 		/// method and will be ignored when user explicitly specifies value for this column.
 		/// </summary>
 		/// <param name="skipOnInsert">If <c>true</c> - column will be ignored for implicit insert operations.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasSkipOnInsert(bool skipOnInsert = true)
+		public PropertyMappingBuilder<TEntity, TProperty> HasSkipOnInsert(bool skipOnInsert = true)
 		{
 			return SetColumn(a => a.SkipOnInsert = skipOnInsert);
 		}
@@ -242,12 +348,12 @@ namespace LinqToDB.Mapping
 		/// <summary>
 		/// Sets whether a column is updatable.
 		/// This flag will affect only update operations with implicit columns specification like
-		/// <see cref="DataExtensions.Update{T}(IDataContext, T, string, string, string)"/>
+		/// <see cref="DataExtensions.Update{T}(IDataContext, T, string?, string?, string?, string?, TableOptions)"/>
 		/// method and will be ignored when user explicitly specifies value for this column.
 		/// </summary>
 		/// <param name="skipOnUpdate">If <c>true</c> - column will be ignored for implicit update operations.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasSkipOnUpdate(bool skipOnUpdate = true)
+		public PropertyMappingBuilder<TEntity, TProperty> HasSkipOnUpdate(bool skipOnUpdate = true)
 		{
 			return SetColumn(a => a.SkipOnUpdate = skipOnUpdate);
 		}
@@ -257,7 +363,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="isNullable">If <c>true</c> - column could contain <c>NULL</c> values.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> IsNullable(bool isNullable = true)
+		public PropertyMappingBuilder<TEntity, TProperty> IsNullable(bool isNullable = true)
 		{
 			return SetColumn(a => a.CanBeNull = isNullable);
 		}
@@ -266,7 +372,7 @@ namespace LinqToDB.Mapping
 		/// Sets current member to be excluded from mapping.
 		/// </summary>
 		/// <returns>Returns current mapping builder.</returns>
-		public PropertyMappingBuilder<T> IsNotColumn()
+		public PropertyMappingBuilder<TEntity, TProperty> IsNotColumn()
 		{
 			return SetColumn(a => a.IsColumn = false);
 		}
@@ -275,7 +381,7 @@ namespace LinqToDB.Mapping
 		/// Sets current member to be included into mapping as column.
 		/// </summary>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> IsColumn()
+		public PropertyMappingBuilder<TEntity, TProperty> IsColumn()
 		{
 			return SetColumn(a => a.IsColumn = true);
 		}
@@ -285,7 +391,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="length">Column length.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasLength(int length)
+		public PropertyMappingBuilder<TEntity, TProperty> HasLength(int length)
 		{
 			return SetColumn(a => a.Length = length);
 		}
@@ -295,7 +401,7 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="precision">Column precision.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasPrecision(int precision)
+		public PropertyMappingBuilder<TEntity, TProperty> HasPrecision(int precision)
 		{
 			return SetColumn(a => a.Precision = precision);
 		}
@@ -305,9 +411,89 @@ namespace LinqToDB.Mapping
 		/// </summary>
 		/// <param name="scale">Column scale.</param>
 		/// <returns>Returns current column mapping builder.</returns>
-		public PropertyMappingBuilder<T> HasScale(int scale)
+		public PropertyMappingBuilder<TEntity, TProperty> HasScale(int scale)
 		{
 			return SetColumn(a => a.Scale = scale);
+		}
+
+		/// <summary>
+		/// Sets the Order of the database column.
+		/// </summary>
+		/// <param name="order">Column order.</param>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> HasOrder(int order)
+		{
+			return SetColumn(a => a.Order = order);
+		}
+
+		/// <summary>
+		/// Sets that property is alias to another member.
+		/// </summary>
+		/// <param name="aliasMember">Alias member getter expression.</param>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> IsAlias(Expression<Func<TEntity, object>> aliasMember)
+		{
+			if (aliasMember == null) throw new ArgumentNullException(nameof(aliasMember));
+
+			var memberInfo = MemberHelper.GetMemberInfo(aliasMember);
+
+			if (memberInfo == null)
+				throw new ArgumentException($"Can not deduce MemberInfo from Lambda: '{aliasMember}'");
+
+			return HasAttribute(new ColumnAliasAttribute(memberInfo.Name));
+		}
+
+		/// <summary>
+		/// Sets that property is alias to another member.
+		/// </summary>
+		/// <param name="aliasMember">Alias member name.</param>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> IsAlias(string aliasMember)
+		{
+			if (string.IsNullOrEmpty(aliasMember))
+				throw new ArgumentException("Value cannot be null or empty.", nameof(aliasMember));
+
+			var memberInfo = typeof(TEntity).GetMember(aliasMember);
+			if (memberInfo == null)
+				throw new ArgumentException($"Member '{aliasMember}' not found in type '{typeof(TEntity)}'");
+
+			return HasAttribute(new ColumnAliasAttribute(aliasMember));
+		}
+
+		/// <summary>
+		/// Configure property as alias to another member.
+		/// </summary>
+		/// <param name="expression">Expression for mapping member during read.</param>
+		/// <param name="isColumn">Indicates whether a property value should be filled during entity materialization (calculated property).</param>
+		/// <param name="alias">Optional alias for specific member expression. By default Member Name is used.</param>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> IsExpression<TR>(Expression<Func<TEntity, TR>> expression, bool isColumn = false, string? alias = null)
+		{
+			if (expression == null) throw new ArgumentNullException(nameof(expression));
+
+			return HasAttribute(new ExpressionMethodAttribute(expression) { IsColumn = isColumn, Alias = alias }).IsNotColumn();
+		}
+
+		/// <summary>
+		///     Configures the property so that the property value is converted to the given type before
+		///     writing to the database and converted back when reading from the database.
+		/// </summary>
+		/// <typeparam name="TProvider"> The type to convert to and from. </typeparam>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> HasConversionFunc<TProvider>(Func<TProperty, TProvider> toProvider, Func<TProvider, TProperty> toModel, bool handlesNulls = false)
+		{
+			return HasAttribute(new ValueConverterAttribute { ValueConverter = new ValueConverterFunc<TProperty, TProvider>(toProvider, toModel, handlesNulls) });
+		}
+
+		/// <summary>
+		///     Configures the property so that the property value is converted to the given type before
+		///     writing to the database and converted back when reading from the database.
+		/// </summary>
+		/// <typeparam name="TProvider"> The type to convert to and from. </typeparam>
+		/// <returns>Returns current column mapping builder.</returns>
+		public PropertyMappingBuilder<TEntity, TProperty> HasConversion<TProvider>(Expression<Func<TProperty, TProvider>> toProvider, Expression<Func<TProvider, TProperty>> toModel, bool handlesNulls = false)
+		{
+			return HasAttribute(new ValueConverterAttribute { ValueConverter = new ValueConverter<TProperty, TProvider>(toProvider, toModel, handlesNulls) });
 		}
 	}
 }

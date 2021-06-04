@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if NETFRAMEWORK
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Linq;
@@ -23,11 +24,11 @@ namespace LinqToDB.Configuration
 			_properties.Add(_propDefaultDataProvider);
 		}
 
-		private static LinqToDBSection _instance;
+		private static LinqToDBSection? _instance;
 		/// <summary>
 		/// linq2db configuration section.
 		/// </summary>
-		public  static LinqToDBSection  Instance
+		public  static LinqToDBSection?  Instance
 		{
 			get
 			{
@@ -48,27 +49,21 @@ namespace LinqToDB.Configuration
 			}
 		}
 
-		protected override ConfigurationPropertyCollection Properties
-		{
-			get { return _properties; }
-		}
+		protected override ConfigurationPropertyCollection Properties => _properties;
 
 		/// <summary>
 		/// Gets list of data providers configuration elements.
 		/// </summary>
-		public DataProviderElementCollection DataProviders
-		{
-			get { return (DataProviderElementCollection) base[_propDataProviders]; }
-		}
+		public DataProviderElementCollection DataProviders => (DataProviderElementCollection)base[_propDataProviders];
 
 		/// <summary>
 		/// Gets default connection configuration name.
 		/// </summary>
-		public string DefaultConfiguration { get { return (string)base[_propDefaultConfiguration]; } }
+		public string DefaultConfiguration => (string)base[_propDefaultConfiguration];
 		/// <summary>
 		/// Gets default data provider configuration name.
 		/// </summary>
-		public string DefaultDataProvider  { get { return (string)base[_propDefaultDataProvider];  } }
+		public string DefaultDataProvider  => (string)base[_propDefaultDataProvider];
 
 		IEnumerable<IConnectionStringSettings> ILinqToDBSettings.ConnectionStrings
 		{
@@ -79,10 +74,7 @@ namespace LinqToDB.Configuration
 			}
 		}
 
-		IEnumerable<IDataProviderSettings> ILinqToDBSettings.DataProviders
-		{
-			get { return DataProviders.OfType<DataProviderElement>(); }
-		}
+		IEnumerable<IDataProviderSettings> ILinqToDBSettings.DataProviders => DataProviders.OfType<DataProviderElement>();
 
 		class ConnectionStringEx : IConnectionStringSettings
 		{
@@ -93,15 +85,15 @@ namespace LinqToDB.Configuration
 				_css = css;
 			}
 
-			public string ConnectionString { get { return _css.ConnectionString; } }
-			public string Name             { get { return _css.Name;             } }
-			public string ProviderName     { get { return _css.ProviderName;     } }
-			public bool IsGlobal           { get { return IsMachineConfig(_css); } }
+			public string ConnectionString => _css.ConnectionString;
+			public string Name             => _css.Name;
+			public string ProviderName     => _css.ProviderName;
+			public bool   IsGlobal         => IsMachineConfig(_css);
 		}
 
 		internal static bool IsMachineConfig(ConnectionStringSettings css)
 		{
-			string source;
+			string? source;
 			bool   isPresent;
 
 			try
@@ -115,10 +107,11 @@ namespace LinqToDB.Configuration
 				isPresent = true;
 			}
 
-			return 
+			return
 				 isPresent == false &&
-				(source    == null  || 
+				(source    == null  ||
 				source.EndsWith("machine.config", StringComparison.OrdinalIgnoreCase));
 		}
 	}
 }
+#endif

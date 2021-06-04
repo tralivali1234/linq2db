@@ -6,53 +6,37 @@ namespace LinqToDB.SqlQuery
 {
 	public class SqlDropTableStatement : SqlStatement
 	{
-		public SqlTable       Table           { get; set; }
-
-		public override QueryType          QueryType    => QueryType.DropTable;
-		public override QueryElementType   ElementType  => QueryElementType.DropTableStatement;
-
-		public override bool               IsParameterDependent
+		public SqlDropTableStatement(SqlTable table)
 		{
-			get => false;
-			set {}
+			Table = table;
 		}
 
-		public override SelectQuery SelectQuery { get => null; set {}}
+		public SqlTable Table { get; }
+
+		public override QueryType        QueryType    => QueryType.DropTable;
+		public override QueryElementType ElementType  => QueryElementType.DropTableStatement;
+		public override bool             IsParameterDependent { get => false; set {} }
+		public override SelectQuery?     SelectQuery          { get => null;  set {} }
 
 		public override StringBuilder ToString(StringBuilder sb, Dictionary<IQueryElement, IQueryElement> dic)
 		{
 			sb.Append("DROP TABLE ");
 
-			((IQueryElement)Table)?.ToString(sb, dic);
+			((IQueryElement?)Table)?.ToString(sb, dic);
 
 			sb.AppendLine();
 
 			return sb;
 		}
 
-		public override ISqlExpression Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> func)
+		public override ISqlExpression? Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 		{
-			((ISqlExpressionWalkable)Table)?.Walk(skipColumns, func);
+			((ISqlExpressionWalkable?)Table)?.Walk(options, func);
 
 			return null;
 		}
 
-		public override ICloneableElement Clone(Dictionary<ICloneableElement,ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
-		{
-			if (!doClone(this))
-				return this;
-
-			var clone = new SqlDropTableStatement();
-
-			if (Table != null)
-				clone.Table = (SqlTable)Table.Clone(objectTree, doClone);
-
-			objectTree.Add(this, clone);
-
-			return clone;
-		}
-
-		public override ISqlTableSource GetTableSource(ISqlTableSource table)
+		public override ISqlTableSource? GetTableSource(ISqlTableSource table)
 		{
 			return null;
 		}

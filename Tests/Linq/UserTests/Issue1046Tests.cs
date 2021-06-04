@@ -1,8 +1,8 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
+
 using LinqToDB;
-using LinqToDB.Data;
 using LinqToDB.Mapping;
+
 using NUnit.Framework;
 
 namespace Tests.UserTests
@@ -16,7 +16,7 @@ namespace Tests.UserTests
 			public int Id { get; set; }
 
 			[Column(IsDiscriminator = true)]
-			public string TargetName { get; set; }
+			public string? TargetName { get; set; }
 		}
 
 		[Table("Task")]
@@ -26,10 +26,10 @@ namespace Tests.UserTests
 			public int Id { get; set; }
 
 			[Column(IsDiscriminator = true)]
-			public string TargetName { get; set; }
+			public string? TargetName { get; set; }
 
 			[Column]
-			public string BdaValue { get; set; }
+			public string? BdaValue { get; set; }
 		}
 
 		[Table("Task")]
@@ -38,29 +38,21 @@ namespace Tests.UserTests
 			public const string Code = "bda.Requests";
 
 			[Column]
-			public string BdaValue { get; set; }
+			public string? BdaValue { get; set; }
 		}
 
 		class SelectAllAndExpand<T>
 		{
-			public T Instance { get; set; } 
+			public T Instance { get; set; } = default!;
 		}
 
-		[Test, DataContextSource]
-		public void TestInheritance(string context)
+		[Test]
+		public void TestInheritance([DataSources] string context)
 		{
+			using (new DisableBaseline("TODO: debug reason for inconsistent column order"))
 			using (var db = GetDataContext(context))
 			{
-				try
-				{
-					db.CreateTable<TaskTable>();
-				}
-				catch 
-				{
-					db.DropTable<TaskTable>();
-					db.CreateTable<TaskTable>();
-				}
-				try
+				using (db.CreateLocalTable<TaskTable>())
 				{
 					db.Insert(new BdaTask
 					{
@@ -93,11 +85,6 @@ namespace Tests.UserTests
 
 					Assert.AreEqual(1, items2.Length);
 					Assert.AreEqual("Bda value", items2[0].Instance.BdaValue);
-
-				}
-				finally
-				{
-					db.DropTable<TaskTable>();
 				}
 			}
 		}

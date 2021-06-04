@@ -1,3 +1,4 @@
-<#@ assembly name="$(SolutionDir).tools\linq2db.t4models\FirebirdSql.Data.FirebirdClient.dll" #>
-<#@ include file="LinqToDB.Tools.ttinclude" #>
-<#@ include file="LinqToDB.Firebird.ttinclude" #>
+<#@ assembly name="$(LinqToDBT4FirebirdClientPath)FirebirdSql.Data.FirebirdClient.dll" #>
+
+<#@ include file="LinqToDB.Tools.ttinclude"    once="true" #>
+<#@ include file="LinqToDB.Firebird.ttinclude" once="true" #>

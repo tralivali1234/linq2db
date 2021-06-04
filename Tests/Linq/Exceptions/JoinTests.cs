@@ -1,11 +1,8 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Collections.Generic;
-
 using LinqToDB;
 using LinqToDB.Linq;
 using LinqToDB.Mapping;
-
 using NUnit.Framework;
 
 namespace Tests.Exceptions
@@ -23,7 +20,7 @@ namespace Tests.Exceptions
 			public int Value;
 
 			[Association(ThisKey ="ParentID", OtherKey = "ParentID")]
-			public IEnumerable<Childs> Childs;
+			public IEnumerable<Childs> Childs = null!;
 		}
 
 		[Table("Child", IsColumnAttributeRequired = false)]
@@ -34,7 +31,7 @@ namespace Tests.Exceptions
 			public int ParentID;
 
 			[Association(ThisKey ="ParentID", OtherKey = "ParentID")]
-			public Parents Parent;
+			public Parents? Parent;
 		}
 
 		[Table("GrandChild", IsColumnAttributeRequired = false)]
@@ -45,10 +42,10 @@ namespace Tests.Exceptions
 			public int? GrandChildID;
 
 			[Association(ThisKey = "ChildID", OtherKey = "ChildID")]
-			public Child Child;
+			public Child? Child;
 		}
-		[Test, DataContextSource]
-		public void InnerJoin(string context)
+		[Test]
+		public void InnerJoin([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -62,8 +59,8 @@ namespace Tests.Exceptions
 			}
 		}
 
-		[Test, DataContextSource]
-		public void MultiJoin1(string context)
+		[Test]
+		public void MultiJoin1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -89,8 +86,8 @@ namespace Tests.Exceptions
 			}
 		}
 
-		[Test, DataContextSource]
-		public void MultiJoin2(string context)
+		[Test]
+		public void MultiJoin2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -112,8 +109,8 @@ namespace Tests.Exceptions
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Issue498Test(string context)
+		[Test]
+		public void Issue498Test([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -139,8 +136,8 @@ namespace Tests.Exceptions
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlCe, ProviderName.SqlServer2005, ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
-		public void Issue589(string context)
+		[Test]
+		public void Issue589([IncludeDataSources(ProviderName.SqlCe, TestProvName.AllSqlServer2005Plus)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -151,15 +148,15 @@ namespace Tests.Exceptions
 						(
 							from child1      in db.GetTable<Childs>()
 							join parent1     in db.GetTable<Parents>()     on child1.ParentID  equals parent1.ParentID
-							join grandChild1 in db.GetTable<GrandChilds>() on parent1.ParentID equals grandChild1.Child.ParentID
-							where grandChild1.ParentID == child.Parent.ParentID
+							join grandChild1 in db.GetTable<GrandChilds>() on parent1.ParentID equals grandChild1.Child!.ParentID
+							where grandChild1.ParentID == child.Parent!.ParentID
 							select grandChild1
 					).Take(1).DefaultIfEmpty()
 					select new
 					{
 						GrandChildID   = grandChild.GrandChildID,
 						ChildID        = child.ChildID,
-						ParentParentId = child.Parent.ParentID,
+						ParentParentId = child.Parent!.ParentID,
 						Tmp            = pf.GrandChildID
 					};
 
@@ -170,15 +167,15 @@ namespace Tests.Exceptions
 						(
 							from child1      in Child
 							join parent1     in Parent     on child1.ParentID  equals parent1.ParentID
-							join grandChild1 in GrandChild on parent1.ParentID equals grandChild1.Child.ParentID
-							where grandChild1.ParentID == child.Parent.ParentID
+							join grandChild1 in GrandChild on parent1.ParentID equals grandChild1.Child!.ParentID
+							where grandChild1.ParentID == child.Parent!.ParentID
 							select grandChild1
 					).Take(1).DefaultIfEmpty()
 					select new
 					{
 						GrandChildID   = grandChild.GrandChildID,
 						ChildID        = child.ChildID,
-						ParentParentId = child.Parent.ParentID,
+						ParentParentId = child.Parent!.ParentID,
 						Tmp            = pf.GrandChildID
 					};
 

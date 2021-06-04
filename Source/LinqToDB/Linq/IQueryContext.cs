@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace LinqToDB.Linq
 {
@@ -7,10 +6,11 @@ namespace LinqToDB.Linq
 
 	public interface IQueryContext
 	{
-		SqlStatement   Statement   { get; }
-		object         Context     { get; set; }
-		List<string>   QueryHints  { get; set; }
+		SqlStatement    Statement   { get; }
+		object?         Context     { get; set; }
+		List<string>?   QueryHints  { get; set; }
 
-		SqlParameter[] GetParameters();
+		SqlParameter[]? Parameters  { get; set; }
+		AliasesContext? Aliases     { get; set; }
 	}
 }

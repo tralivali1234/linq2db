@@ -14,7 +14,6 @@ namespace Tests.Samples
 	[TestFixture]
 	public class ConcurrencyCheckTests : TestBase
 	{
-#if !MONO
 		class InterceptDataConnection : DataConnection
 		{
 			public InterceptDataConnection(string providerName, string connectionString) : base(providerName, connectionString)
@@ -27,35 +26,27 @@ namespace Tests.Samples
 			/// <param name="original"></param>
 			SqlStatement Clone(SqlStatement original)
 			{
-				var clone = original.Clone();
-
-				var pairs = from o in original.Parameters.Distinct()
-							join n in clone.Parameters.Distinct() on o.Name equals n.Name
-							select new { Old = o, New = n };
-
-				var dic = pairs.ToDictionary(p => p.New, p => p.Old);
-
-				clone = new QueryVisitor().Convert(clone, e =>
-					e is SqlParameter param && dic.TryGetValue(param, out var newParam) ? newParam : e);
-
-				clone.Parameters.Clear();
-				clone.Parameters.AddRange(original.Parameters);
+				var clone = original.Clone(e =>
+				{
+					if (!(e is IQueryElement queryElement))
+						return false;
+					return queryElement.ElementType != QueryElementType.SqlParameter;
+				});
 
 				return clone;
 			}
 
-			protected override SqlStatement ProcessQuery(SqlStatement statement)
+			protected override SqlStatement ProcessQuery(SqlStatement statement, EvaluationContext context)
 			{
 				#region Update
 
 				if (statement.QueryType == QueryType.Update || statement.QueryType == QueryType.InsertOrUpdate)
 				{
-					var query = statement.SelectQuery;
-					var source = query.From.Tables[0].Source as SqlTable;
-					if (source == null)
+					var query = statement.SelectQuery!;
+					if (!(query.From.Tables[0].Source is SqlTable source))
 						return statement;
 
-					var descriptor = MappingSchema.GetEntityDescriptor(source.ObjectType);
+					var descriptor = MappingSchema.GetEntityDescriptor(source.ObjectType!);
 					if (descriptor == null)
 						return statement;
 
@@ -64,11 +55,11 @@ namespace Tests.Samples
 						return statement;
 
 					var newStatment = Clone(statement);
-					source        = newStatment.SelectQuery.From.Tables[0].Source as SqlTable;
-					var field     = source.Fields[rowVersion.ColumnName];
+					source        = (SqlTable)newStatment.SelectQuery!.From.Tables[0].Source;
+					var field     = source[rowVersion.ColumnName] ?? throw new InvalidOperationException();
 
 					// get real value of RowVersion
-					var updateColumn = newStatment.RequireUpdateClause().Items.FirstOrDefault(ui => ui.Column is SqlField && ((SqlField)ui.Column).Equals(field));
+					var updateColumn = newStatment.RequireUpdateClause().Items.FirstOrDefault(ui => ui.Column is SqlField fld && fld.Equals(field));
 					if (updateColumn == null)
 					{
 						updateColumn = new SqlSetExpression(field, field);
@@ -87,8 +78,8 @@ namespace Tests.Samples
 
 				else if (statement.QueryType == QueryType.Insert || statement.QueryType == QueryType.InsertOrUpdate)
 				{
-					var source          = statement.RequireInsertClause().Into;
-					var descriptor      = MappingSchema.GetEntityDescriptor(source.ObjectType);
+					var source          = statement.RequireInsertClause().Into!;
+					var descriptor      = MappingSchema.GetEntityDescriptor(source.ObjectType!);
 					var rowVersion      = descriptor.Columns.SingleOrDefault(c => c.MemberAccessor.GetAttribute<RowVersionAttribute>() != null);
 
 					if (rowVersion == null)
@@ -97,7 +88,7 @@ namespace Tests.Samples
 
 					var newInsertStatement = Clone(statement);
 					var insertClause       = newInsertStatement.RequireInsertClause();
-					var field              = insertClause.Into[rowVersion.ColumnName];
+					var field              = insertClause.Into![rowVersion.ColumnName]!;
 
 					var versionColumn = (from i in insertClause.Items
 										 let f = i.Column as SqlField
@@ -117,6 +108,7 @@ namespace Tests.Samples
 			}
 		}
 
+		[AttributeUsage(AttributeTargets.Property)]
 		public class RowVersionAttribute: Attribute
 		{ }
 
@@ -127,21 +119,21 @@ namespace Tests.Samples
 			public int ID { get; set; }
 
 			[Column(Name = "Description")]
-			public string Description { get; set; }
+			public string? Description { get; set; }
 
 			private int _rowVer;
 
 			[Column(Name = "RowVer", Storage = "_rowVer", IsPrimaryKey = true, PrimaryKeyOrder = 1)]
 			[RowVersion]
-			public int RowVer { get { return _rowVer; } }
+			public int RowVer => _rowVer;
 		}
 
-		private InterceptDataConnection _connection;
+		private InterceptDataConnection _connection = null!;
 
 		[OneTimeSetUp]
 		public void SetUp()
 		{
-#if NETSTANDARD1_6 || NETSTANDARD2_0
+#if !NET472
 			_connection = new InterceptDataConnection(ProviderName.SQLiteMS, "Data Source=:memory:;");
 #else
 			_connection = new InterceptDataConnection(ProviderName.SQLiteClassic, "Data Source=:memory:;");
@@ -204,7 +196,7 @@ namespace Tests.Samples
 			Assert.AreEqual(0, result);
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public void InsertAndDeleteTest()
 		{
 			var db = _connection;
@@ -227,7 +219,7 @@ namespace Tests.Samples
 			Assert.AreEqual(1, db.Delete(obj1001));
 		}
 
-		[Test, Parallelizable(ParallelScope.None)]
+		[Test]
 		public async Task InsertAndDeleteTestAsync()
 		{
 			var db    = _connection;
@@ -269,6 +261,5 @@ namespace Tests.Samples
 			Assert.AreEqual(1, result);
 			Assert.AreEqual(3, table.Count());
 		}
-#endif
-		}
+	}
 }

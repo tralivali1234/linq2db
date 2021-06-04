@@ -1,9 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-
-using JetBrains.Annotations;
+using System.Text;
 
 namespace LinqToDB.SqlProvider
 {
@@ -11,28 +10,14 @@ namespace LinqToDB.SqlProvider
 
 	class JoinOptimizer
 	{
-		Dictionary<SqlSearchCondition,SqlSearchCondition>                    _additionalFilter;
-		Dictionary<VirtualField,HashSet<Tuple<int,VirtualField>>>            _equalityMap;
-		Dictionary<Tuple<SqlTableSource,SqlTableSource>,List<FoundEquality>> _fieldPairCache;
-		Dictionary<int,List<List<string>>>                                   _keysCache;
-		HashSet<int>                                                         _removedSources;
-		Dictionary<VirtualField,VirtualField>                                _replaceMap;
-		SelectQuery                                                          _selectQuery;
-		SqlStatement                                                         _statement;
-
-		static bool IsEqualTables(SqlTable table1, SqlTable table2)
-		{
-			var result =
-				   table1              != null
-				&& table2              != null
-				&& table1.ObjectType   == table2.ObjectType
-				&& table1.Database     == table2.Database
-				&& table1.Schema       == table2.Schema
-				&& table1.Name         == table2.Name
-				&& table1.PhysicalName == table2.PhysicalName;
-
-			return result;
-		}
+		Dictionary<SqlSearchCondition,SqlSearchCondition>?                      _additionalFilter;
+		Dictionary<VirtualField,HashSet<Tuple<int,VirtualField>>>?              _equalityMap;
+		Dictionary<Tuple<SqlTableSource?,SqlTableSource>,List<FoundEquality>?>? _fieldPairCache;
+		Dictionary<int,List<VirtualField[]>?>?                                  _keysCache;
+		HashSet<int>?                                                           _removedSources;
+		Dictionary<VirtualField,VirtualField>?                                  _replaceMap;
+		SelectQuery                                                              _selectQuery = null!;
+		SqlStatement                                                            _statement = null!;
 
 		void FlattenJoins(SqlTableSource table)
 		{
@@ -45,8 +30,20 @@ namespace LinqToDB.SqlProvider
 					for (var si = 0; si < j.Table.Joins.Count; si++)
 					{
 						var sj = j.Table.Joins[si];
-						if ((sj.JoinType == JoinType.Inner || sj.JoinType == JoinType.Left)
+						if ((sj.JoinType == JoinType.Inner || sj.JoinType == JoinType.Left || sj.JoinType == JoinType.CrossApply || sj.JoinType == JoinType.OuterApply)
 							&& table != j.Table && !HasDependencyWithParent(j, sj))
+						{
+							table.Joins.Insert(i + 1, sj);
+							j.Table.Joins.RemoveAt(si);
+							--si;
+						}
+					}
+				else if (j.JoinType == JoinType.Left)
+					for (var si = 0; si < j.Table.Joins.Count; si++)
+					{
+						var sj = j.Table.Joins[si];
+						if ((sj.JoinType == JoinType.Left)
+						    && table != j.Table && !HasDependencyWithParent(j, sj))
 						{
 							table.Joins.Insert(i + 1, sj);
 							j.Table.Joins.RemoveAt(si);
@@ -56,8 +53,7 @@ namespace LinqToDB.SqlProvider
 			}
 		}
 
-		bool IsDependedBetweenJoins(SqlTableSource table,
-			SqlJoinedTable testedJoin)
+		bool IsDependedBetweenJoins(SqlTableSource table, SqlJoinedTable testedJoin)
 		{
 			var testedSources = new HashSet<int>(testedJoin.Table.GetTables().Select(t => t.SourceID));
 
@@ -73,6 +69,20 @@ namespace LinqToDB.SqlProvider
 			return IsDependedExcludeJoins(testedSources);
 		}
 
+		private class IsDependedContext
+		{
+			public IsDependedContext(JoinOptimizer optimizer, HashSet<int> testedSources)
+			{
+				Optimizer     = optimizer;
+				TestedSources = testedSources;
+			}
+
+			public bool Dependent;
+
+			public readonly JoinOptimizer Optimizer;
+			public readonly HashSet<int>  TestedSources;
+		}
+
 		bool IsDepended(SqlJoinedTable join, SqlJoinedTable toIgnore)
 		{
 			var testedSources = new HashSet<int>(join.Table.GetTables().Select(t => t.SourceID));
@@ -80,11 +90,11 @@ namespace LinqToDB.SqlProvider
 				foreach (var sourceId in toIgnore.Table.GetTables().Select(t => t.SourceID))
 					testedSources.Add(sourceId);
 
-			var dependent = false;
+			var ctx = new IsDependedContext(this, testedSources);
 
-			new QueryVisitor().VisitParentFirst(_statement, e =>
+			_statement.VisitParentFirst(ctx, static (context, e) =>
 			{
-				if (dependent)
+				if (context.Dependent)
 					return false;
 
 				// ignore non searchable parts
@@ -94,27 +104,25 @@ namespace LinqToDB.SqlProvider
 					return false;
 
 				if (e.ElementType == QueryElementType.JoinedTable)
-					if (testedSources.Contains(((SqlJoinedTable) e).Table.SourceID))
+					if (context.TestedSources.Contains(((SqlJoinedTable) e).Table.SourceID))
 						return false;
 
-				var expression = e as ISqlExpression;
-
-				if (expression != null)
+				if (e is ISqlExpression expression)
 				{
 					var field = GetUnderlayingField(expression);
 					if (field != null)
 					{
-						var newField = GetNewField(field);
-						var local = testedSources.Contains(newField.SourceID);
+						var newField = context.Optimizer.GetNewField(field);
+						var local = context.TestedSources.Contains(newField.SourceID);
 						if (local)
-							dependent = !CanWeReplaceField(null, newField, testedSources, -1);
+							context.Dependent = !context.Optimizer.CanWeReplaceField(null, newField, context.TestedSources, -1);
 					}
 				}
 
-				return !dependent;
+				return !context.Dependent;
 			});
 
-			return dependent;
+			return ctx.Dependent;
 		}
 
 		bool IsDependedExcludeJoins(SqlJoinedTable join)
@@ -123,13 +131,25 @@ namespace LinqToDB.SqlProvider
 			return IsDependedExcludeJoins(testedSources);
 		}
 
+		private class IsDependedExcludeJoinsContext
+		{
+			public IsDependedExcludeJoinsContext(JoinOptimizer optimizer, HashSet<int> testedSources)
+			{
+				Optimizer     = optimizer;
+				TestedSources = testedSources;
+			}
+
+			public bool Dependent;
+
+			public readonly JoinOptimizer Optimizer;
+			public readonly HashSet<int>  TestedSources;
+		}
+
 		bool IsDependedExcludeJoins(HashSet<int> testedSources)
 		{
-			var dependent = false;
-
-			bool CheckDependency(IQueryElement e)
+			static bool CheckDependency(IsDependedExcludeJoinsContext context, IQueryElement e)
 			{
-				if (dependent)
+				if (context.Dependent)
 					return false;
 
 				if (e.ElementType == QueryElementType.JoinedTable)
@@ -141,61 +161,94 @@ namespace LinqToDB.SqlProvider
 
 					if (field != null)
 					{
-						var newField = GetNewField(field);
-						var local = testedSources.Contains(newField.SourceID);
+						var newField = context.Optimizer.GetNewField(field);
+						var local = context.TestedSources.Contains(newField.SourceID);
 						if (local)
-							dependent = !CanWeReplaceField(null, newField, testedSources, -1);
+							context.Dependent = !context.Optimizer.CanWeReplaceField(null, newField, context.TestedSources, -1);
 					}
 				}
 
-				return !dependent;
+				return !context.Dependent;
 			}
 
-			//TODO: review dependency checking
-			new QueryVisitor().VisitParentFirst(_selectQuery, CheckDependency);
-			if (!dependent && _selectQuery.ParentSelect == null)
-				new QueryVisitor().VisitParentFirst(_statement, CheckDependency);
+			var ctx = new IsDependedExcludeJoinsContext(this, testedSources);
 
-			return dependent;
+			//TODO: review dependency checking
+			_selectQuery.VisitParentFirst(ctx, CheckDependency);
+			if (!ctx.Dependent && _selectQuery.ParentSelect == null)
+				_statement.VisitParentFirst(ctx, CheckDependency);
+
+			return ctx.Dependent;
 		}
 
-		bool HasDependencyWithParent(SqlJoinedTable parent,
-			SqlJoinedTable child)
+		private class HasDependencyWithParentContext
 		{
-			var sources   = new HashSet<int>(child.Table.GetTables().Select(t => t.SourceID));
-			var dependent = false;
+			public HasDependencyWithParentContext(SqlJoinedTable child, HashSet<int> sources)
+			{
+				Child   = child;
+				Sources = sources;
+			}
+
+			public readonly SqlJoinedTable Child;
+			public readonly HashSet<int>   Sources;
+
+			public bool Dependent;
+		}
+
+		bool HasDependencyWithParent(SqlJoinedTable parent, SqlJoinedTable child)
+		{
+			var sources = new HashSet<int>(child.Table.GetTables().Select(t => t.SourceID));
+			var ctx     = new HasDependencyWithParentContext(child, sources);
 
 			// check that parent has dependency on child
-			new QueryVisitor().VisitParentFirst(parent, e =>
+			parent.VisitParentFirst(ctx, static (context, e) =>
 			{
-				if (dependent)
+				if (context.Dependent)
 					return false;
 
-				if (e == child)
+				if (e == context.Child)
 					return false;
 
 				if (e is ISqlExpression expression)
 				{
 					var field = GetUnderlayingField(expression);
 					if (field != null)
-						dependent = sources.Contains(field.SourceID);
+						context.Dependent = context.Sources.Contains(field.SourceID);
 				}
 
-				return !dependent;
+				return !context.Dependent;
 			});
 
-			return dependent;
+			return ctx.Dependent;
 		}
+
+		private class IsDependedOnJoinContext
+		{
+			public IsDependedOnJoinContext(JoinOptimizer optimizer, SqlTableSource table, HashSet<int> testedSources, int currentSourceId)
+			{
+				Optimizer       = optimizer;
+				Table           = table;
+				TestedSources   = testedSources;
+				CurrentSourceId = currentSourceId;
+			}
+
+			public bool Dependent;
+
+			public readonly JoinOptimizer  Optimizer;
+			public readonly SqlTableSource Table;
+			public readonly HashSet<int>   TestedSources;
+			public readonly int            CurrentSourceId;
+		}
+
 
 		bool IsDependedOnJoin(SqlTableSource table, SqlJoinedTable testedJoin, HashSet<int> testedSources)
 		{
-			var dependent       = false;
-			var currentSourceId = testedJoin.Table.SourceID;
+			var ctx = new IsDependedOnJoinContext(this, table, testedSources, testedJoin.Table.SourceID);
 
-			// check everyting that can be dependent on specific table
-			new QueryVisitor().VisitParentFirst(testedJoin, e =>
+			// check everything that can be dependent on specific table
+			testedJoin.VisitParentFirst(ctx, static (context, e) =>
 			{
-				if (dependent)
+				if (context.Dependent)
 					return false;
 
 				if (e is ISqlExpression expression)
@@ -204,22 +257,22 @@ namespace LinqToDB.SqlProvider
 
 					if (field != null)
 					{
-						var newField = GetNewField(field);
-						var local    = testedSources.Contains(newField.SourceID);
+						var newField = context.Optimizer.GetNewField(field);
+						var local    = context.TestedSources.Contains(newField.SourceID);
 
 						if (local)
-							dependent = !CanWeReplaceField(table, newField, testedSources, currentSourceId);
+							context.Dependent = !context.Optimizer.CanWeReplaceField(context.Table, newField, context.TestedSources, context.CurrentSourceId);
 					}
 				}
 
-				return !dependent;
+				return !context.Dependent;
 			});
 
-			return dependent;
+			return ctx.Dependent;
 		}
 
 		bool CanWeReplaceFieldInternal(
-			SqlTableSource table, VirtualField field, HashSet<int> excludeSourceIds, int testedSourceIndex, HashSet<VirtualField> visited)
+			SqlTableSource? table, VirtualField field, HashSet<int> excludeSourceIds, int testedSourceIndex, HashSet<VirtualField> visited)
 		{
 			if (visited.Contains(field))
 				return false;
@@ -244,7 +297,7 @@ namespace LinqToDB.SqlProvider
 			return false;
 		}
 
-		bool CanWeReplaceField(SqlTableSource table, VirtualField field, HashSet<int> excludeSourceId, int testedSourceId)
+		bool CanWeReplaceField(SqlTableSource? table, VirtualField field, HashSet<int> excludeSourceId, int testedSourceId)
 		{
 			var visited = new HashSet<VirtualField>();
 
@@ -269,7 +322,7 @@ namespace LinqToDB.SqlProvider
 			return newField;
 		}
 
-		VirtualField MapToSourceInternal(SqlTableSource fromTable, VirtualField field, int sourceId, HashSet<VirtualField> visited)
+		VirtualField? MapToSourceInternal(SqlTableSource fromTable, VirtualField field, int sourceId, HashSet<VirtualField> visited)
 		{
 			if (visited.Contains(field))
 				return null;
@@ -284,9 +337,7 @@ namespace LinqToDB.SqlProvider
 
 			var sourceIndex = GetSourceIndex(fromTable, sourceId);
 
-			HashSet<Tuple<int, VirtualField>> sameFields;
-
-			if (_equalityMap.TryGetValue(field, out sameFields))
+			if (_equalityMap.TryGetValue(field, out var sameFields))
 				foreach (var pair in sameFields)
 				{
 					var itemIndex = GetSourceIndex(fromTable, pair.Item1);
@@ -303,7 +354,7 @@ namespace LinqToDB.SqlProvider
 			return null;
 		}
 
-		VirtualField MapToSource(SqlTableSource table, VirtualField field, int sourceId)
+		VirtualField? MapToSource(SqlTableSource table, VirtualField field, int sourceId)
 		{
 			var visited = new HashSet<VirtualField>();
 
@@ -332,6 +383,14 @@ namespace LinqToDB.SqlProvider
 				}
 			}
 
+			//TODO: investigate another ways when we can propagate keys up
+			if (join.JoinType == JoinType.Inner && join.Table.HasUniqueKeys)
+			{
+				var newFields = join.Table.UniqueKeys
+					.Select(uk => uk.Select(k => GetNewField(new VirtualField(k)).Element).ToArray());
+				fromTable.UniqueKeys.AddRange(newFields);
+			}
+
 			ResetFieldSearchCache(join.Table);
 		}
 
@@ -354,9 +413,7 @@ namespace LinqToDB.SqlProvider
 			if (_equalityMap == null)
 				_equalityMap = new Dictionary<VirtualField, HashSet<Tuple<int, VirtualField>>>();
 
-			HashSet<Tuple<int, VirtualField>> set;
-
-			if (!_equalityMap.TryGetValue(field1, out set))
+			if (!_equalityMap.TryGetValue(field1, out var set))
 			{
 				set = new HashSet<Tuple<int, VirtualField>>();
 				_equalityMap.Add(field1, set);
@@ -564,8 +621,8 @@ namespace LinqToDB.SqlProvider
 			var res = new Dictionary<string, VirtualField>();
 
 			if (source is SqlTable table)
-				foreach (var pair in table.Fields)
-					res.Add(pair.Key, new VirtualField(pair.Value));
+				foreach (var field in table.Fields)
+					res.Add(field.Name, new VirtualField(field));
 
 			return res;
 		}
@@ -590,7 +647,7 @@ namespace LinqToDB.SqlProvider
 			if (_replaceMap != null && _replaceMap.Count > 0 || _removedSources != null)
 			{
 				((ISqlExpressionWalkable)_statement)
-					.Walk(false, element =>
+					.Walk(new WalkOptions(), element =>
 					{
 						if (element is SqlField field)
 							return GetNewField(new VirtualField(field)).Element;
@@ -603,7 +660,7 @@ namespace LinqToDB.SqlProvider
 			}
 		}
 
-		int GetSourceIndex(SqlTableSource table, int sourceId)
+		int GetSourceIndex(SqlTableSource? table, int sourceId)
 		{
 			if (table == null || table.SourceID == sourceId || sourceId == -1)
 				return 0;
@@ -658,40 +715,39 @@ namespace LinqToDB.SqlProvider
 			}
 		}
 
-		List<List<string>> GetKeysInternal(ISqlTableSource tableSource)
+		/// <summary>
+		/// Collects unique keys from different sources.
+		/// </summary>
+		/// <param name="tableSource"></param>
+		/// <returns>List of unique keys</returns>
+		List<VirtualField[]>? GetKeysInternal(SqlTableSource tableSource)
 		{
-			//TODO: needed mechanism to define unique indexes. Currently only primary key is used
-
-			// only from tables we can get keys
-			if (!(tableSource is SqlTable))
+			var knownKeys = new List<IList<ISqlExpression>>();
+			QueryHelper.CollectUniqueKeys(tableSource, knownKeys);
+			if (knownKeys.Count == 0)
 				return null;
 
-			var keys = tableSource.GetKeys(false);
+			var result = new List<VirtualField[]>();
 
-			if (keys == null || keys.Count == 0)
-				return null;
+			foreach (var v in knownKeys)
+			{
+				var fields = new VirtualField[v.Count];
+				for (var i = 0; i < v.Count; i++)
+					fields[i] = GetUnderlayingField(v[i]) ?? throw new InvalidOperationException($"Cannot get field for {v[i]}");
+				result.Add(fields);
+			}
 
-			var fields = keys.Select(GetUnderlayingField)
-				.Where(f => f != null)
-				.Select(f => f.Name).ToList();
-
-			if (fields.Count != keys.Count)
-				return null;
-
-			var knownKeys = new List<List<string>> { fields };
-
-
-			return knownKeys;
+			return result.Count > 0 ? result : null;
 		}
 
-		List<List<string>> GetKeys(ISqlTableSource tableSource)
+		List<VirtualField[]>? GetKeys(SqlTableSource tableSource)
 		{
 			if (_keysCache == null || !_keysCache.TryGetValue(tableSource.SourceID, out var keys))
 			{
 				keys = GetKeysInternal(tableSource);
 
 				if (_keysCache == null)
-					_keysCache = new Dictionary<int, List<List<string>>>();
+					_keysCache = new Dictionary<int, List<VirtualField[]>?>();
 
 				_keysCache.Add(tableSource.SourceID, keys);
 			}
@@ -721,9 +777,9 @@ namespace LinqToDB.SqlProvider
 						continue;
 
 					// trying to remove join that is equal to FROM table
-					if (IsEqualTables(fromTable.Source as SqlTable, j1.Table.Source as SqlTable))
+					if (QueryHelper.IsEqualTables(fromTable.Source as SqlTable, j1.Table.Source as SqlTable))
 					{
-						var keys = GetKeys(j1.Table.Source);
+						var keys = GetKeys(j1.Table);
 						if (keys != null && TryMergeWithTable(fromTable, j1, keys))
 						{
 							fromTable.Joins.RemoveAt(i1);
@@ -740,10 +796,10 @@ namespace LinqToDB.SqlProvider
 						if (j2.JoinType != JoinType.Inner && j2.JoinType != JoinType.Left)
 							continue;
 
-						if (!IsEqualTables(j1.Table.Source as SqlTable, j2.Table.Source as SqlTable))
+						if (!QueryHelper.IsEqualTables(j1.Table.Source as SqlTable, j2.Table.Source as SqlTable))
 							continue;
 
-						var keys = GetKeys(j2.Table.Source);
+						var keys = GetKeys(j2.Table);
 
 						if (keys != null)
 						{
@@ -769,33 +825,22 @@ namespace LinqToDB.SqlProvider
 				}
 
 				// trying to remove joins that are not in projection
-				for (var i1 = 0; i1 < fromTable.Joins.Count; i1++)
+				for (var i1 = fromTable.Joins.Count - 1; i1 >= 0; i1--)
 				{
 					var j1 = fromTable.Joins[i1];
 
 					if (j1.JoinType == JoinType.Left || j1.JoinType == JoinType.Inner)
 					{
-						var keys = GetKeys(j1.Table.Source);
+						var keys = GetKeys(j1.Table);
 
 						if (keys != null && !IsDependedBetweenJoins(fromTable, j1))
 						{
 							// try merge if joins are the same
-							var removed = TryToRemoveIndependent(fromTable, fromTable, j1, keys);
-							if (!removed)
-								for (var im = 0; im < i1; im++)
-								{
-									var jm = fromTable.Joins[im];
-									if (jm.JoinType == JoinType.Inner || jm.JoinType != JoinType.Left)
-									{
-										removed = TryToRemoveIndependent(fromTable, jm.Table, j1, keys);
-										if (removed)
-											break;
-									}
-								}
+							var removed = TryToRemoveIndependentLeftJoin(fromTable, j1, keys);
+							
 							if (removed)
 							{
 								fromTable.Joins.RemoveAt(i1);
-								--i1;
 							}
 						}
 					}
@@ -808,10 +853,17 @@ namespace LinqToDB.SqlProvider
 
 		}
 
-		static VirtualField GetUnderlayingField(ISqlExpression expr)
+		static VirtualField? GetUnderlayingField(ISqlExpression expr)
 		{
 			switch (expr.ElementType)
 			{
+				case QueryElementType.SqlExpression:
+				{
+					var sqlExpr = (SqlExpression) expr;
+					if (sqlExpr.Expr == "{0}" && sqlExpr.Parameters.Length == 1)
+						return GetUnderlayingField(sqlExpr.Parameters[0]);
+					break;
+				}
 				case QueryElementType.SqlField:
 					return new VirtualField((SqlField) expr);
 				case QueryElementType.Column:
@@ -821,27 +873,28 @@ namespace LinqToDB.SqlProvider
 			return null;
 		}
 
-		void DetectField(SqlTableSource manySource, SqlTableSource oneSource, VirtualField field, FoundEquality equality)
+		void DetectField(SqlTableSource? manySource, SqlTableSource oneSource, VirtualField field, FoundEquality equality)
 		{
 			field = GetNewField(field);
 
 			if (oneSource.Source.SourceID == field.SourceID)
 				equality.OneField = field;
-			else if (manySource.Source.SourceID == field.SourceID)
+			else if (oneSource.Source is SelectQuery select && select.Select.From.Tables.Count == 1 && select.Select.From.Tables[0].SourceID == field.SourceID)
+				equality.OneField = field;
+			else if (manySource?.Source.SourceID == field.SourceID)
 				equality.ManyField = field;
-			else
-				equality.ManyField = MapToSource(manySource, field, manySource.Source.SourceID);
+			else if (manySource != null)
+				equality.ManyField = MapToSource(manySource, field, manySource.Source.SourceID)!;
 		}
 
-		bool MatchFields(SqlTableSource manySource, SqlTableSource oneSource, VirtualField field1, VirtualField field2, FoundEquality equality)
+		bool MatchFields(SqlTableSource? manySource, SqlTableSource oneSource, VirtualField? field1, VirtualField? field2, FoundEquality equality)
 		{
-			if (field1 == null || field2 == null)
-				return false;
+			if (field1 != null)
+				DetectField(manySource, oneSource, field1, equality);
+			if (field2 != null)
+				DetectField(manySource, oneSource, field2, equality);
 
-			DetectField(manySource, oneSource, field1, equality);
-			DetectField(manySource, oneSource, field2, equality);
-
-			return equality.OneField != null && equality.ManyField != null;
+			return equality.OneField != null && (manySource == null || equality.ManyField != null);
 		}
 
 		void ResetFieldSearchCache(SqlTableSource table)
@@ -855,10 +908,10 @@ namespace LinqToDB.SqlProvider
 				_fieldPairCache.Remove(key);
 		}
 
-		List<FoundEquality> SearchForFields(SqlTableSource manySource, SqlJoinedTable join)
+		List<FoundEquality>? SearchForFields(SqlTableSource? manySource, SqlJoinedTable join)
 		{
-			var                 key   = Tuple.Create(manySource, join.Table);
-			List<FoundEquality> found = null;
+			var                  key   = Tuple.Create(manySource, join.Table);
+			List<FoundEquality>? found = null;
 
 			if (_fieldPairCache != null && _fieldPairCache.TryGetValue(key, out found))
 				return found;
@@ -873,8 +926,8 @@ namespace LinqToDB.SqlProvider
 					break;
 				}
 
-				if (   c.ElementType                                           != QueryElementType.Condition
-					|| c.Predicate.ElementType                                 != QueryElementType.ExprExprPredicate
+				if (   c.ElementType                                  != QueryElementType.Condition
+					|| c.Predicate.ElementType                        != QueryElementType.ExprExprPredicate
 					|| ((SqlPredicate.ExprExpr) c.Predicate).Operator != SqlPredicate.Operator.Equal)
 					continue;
 
@@ -896,16 +949,20 @@ namespace LinqToDB.SqlProvider
 			}
 
 			if (_fieldPairCache == null)
-				_fieldPairCache = new Dictionary<Tuple<SqlTableSource, SqlTableSource>, List<FoundEquality>>();
+				_fieldPairCache = new Dictionary<Tuple<SqlTableSource?, SqlTableSource>, List<FoundEquality>?>();
 
 			_fieldPairCache.Add(key, found);
 
 			return found;
 		}
 
-		bool TryMergeWithTable(SqlTableSource fromTable, SqlJoinedTable join, List<List<string>> uniqueKeys)
+		bool TryMergeWithTable(SqlTableSource fromTable, SqlJoinedTable join, List<VirtualField[]> uniqueKeys)
 		{
 			if (join.Table.Joins.Count != 0)
+				return false;
+
+			// do not allow merging if table used in statement
+			if (join.Table.Source is SqlTable t && _statement.IsDependedOn(t))
 				return false;
 
 			var hasLeftJoin = join.JoinType == JoinType.Left;
@@ -930,8 +987,8 @@ namespace LinqToDB.SqlProvider
 					return false;
 			}
 
-			HashSet<string> foundFields  = new HashSet<string>(found.Select(f => f.OneField.Name));
-			HashSet<string> uniqueFields = null;
+			HashSet<VirtualField>  foundFields  = new HashSet<VirtualField>(found.Select(f => f.OneField));
+			HashSet<VirtualField>? uniqueFields = null;
 
 			for (var i = 0; i < uniqueKeys.Count; i++)
 			{
@@ -940,7 +997,7 @@ namespace LinqToDB.SqlProvider
 				if (keys.All(k => foundFields.Contains(k)))
 				{
 					if (uniqueFields == null)
-						uniqueFields = new HashSet<string>();
+						uniqueFields = new HashSet<VirtualField>();
 
 					foreach (var key in keys)
 						uniqueFields.Add(key);
@@ -950,7 +1007,7 @@ namespace LinqToDB.SqlProvider
 			if (uniqueFields != null)
 			{
 				foreach (var item in found)
-					if (uniqueFields.Contains(item.OneField.Name))
+					if (uniqueFields.Contains(item.OneField))
 					{
 						// remove unique key conditions
 						join.Condition.Conditions.Remove(item.OneCondition);
@@ -970,7 +1027,7 @@ namespace LinqToDB.SqlProvider
 					{
 						var newField = MapToSource(fromTable, item.ManyField, fromTable.SourceID);
 						AddSearchCondition(_selectQuery.Where.SearchCondition,
-							new SqlCondition(false, new SqlPredicate.IsNull(newField.Element, true)));
+							new SqlCondition(false, new SqlPredicate.IsNull(newField!.Element, true)));
 					}
 
 				// add mapping to new source
@@ -985,8 +1042,12 @@ namespace LinqToDB.SqlProvider
 		bool TryMergeJoins(SqlTableSource fromTable,
 			SqlTableSource manySource,
 			SqlJoinedTable join1, SqlJoinedTable join2,
-			List<List<string>> uniqueKeys)
+			List<VirtualField[]> uniqueKeys)
 		{
+			// do not allow merging if table used in statement
+			if (join2.Table.Source is SqlTable t && _statement.IsDependedOn(t))
+				return false;
+
 			var found1 = SearchForFields(manySource, join1);
 
 			if (found1 == null)
@@ -1012,7 +1073,7 @@ namespace LinqToDB.SqlProvider
 					return false;
 			}
 
-			List<FoundEquality> found = null;
+			List<FoundEquality>? found = null;
 
 			for (var i1 = 0; i1 < found1.Count; i1++)
 			{
@@ -1046,8 +1107,8 @@ namespace LinqToDB.SqlProvider
 					return false;
 			}
 
-			HashSet<string> foundFields  = new HashSet<string>(found.Select(f => f.OneField.Name));
-			HashSet<string> uniqueFields = null;
+			HashSet<VirtualField>  foundFields  = new HashSet<VirtualField>(found.Select(f => f.OneField));
+			HashSet<VirtualField>? uniqueFields = null;
 
 			for (var i = 0; i < uniqueKeys.Count; i++)
 			{
@@ -1056,7 +1117,7 @@ namespace LinqToDB.SqlProvider
 				if (keys.All(k => foundFields.Contains(k)))
 				{
 					if (uniqueFields == null)
-						uniqueFields = new HashSet<string>();
+						uniqueFields = new HashSet<VirtualField>();
 
 					foreach (var key in keys)
 						uniqueFields.Add(key);
@@ -1066,7 +1127,7 @@ namespace LinqToDB.SqlProvider
 			if (uniqueFields != null)
 			{
 				foreach (var item in found)
-					if (uniqueFields.Contains(item.OneField.Name))
+					if (uniqueFields.Contains(item.OneField))
 					{
 						// remove from second
 						join2.Condition.Conditions.Remove(item.OneCondition);
@@ -1094,18 +1155,25 @@ namespace LinqToDB.SqlProvider
 
 		// here we can deal with LEFT JOIN and INNER JOIN
 		bool TryToRemoveIndependent(
-			SqlTableSource fromTable, SqlTableSource manySource, SqlJoinedTable join, List<List<string>> uniqueKeys)
+			SqlTableSource fromTable, SqlTableSource manySource, SqlJoinedTable join, List<VirtualField[]> uniqueKeys)
 		{
 			if (join.JoinType == JoinType.Inner)
 				return false;
+
+			if (join.Table.Source is SqlTable table)
+			{
+				// do not allow to remove JOIN if table used in statement
+				if (_statement.IsDependedOn(table))
+					return false;
+			}
 
 			var found = SearchForFields(manySource, join);
 
 			if (found == null)
 				return false;
 
-			HashSet<string> foundFields  = new HashSet<string>(found.Select(f => f.OneField.Name));
-			HashSet<string> uniqueFields = null;
+			HashSet<VirtualField>  foundFields  = new HashSet<VirtualField>(found.Select(f => f.OneField));
+			HashSet<VirtualField>? uniqueFields = null;
 
 			for (var i = 0; i < uniqueKeys.Count; i++)
 			{
@@ -1114,7 +1182,7 @@ namespace LinqToDB.SqlProvider
 				if (keys.All(k => foundFields.Contains(k)))
 				{
 					if (uniqueFields == null)
-						uniqueFields = new HashSet<string>();
+						uniqueFields = new HashSet<VirtualField>();
 					foreach (var key in keys)
 						uniqueFields.Add(key);
 				}
@@ -1125,7 +1193,7 @@ namespace LinqToDB.SqlProvider
 				if (join.JoinType == JoinType.Inner)
 				{
 					foreach (var item in found)
-						if (uniqueFields.Contains(item.OneField.Name))
+						if (uniqueFields.Contains(item.OneField))
 						{
 							// remove from second
 							join.Condition.Conditions.Remove(item.OneCondition);
@@ -1154,33 +1222,89 @@ namespace LinqToDB.SqlProvider
 			return false;
 		}
 
+		bool TryToRemoveIndependentLeftJoin(
+			SqlTableSource fromTable, SqlJoinedTable join, List<VirtualField[]> uniqueKeys)
+		{
+			if (join.JoinType != JoinType.Left)
+				return false;
+
+			var found = SearchForFields(null, join);
+
+			if (found == null)
+				return false;
+
+			HashSet<VirtualField>  foundFields  = new HashSet<VirtualField>(found.Select(f => f.OneField!));
+			HashSet<VirtualField>? uniqueFields = null;
+
+			for (var i = 0; i < uniqueKeys.Count; i++)
+			{
+				var keys = uniqueKeys[i];
+
+				if (keys.All(k => foundFields.Contains(k)))
+				{
+					if (uniqueFields == null)
+						uniqueFields = new HashSet<VirtualField>();
+					foreach (var key in keys)
+						uniqueFields.Add(key);
+				}
+			}
+
+			if (uniqueFields != null)
+			{
+				RemoveSource(fromTable, join);
+
+				return true;
+			}
+
+			return false;
+		}
+
+
 		[DebuggerDisplay("{ManyField.DisplayString()} -> {OneField.DisplayString()}")]
 		class FoundEquality
 		{
-			public VirtualField ManyField;
-			public SqlCondition OneCondition;
-			public VirtualField OneField;
+			public VirtualField ManyField = null!;
+			public SqlCondition OneCondition = null!;
+			public VirtualField OneField = null!;
 		}
 
+		//TODO: investigate do we still needs this class over ISqlExpression
 		[DebuggerDisplay("{DisplayString()}")]
 		class VirtualField
 		{
-			public VirtualField([NotNull] SqlField field)
+			public VirtualField(ISqlExpression expression)
+			{
+				if (expression == null) throw new ArgumentNullException(nameof(expression));
+
+				if (expression is SqlField field)
+					Field = field;
+				else if (expression is SqlColumn column)
+					Column = column;
+				else
+					throw new ArgumentException($"Expression '{expression}' is not a Field or Column.",
+						nameof(expression));
+			}
+
+			public VirtualField(SqlField field)
 			{
 				Field = field ?? throw new ArgumentNullException(nameof(field));
 			}
 
-			public VirtualField([NotNull] SqlColumn column)
+			public VirtualField(SqlColumn column)
 			{
 				Column = column ?? throw new ArgumentNullException(nameof(column));
 			}
 
-			public SqlField  Field  { get; }
-			public SqlColumn Column { get; }
+			public SqlField?  Field  { get; }
+			public SqlColumn? Column { get; }
 
-			public string Name      => Field == null ? Column.Alias : Field.Name;
-			public int    SourceID  => Field == null ? Column.Parent.SourceID : Field.Table?.SourceID ?? -1;
-			public bool   CanBeNull => Field?.CanBeNull ?? Column.CanBeNull;
+			public string Name      => Field == null    ?  Column!.Alias! : Field.Name!;
+			public int    SourceID  => Field == null    ?  Column!.Parent!.SourceID : Field.Table?.SourceID ?? -1;
+			public bool   CanBeNull => Element.CanBeNull;
+
+			private ISqlExpression? _expression;
+			private ISqlExpression Expression => 
+				_expression ??= Field ?? QueryHelper.GetUnderlyingField(Column!) as ISqlExpression ?? Column!;
 
 			public ISqlExpression Element
 			{
@@ -1189,16 +1313,16 @@ namespace LinqToDB.SqlProvider
 					if (Field != null)
 						return Field;
 
-					return Column;
+					return Column!;
 				}
 			}
 
-			protected bool Equals(VirtualField other)
+			bool Equals(VirtualField other)
 			{
-				return Equals(Field, other.Field) && Equals(Column, other.Column);
+				return Equals(Expression, other.Expression);
 			}
 
-			public override bool Equals(object obj)
+			public override bool Equals(object? obj)
 			{
 				if (ReferenceEquals(null, obj)) return false;
 
@@ -1220,23 +1344,23 @@ namespace LinqToDB.SqlProvider
 					return res;
 				}
 
-				return $"({source.SourceID}).{source}";
+				var sb = new StringBuilder();
+				source.ToString(sb, new Dictionary<IQueryElement, IQueryElement>());
+
+				return $"({source.SourceID}).{sb}";
 			}
 
 			public string DisplayString()
 			{
 				if (Field != null)
-					return $"F: '{GetSourceString(Field.Table)}.{Name}'";
+					return $"F: '{GetSourceString(Field.Table!)}.{Name}'";
 
-				return $"C: '{GetSourceString(Column.Parent)}.{Name}'";
+				return $"C: '{GetSourceString(Column!.Parent!)}.{Name}'";
 			}
 
 			public override int GetHashCode()
 			{
-				unchecked
-				{
-					return ((Field != null ? Field.GetHashCode() : 0) * 397) ^ (Column != null ? Column.GetHashCode() : 0);
-				}
+				return Expression?.GetHashCode() ?? 0;
 			}
 		}
 	}

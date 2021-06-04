@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using LinqToDB;
 using LinqToDB.Linq;
 using LinqToDB.Mapping;
@@ -10,27 +11,28 @@ using NUnit.Framework;
 
 namespace Tests.Linq
 {
+	using System.Linq.Expressions;
 	using Model;
 
 	[TestFixture]
 	public class InheritanceTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void Test1(string context)
+		[Test]
+		public void Test1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(ParentInheritance, db.ParentInheritance);
 		}
 
-		[Test, DataContextSource]
-		public void Test2(string context)
+		[Test]
+		public void Test2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(ParentInheritance, db.ParentInheritance.Select(p => p));
 		}
 
-		[Test, DataContextSource]
-		public void Test3(string context)
+		[Test]
+		public void Test3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -38,8 +40,8 @@ namespace Tests.Linq
 					from p in db.ParentInheritance where p is ParentInheritance1 select p);
 		}
 
-		[Test, DataContextSource]
-		public void Test4(string context)
+		[Test]
+		public void Test4([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -47,8 +49,8 @@ namespace Tests.Linq
 					from p in db.ParentInheritance where !(p is ParentInheritanceNull) select p);
 		}
 
-		[Test, DataContextSource]
-		public void Test5(string context)
+		[Test]
+		public void Test5([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -56,29 +58,27 @@ namespace Tests.Linq
 					from p in db.ParentInheritance where p is ParentInheritanceValue select p);
 		}
 
-		[Test, DataContextSource]
-		public void Test6(string context)
+		[Test]
+		public void Test6([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var q = from p in db.ParentInheritance2 where p is ParentInheritance12 select p;
-				q.ToList();
+				var _ = q.ToList();
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Test7(string context)
+		[Test]
+		public void Test7([DataSources] string context)
 		{
-#pragma warning disable 183
 			using (var db = GetDataContext(context))
 				AreEqual(
 					from p in    ParentInheritance where p is ParentInheritanceBase select p,
 					from p in db.ParentInheritance where p is ParentInheritanceBase select p);
-#pragma warning restore 183
 		}
 
-		[Test, DataContextSource]
-		public void Test8(string context)
+		[Test]
+		public void Test8([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -86,8 +86,8 @@ namespace Tests.Linq
 					db.ParentInheritance.OfType<ParentInheritance1>());
 		}
 
-		[Test, DataContextSource]
-		public void Test9(string context)
+		[Test]
+		public void Test9([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -99,8 +99,8 @@ namespace Tests.Linq
 						.OfType<ParentInheritanceNull>());
 		}
 
-		[Test, DataContextSource]
-		public void Test10(string context)
+		[Test]
+		public void Test10([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -108,18 +108,18 @@ namespace Tests.Linq
 					db.ParentInheritance.OfType<ParentInheritanceValue>());
 		}
 
-		[Test, DataContextSource]
-		public void Test11(string context)
+		[Test]
+		public void Test11([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var q = from p in db.ParentInheritance3 where p is ParentInheritance13 select p;
-				q.ToList();
+				var _ = q.ToList();
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Test12(string context)
+		[Test]
+		public void Test12([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -127,8 +127,8 @@ namespace Tests.Linq
 					from p in db.ParentInheritance1 where p.ParentID == 1 select p);
 		}
 
-		//[Test, DataContextSource]
-		public void Test13(string context)
+		//[Test]
+		public void Test13([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -140,8 +140,8 @@ namespace Tests.Linq
 					select p);
 		}
 
-		[Test, DataContextSource]
-		public void TestGetBaseClass(string context)
+		[Test]
+		public void TestGetBaseClass([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -152,8 +152,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void TypeCastAsTest1(string context)
+		[Test]
+		public void TypeCastAsTest1([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -168,8 +168,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void TypeCastAsTest11(string context)
+		[Test]
+		public void TypeCastAsTest11([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -184,8 +184,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void TypeCastAsTest2(string context)
+		[Test]
+		public void TypeCastAsTest2([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -200,20 +200,20 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void FirstOrDefault(string context)
+		[Test]
+		public void FirstOrDefault([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
 				var dd = GetNorthwindAsList(context);
 				Assert.AreEqual(
-					dd.DiscontinuedProduct.FirstOrDefault().ProductID,
-					db.DiscontinuedProduct.FirstOrDefault().ProductID);
+					dd.DiscontinuedProduct.FirstOrDefault()!.ProductID,
+					db.DiscontinuedProduct.FirstOrDefault()!.ProductID);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Cast1(string context)
+		[Test]
+		public void Cast1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -221,8 +221,8 @@ namespace Tests.Linq
 					db.ParentInheritance.OfType<ParentInheritance1>().Cast<ParentInheritanceBase>());
 		}
 
-		[Test, DataContextSource]
-		public async Task Cast1Async(string context)
+		[Test]
+		public async Task Cast1Async([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -244,8 +244,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Cast2(string context)
+		[Test]
+		public void Cast2([DataSources] string context)
 		{
 			ParentEx.Test(this, context);
 		}
@@ -273,7 +273,7 @@ namespace Tests.Linq
 		[Column("Value1", "Value.ID")]
 		public class Parent222 : Parent111
 		{
-			public Value111 Value;
+			public Value111 Value = null!;
 		}
 
 		public class Value111
@@ -308,8 +308,8 @@ namespace Tests.Linq
 		public class MyChild11 : MyChildBase_11_21 { }
 		public class MyChild21 : MyChildBase_11_21 { }
 
-		[Test, DataContextSource]
-		public void InheritanceMappingIssue106Test(string context)
+		[Test]
+		public void InheritanceMappingIssue106Test([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -322,14 +322,14 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void ReferenceNavigation(string context)
+		[Test]
+		public void ReferenceNavigation([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
 				var result =
 					from od in db.OrderDetail
-					where od.Product.Category.CategoryName == "Seafood"
+					where od.Product.Category!.CategoryName == "Seafood"
 					select new { od.Order, od.Product };
 
 				var list = result.ToList();
@@ -348,8 +348,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void TypeCastIsChildConditional1(string context)
+		[Test]
+		public void TypeCastIsChildConditional1([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -357,14 +357,14 @@ namespace Tests.Linq
 				var expected = db.Product.ToList().Select(x => x is Northwind.DiscontinuedProduct ? x : null).ToList();
 
 				Assert.That(result.Count,                    Is.GreaterThan(0));
-				Assert.That(expected.Count(),                Is.EqualTo(result.Count));
+				Assert.That(expected.Count,                  Is.EqualTo(result.Count));
 				Assert.That(result.Contains(null),           Is.True);
 				Assert.That(result.Select(x => x == null ? (int?)null : x.ProductID).Except(expected.Select(x => x == null ? (int?)null : x.ProductID)).Count(), Is.EqualTo(0));
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void TypeCastIsChildConditional2(string context)
+		[Test]
+		public void TypeCastIsChildConditional2([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -379,8 +379,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void TypeCastIsChild(string context)
+		[Test]
+		public void TypeCastIsChild([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -408,16 +408,16 @@ namespace Tests.Linq
 
 		}
 
-		T FindById<T>(IQueryable<T> queryable, int id)
-			where T : IChildTest14
+		T? FindById<T>(IQueryable<T> queryable, int id)
+			where T : class, IChildTest14
 		{
 			return queryable.Where(x => x.ChildID == id).FirstOrDefault();
 		}
 
 		#endregion
 
-		[Test, DataContextSource]
-		public void Test14(string context)
+		[Test]
+		public void Test14([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -426,8 +426,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void Test15(string context)
+		[Test]
+		public void Test15([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -440,8 +440,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void Test16(string context)
+		[Test]
+		public void Test16([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -468,10 +468,7 @@ namespace Tests.Linq
 			[Column] public Guid GuidValue { get; set; }
 
 			[Column("ID")]
-			public virtual TypeCodeEnum TypeCode
-			{
-				get { return TypeCodeEnum.Base; }
-			}
+			public virtual TypeCodeEnum TypeCode => TypeCodeEnum.Base;
 		}
 
 		[InheritanceMapping(Code = TypeCodeEnum.A1, Type = typeof(InheritanceA1), IsDefault = false)]
@@ -479,31 +476,22 @@ namespace Tests.Linq
 		public abstract class InheritanceA : InheritanceBase
 		{
 			[Association(CanBeNull = true, ThisKey = "GuidValue", OtherKey = "GuidValue")]
-			public List<InheritanceB> Bs { get; set; }
+			public List<InheritanceB> Bs { get; set; } = null!;
 
 			[Column("ID", IsDiscriminator = true)]
-			public override TypeCodeEnum TypeCode
-			{
-				get { return TypeCodeEnum.A; }
-			}
+			public override TypeCodeEnum TypeCode => TypeCodeEnum.A;
 		}
 
 		public class InheritanceA1 : InheritanceA
 		{
 			[Column("ID", IsDiscriminator = true)]
-			public override TypeCodeEnum TypeCode
-			{
-				get { return TypeCodeEnum.A1; }
-			}
+			public override TypeCodeEnum TypeCode => TypeCodeEnum.A1;
 		}
 
 		public class InheritanceA2 : InheritanceA
 		{
 			[Column("ID", IsDiscriminator = true)]
-			public override TypeCodeEnum TypeCode
-			{
-				get { return TypeCodeEnum.A2; }
-			}
+			public override TypeCodeEnum TypeCode => TypeCodeEnum.A2;
 		}
 
 		public class InheritanceB : InheritanceBase
@@ -515,12 +503,11 @@ namespace Tests.Linq
 		{
 			[Column] public Guid GuidValue { get; set; }
 
-			[JetBrains.Annotations.NotNull]
 			[Association(CanBeNull = true, ThisKey = "GuidValue", OtherKey = "GuidValue")]
-			public InheritanceA1 A1 { get; set; }
+			public InheritanceA1? A1 { get; set; }
 
 			[Association(CanBeNull = true, ThisKey = "GuidValue", OtherKey = "GuidValue")]
-			public InheritanceA2 A2 { get; set; }
+			public InheritanceA2? A2 { get; set; }
 		}
 
 		[Test]
@@ -532,8 +519,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void QuerySyntaxSimpleTest(string context)
+		[Test]
+		public void QuerySyntaxSimpleTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -553,22 +540,22 @@ namespace Tests.Linq
 
 		public class Test17John : Test17Person
 		{
-			public string FirstName { get; set; }
+			public string FirstName { get; set; } = null!;
 		}
 
 		public class Test17Tester : Test17Person
 		{
-			public string LastName { get; set; }
+			public string LastName { get; set; } = null!;
 		}
 
-		[Test, DataContextSource(false)]
-		public void Test17(string data)
+		[Test]
+		public void Test17([DataSources(false)] string data)
 		{
 			using (var context = GetDataContext(data))
 			{
 				var db = (TestDataConnection)context;
 				db.GetTable<Test17Person>().OfType<Test17John>().ToList();
-				Assert.False(db.LastQuery.ToLowerInvariant().Contains("lastname"), "Why select LastName field??");
+				Assert.False(db.LastQuery!.ToLowerInvariant().Contains("lastname"), "Why select LastName field??");
 			}
 		}
 
@@ -583,17 +570,17 @@ namespace Tests.Linq
 
 		public class Test18Male : Test18Person
 		{
-			[Column] public string FirstName { get; set; }
+			[Column] public string FirstName { get; set; } = null!;
 		}
 
 		public class Test18Female : Test18Person
 		{
-			[Column] public string FirstName { get; set; }
-			[Column] public string LastName  { get; set; }
+			[Column] public string FirstName { get; set; } = null!;
+			[Column] public string LastName  { get; set; } = null!;
 		}
 
-		[Test, DataContextSource]
-		public void Test18(string context)
+		[Test]
+		public void Test18([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -608,8 +595,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public async Task Test18Async(string context)
+		[Test]
+		public async Task Test18Async([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -624,8 +611,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Test19(string context)
+		[Test]
+		public void Test19([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -641,16 +628,16 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void InheritanceAssociationTest(string context)
+		[Test]
+		public void InheritanceAssociationTest([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var result = db.GetTable<InheritanceAssociation>().Select(ia =>
 					new
 					{
-						TC1 = ia.A1.TypeCode,
-						TC2 = ia.A2.TypeCode
+						TC1 = ia.A1!.TypeCode,
+						TC2 = ia.A2!.TypeCode
 					});
 
 				var items = db.GetTable<LinqDataTypes>().ToList();
@@ -665,5 +652,133 @@ namespace Tests.Linq
 			}
 		}
 
+		#region issue 2429
+
+		public abstract class Root
+		{
+			public abstract int Value { get; set; }
+			public abstract int GetValue();
+		}
+
+		[Table]
+		public class BaseTable : Root
+		{
+			[PrimaryKey, NotNull  ] public int Id { get; set; }
+			[Column(nameof(Value))] public int BaseValue { get; set; }
+
+			private static Expression<Func<BaseTable, int>> GeValueImpl() => e => e.BaseValue;
+
+			[ExpressionMethod(nameof(GeValueImpl), IsColumn = true)]
+			public override int Value { get => BaseValue; set => BaseValue = value; }
+
+			[ExpressionMethod(nameof(GeValueImpl))]
+			public override int GetValue() => BaseValue;
+
+			public static readonly BaseTable[] Data = new []
+			{
+				new BaseTable() { Id = 1, Value = 100 }
+			};
+		}
+
+		[Table]
+		public class BaseTable2
+		{
+			[PrimaryKey, NotNull] public         int Id { get; set; }
+			[Column             ] public virtual int Value { get; set; }
+
+			[ExpressionMethod(nameof(GetBaseTableOverrideImpl), IsColumn = true)]
+			public virtual int GetValue() => Value;
+
+			private static Expression<Func<BaseTable2, int>> GetBaseTableOverrideImpl() => e => e.Value;
+
+			public static readonly BaseTable2[] Data = new []
+			{
+				new BaseTable2() { Id = 1, Value = 100 }
+			};
+		}
+
+		public class DerivedTable2 : BaseTable2
+		{
+			private static Expression<Func<DerivedTable2, int>> GetDerivedTableOverrideImpl() => e => e.BaseValue * -1;
+
+			[Column(nameof(Value))] public int BaseValue { get; set; }
+
+			[ExpressionMethod(nameof(GetDerivedTableOverrideImpl), IsColumn = true)]
+			public override int Value { get; set; }
+
+			[ExpressionMethod(nameof(GetDerivedTableOverrideImpl))]
+			public override int GetValue() => BaseValue * -1;
+		}
+
+		[Test]
+		public void Issue2429PropertiesTest1([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable(BaseTable.Data))
+			{
+					var baseTableRecordById = db.GetTable<BaseTable>().FirstOrDefault(x => x.Id == 1);
+					Assert.AreEqual(1, baseTableRecordById?.Id);
+					Assert.AreEqual(100, baseTableRecordById?.Value);
+
+					var baseTableRecordWithValuePredicate = db.GetTable<BaseTable>().FirstOrDefault(x => x.Id == 1 && x.Value == 100);
+					Assert.AreEqual(1, baseTableRecordWithValuePredicate?.Id);
+					Assert.AreEqual(100, baseTableRecordWithValuePredicate?.Value);
+			}
+		}
+
+		[Test]
+		public void Issue2429MethodsTest1([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable(BaseTable.Data))
+			{
+				var baseTableRecordById = db.GetTable<BaseTable>().FirstOrDefault(x => x.Id == 1);
+				Assert.AreEqual(1, baseTableRecordById?.Id);
+				Assert.AreEqual(100, baseTableRecordById?.Value);
+
+				var baseTableRecordWithValuePredicate = db.GetTable<BaseTable>().FirstOrDefault(x => x.Id == 1 && x.GetValue() == 100);
+				Assert.AreEqual(1, baseTableRecordWithValuePredicate?.Id);
+				Assert.AreEqual(100, baseTableRecordWithValuePredicate?.Value);
+			}
+		}
+
+		[ActiveIssue(Details = "Invalid mappings?")]
+		[Test]
+		public void Issue2429PropertiesTest2([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable(BaseTable2.Data))
+			{
+				var baseTableRecord    = db.GetTable<BaseTable2>().FirstOrDefault(x => x.Id == 1 && x.Value == 100);
+				//var derivedTableRecord = db.GetTable<DerivedTable2>().FirstOrDefault(x => x.Id == 1 && x.Value == (100 * -1 ));
+				var derivedTableRecord = db.GetTable<BaseTable2>().OfType<DerivedTable2>().FirstOrDefault(x => x.Id == 1 && x.Value == (100 * -1 ));
+
+				Assert.AreEqual(1, baseTableRecord?.Id);
+				Assert.AreEqual(100, baseTableRecord?.Value);
+
+				Assert.AreEqual(1, derivedTableRecord?.Id);
+				Assert.AreEqual(100, derivedTableRecord?.Value * -1);
+			}
+		}
+
+		[ActiveIssue(Details = "Invalid mappings?")]
+		[Test]
+		public void Issue2429MethodsTest2([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			using (db.CreateLocalTable(BaseTable2.Data))
+			{
+				var baseTableRecord    = db.GetTable<BaseTable2>().FirstOrDefault(x => x.Id == 1 && x.GetValue() == 100);
+				//var derivedTableRecord = db.GetTable<DerivedTable2>().FirstOrDefault(x => x.Id == 1 && x.GetValue() == (100 * -1 ));
+				var derivedTableRecord = db.GetTable<BaseTable2>().OfType<DerivedTable2>().FirstOrDefault(x => x.Id == 1 && x.GetValue() == (100 * -1 ));
+
+				Assert.AreEqual(1, baseTableRecord?.Id);
+				Assert.AreEqual(100, baseTableRecord?.Value);
+
+				Assert.AreEqual(1, derivedTableRecord?.Id);
+				Assert.AreEqual(100, derivedTableRecord?.Value * -1);
+			}
+		}
+		#endregion
 	}
 }

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Linq.Expressions;
+using JetBrains.Annotations;
 
 namespace LinqToDB
 {
@@ -26,6 +28,7 @@ namespace LinqToDB
 	/// - last method parameters could be ommited from expression method, but only if you don't add database connection context parameter.
 	/// </para>
 	/// </summary>
+	[PublicAPI]
 	[AttributeUsage(AttributeTargets.Property | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
 	public class ExpressionMethodAttribute : Attribute
 	{
@@ -35,7 +38,18 @@ namespace LinqToDB
 		/// <param name="methodName">Name of method in the same class that returns substitution expression.</param>
 		public ExpressionMethodAttribute(string methodName)
 		{
+			if (string.IsNullOrEmpty(methodName))
+				throw new ArgumentException("Value cannot be null or empty.", nameof(methodName));
 			MethodName = methodName;
+		}
+
+		/// <summary>
+		/// Creates instance of attribute.
+		/// </summary>
+		/// <param name="expression">Substitution expression.</param>
+		public ExpressionMethodAttribute(LambdaExpression expression)
+		{
+			Expression = expression ?? throw new ArgumentNullException(nameof(expression));
 		}
 
 		/// <summary>
@@ -43,10 +57,10 @@ namespace LinqToDB
 		/// </summary>
 		/// <param name="configuration">Connection configuration, for which this attribute should be taken into account.</param>
 		/// <param name="methodName">Name of method in the same class that returns substitution expression.</param>
-		public ExpressionMethodAttribute(string configuration, string methodName)
+		public ExpressionMethodAttribute(string? configuration, string methodName)
 		{
 			Configuration = configuration;
-			MethodName    = methodName;
+			MethodName    = methodName ?? throw new ArgumentNullException(nameof(methodName));
 		}
 
 		/// <summary>
@@ -54,18 +68,31 @@ namespace LinqToDB
 		/// <see cref="ProviderName"/> for standard names.
 		/// Attributes with <c>null</c> or empty string <see cref="Configuration"/> value applied to all configurations (if no attribute found for current configuration).
 		/// </summary>
-		public string Configuration { get; set; }
+		public string? Configuration { get; set; }
 
 		/// <summary>
 		/// Name of method in the same class that returns substitution expression.
 		/// </summary>
-		public string MethodName    { get; set; }
+		public string? MethodName    { get; set; }
 
 		/// <summary>
-		/// Indicates whether a property should be mapped with this expression Method. </summary>
-		/// <value>
-		/// True if the property should be mapped with this expression Method. </value>
+		/// Substitution expression.
+		/// </summary>
+		public LambdaExpression? Expression { get; set; }
+
+		/// <summary>
+		/// Gets or sets calculated column flag. When applied to property and set to <c>true</c>, Linq To DB will
+		/// load data into property using expression during entity materialization.
+		/// </summary>
 		public bool IsColumn { get; set; }
+
+		/// <summary>
+		/// Gets or sets alias for substitution expression.
+		/// <remarks>
+		/// Note that alias can be overriden by projection member name.
+		/// </remarks>
+		/// </summary>
+		public string? Alias { get; set; }
 
 	}
 }

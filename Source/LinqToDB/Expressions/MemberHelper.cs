@@ -2,12 +2,12 @@
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using LinqToDB.Mapping;
-using LinqToDB.Reflection;
 
 namespace LinqToDB.Expressions
 {
 	using LinqToDB.Extensions;
+	using Mapping;
+	using Reflection;
 
 	public static class MemberHelper
 	{
@@ -39,7 +39,7 @@ namespace LinqToDB.Expressions
 		/// <exception cref="ArgumentException">Only simple, non-navigational, member names are supported in this context (e.g.: x =&gt; Sql.Property(x, \"SomeProperty\")).</exception>
 		public static MemberInfo GetMemberInfo(Expression expr)
 		{
-			while (expr.NodeType == ExpressionType.Convert || expr.NodeType == ExpressionType.ConvertChecked)
+			while (expr.NodeType == ExpressionType.Convert || expr.NodeType == ExpressionType.ConvertChecked || expr.NodeType == ExpressionType.TypeAs)
 				expr = ((UnaryExpression)expr).Operand;
 
 			if (expr.NodeType == ExpressionType.New)
@@ -52,10 +52,10 @@ namespace LinqToDB.Expressions
 					? ((UnaryExpression)methodCall.Arguments[0]).Operand
 					: methodCall.Arguments[0];
 
-				if (arg1.NodeType != ExpressionType.Constant && arg1.NodeType != ExpressionType.Parameter || methodCall.Arguments[1].NodeType != ExpressionType.Constant)
+				if (arg1.NodeType != ExpressionType.Constant && arg1.NodeType != ExpressionType.Parameter)
 					throw new ArgumentException("Only simple, non-navigational, member names are supported in this context (e.g.: x => Sql.Property(x, \"SomeProperty\")).");
 
-				var memberName = (string)((ConstantExpression)methodCall.Arguments[1]).Value;
+				var memberName = (string)methodCall.Arguments[1].EvaluateExpression()!;
 
 				// check if member exists on type
 				var existingMember = TypeAccessor.GetAccessor(arg1.Type).Members.SingleOrDefault(m =>
@@ -64,14 +64,13 @@ namespace LinqToDB.Expressions
 
 				if (existingMember != null)
 					return existingMember.MemberInfo;
-				
-#if !NETSTANDARD1_6
+
 				// create dynamic column info
 				return new DynamicColumnInfo(arg1.Type, methodCall.Method.GetGenericArguments()[0], memberName);
-#else
-				throw new NotSupportedException("Dynamic columns are not supported on .NET Standard 1.6.");
-#endif
 			}
+
+			if (expr.NodeType == ExpressionType.ArrayLength)
+				return ((UnaryExpression)expr).Operand.Type.GetProperty(nameof(Array.Length))!;
 
 			return
 				expr is MemberExpression me
@@ -81,31 +80,108 @@ namespace LinqToDB.Expressions
 						: (MemberInfo)((NewExpression)expr).Constructor;
 		}
 
-		public static MemberInfo MemberOf<T>(Expression<Func<T,object>> func)
+		public static MemberInfo MemberOf<T>(Expression<Func<T,object?>> func)
 		{
 			return GetMemberInfo(func);
 		}
 
-		public static FieldInfo FieldOf<T>(Expression<Func<T,object>> func)
+		public static MemberInfo MemberOf<T, TMember>(Expression<Func<T,TMember>> func)
+		{
+			return GetMemberInfo(func);
+		}
+
+		public static FieldInfo FieldOf<T>(Expression<Func<T,object?>> func)
 		{
 			return (FieldInfo)GetMemberInfo(func);
 		}
 
-		public static PropertyInfo PropertyOf<T>(Expression<Func<T,object>> func)
+		public static PropertyInfo PropertyOf<T>(Expression<Func<T,object?>> func)
 		{
 			return (PropertyInfo)GetMemberInfo(func);
 		}
 
-		public static MethodInfo MethodOf<T>(Expression<Func<T,object>> func)
+		public static MethodInfo MethodOf<T>(Expression<Func<T,object?>> func)
 		{
 			var mi = GetMemberInfo(func);
-			return mi is PropertyInfo ? ((PropertyInfo)mi).GetGetMethodEx() : (MethodInfo)mi;
+			return mi is PropertyInfo info ? info.GetGetMethod()! : (MethodInfo)mi;
 		}
 
-		public static MethodInfo MethodOf(Expression<Func<object>> func)
+		public static MethodInfo MethodOf<T1, T2>(Expression<Func<T1, T2,object?>> func)
 		{
 			var mi = GetMemberInfo(func);
-			return mi is PropertyInfo ? ((PropertyInfo)mi).GetGetMethodEx() : (MethodInfo)mi;
+			return mi is PropertyInfo info ? info.GetGetMethod()! : (MethodInfo)mi;
+		}
+
+		public static MethodInfo MethodOf<T1, T2, T3>(Expression<Func<T1, T2, T3, object?>> func)
+		{
+			var mi = GetMemberInfo(func);
+			return mi is PropertyInfo info ? info.GetGetMethod()! : (MethodInfo)mi;
+		}
+
+		public static MethodInfo MethodOf<T1, T2, T3, T4>(Expression<Func<T1, T2, T3, T4, object?>> func)
+		{
+			var mi = GetMemberInfo(func);
+			return mi is PropertyInfo info ? info.GetGetMethod()! : (MethodInfo)mi;
+		}
+
+		public static MethodInfo MethodOf(Expression<Func<object?>> func)
+		{
+			var mi = GetMemberInfo(func);
+			return mi is PropertyInfo info ? info.GetGetMethod()! : (MethodInfo)mi;
+		}
+
+		public static MethodInfo MethodOf(Expression<Action> func)
+		{
+			var mi = GetMemberInfo(func);
+			return mi is PropertyInfo info ? info.GetGetMethod()! : (MethodInfo)mi;
+		}
+
+		public static MethodInfo MethodOfGeneric<T>(Expression<Func<T,object?>> func)
+		{
+			var mi = MethodOf(func);
+			if (mi.IsGenericMethod)
+				mi = mi.GetGenericMethodDefinition();
+			return mi;
+		}
+
+		public static MethodInfo MethodOfGeneric<T1, T2>(Expression<Func<T1, T2, object?>> func)
+		{
+			var mi = MethodOf(func);
+			if (mi.IsGenericMethod)
+				mi = mi.GetGenericMethodDefinition();
+			return mi;
+		}
+
+		public static MethodInfo MethodOfGeneric<T1, T2, T3>(Expression<Func<T1, T2, T3, object?>> func)
+		{
+			var mi = MethodOf(func);
+			if (mi.IsGenericMethod)
+				mi = mi.GetGenericMethodDefinition();
+			return mi;
+		}
+
+		public static MethodInfo MethodOfGeneric<T1, T2, T3, T4>(Expression<Func<T1, T2, T3, T4, object?>> func)
+		{
+			var mi = MethodOf(func);
+			if (mi.IsGenericMethod)
+				mi = mi.GetGenericMethodDefinition();
+			return mi;
+		}
+
+		public static MethodInfo MethodOfGeneric(Expression<Func<object?>> func)
+		{
+			var mi = MethodOf(func);
+			if (mi.IsGenericMethod)
+				mi = mi.GetGenericMethodDefinition();
+			return mi;
+		}
+
+		public static MethodInfo MethodOfGeneric(Expression<Action> func)
+		{
+			var mi = MethodOf(func);
+			if (mi.IsGenericMethod)
+				mi = mi.GetGenericMethodDefinition();
+			return mi;
 		}
 
 		public static ConstructorInfo ConstructorOf<T>(Expression<Func<T,object>> func)

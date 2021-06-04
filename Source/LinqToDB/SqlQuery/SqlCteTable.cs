@@ -1,37 +1,66 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using LinqToDB.Mapping;
 
 namespace LinqToDB.SqlQuery
 {
+	using Mapping;
+
 	public class SqlCteTable : SqlTable
 	{
-		[JetBrains.Annotations.NotNull]
-		public          CteClause Cte  { get; }
+		public          CteClause? Cte  { get; private set; }
 
-		public override string    Name
+		public override string?    Name
 		{
-			get => Cte.Name ?? base.Name;
+			get => Cte?.Name ?? base.Name;
 			set => base.Name = value;
 		}
 
+		public override string?    PhysicalName
+		{
+			get => Cte?.Name ?? base.PhysicalName;
+			set => base.PhysicalName = value;
+		}
+
+		// required by Clone :-/
+		internal string? BaseName         => base.Name;
+		internal string? BasePhysicalName => base.PhysicalName;
+
 		public SqlCteTable(
-			[JetBrains.Annotations.NotNull] MappingSchema mappingSchema,
-			[JetBrains.Annotations.NotNull] CteClause cte) : base(mappingSchema, cte.ObjectType)
+			MappingSchema mappingSchema,
+			CteClause     cte)
+			: base(mappingSchema, cte.ObjectType, cte.Name)
+		{
+			Cte = cte ?? throw new ArgumentNullException(nameof(cte));
+
+			// CTE has it's own names even there is mapping
+			foreach (var field in Fields)
+				field.PhysicalName = field.Name;
+		}
+
+		internal SqlCteTable(int id, string alias, SqlField[] fields, CteClause cte)
+			: base(id, cte.Name, alias, string.Empty, string.Empty, string.Empty, cte.Name, cte.ObjectType, null, fields, SqlTableType.Cte, null, TableOptions.NotSet)
 		{
 			Cte = cte ?? throw new ArgumentNullException(nameof(cte));
 		}
 
-		internal SqlCteTable(int id, string alias, SqlField[] fields, [JetBrains.Annotations.NotNull] CteClause cte)
-			: base(id, cte.Name, alias, string.Empty, string.Empty, cte.Name, cte.ObjectType, null, fields, SqlTableType.Cte, null)
+		internal SqlCteTable(int id, string alias, SqlField[] fields)
+			: base(id, null, alias, string.Empty, string.Empty, string.Empty, null, null, null, fields, SqlTableType.Cte, null, TableOptions.NotSet)
 		{
-			Cte = cte ?? throw new ArgumentNullException(nameof(cte));
+		}
+
+		internal void SetDelayedCteObject(CteClause cte)
+		{
+			Cte          = cte ?? throw new ArgumentNullException(nameof(cte));
+			Name         = cte.Name;
+			PhysicalName = cte.Name;
+			ObjectType   = cte.ObjectType;
 		}
 
 		public SqlCteTable(SqlCteTable table, IEnumerable<SqlField> fields, CteClause cte)
 		{
 			Alias              = table.Alias;
+			Server             = table.Server;
 			Database           = table.Database;
 			Schema             = table.Schema;
 
@@ -47,9 +76,10 @@ namespace LinqToDB.SqlQuery
 		public override QueryElementType ElementType  => QueryElementType.SqlCteTable;
 		public override SqlTableType     SqlTableType => SqlTableType.Cte;
 
-		public StringBuilder ToString(StringBuilder sb, Dictionary<IQueryElement, IQueryElement> dic)
+		public override StringBuilder ToString(StringBuilder sb, Dictionary<IQueryElement, IQueryElement> dic)
 		{
-			return sb.Append(Name);
+			Cte?.ToString(sb, dic);
+			return sb;
 		}
 
 		#region IQueryElement Members

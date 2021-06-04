@@ -2,7 +2,7 @@
 using System.Linq;
 
 using LinqToDB;
-
+using LinqToDB.SqlQuery;
 using NUnit.Framework;
 
 // ReSharper disable ReturnValueOfPureMethodIsNotUsed
@@ -14,8 +14,8 @@ namespace Tests.Linq
 	[TestFixture]
 	public class OrderByTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void OrderBy1(string context)
+		[Test]
+		public void OrderBy1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -33,8 +33,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy2(string context)
+		[Test]
+		public void OrderBy2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -43,7 +43,7 @@ namespace Tests.Linq
 					orderby ch.ParentID descending, ch.ChildID ascending
 					select ch;
 
-				var result = 
+				var result =
 					from ch in db.Child
 					orderby ch.ParentID descending, ch.ChildID ascending
 					select ch;
@@ -52,8 +52,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy3(string context)
+		[Test]
+		public void OrderBy3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -77,8 +77,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy4(string context)
+		[Test]
+		public void OrderBy4([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -102,8 +102,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy5(string context)
+		[Test]
+		public void OrderBy5([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -121,8 +121,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ConditionOrderBy(string context)
+		[Test]
+		public void ConditionOrderBy([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -140,8 +140,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(false)]
-		public void OrderBy6(string context)
+		[Test]
+		public void OrderBy6([DataSources(false)] string context)
 		{
 			using (var db = (TestDataConnection)GetDataContext(context))
 			{
@@ -154,43 +154,35 @@ namespace Tests.Linq
 
 				q.ToList();
 
-				Assert.IsFalse(db.LastQuery.Contains("Diagnosis"), "Why do we select Patient.Diagnosis??");
+				Assert.IsFalse(db.LastQuery!.Contains("Diagnosis"), "Why do we select Patient.Diagnosis??");
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy7(string context)
+		[Test]
+		public void OrderBy7([DataSources] string context)
 		{
-			try
+			using (new DoNotClearOrderBys(true))
+			using (var db = GetDataContext(context))
 			{
-				LinqToDB.Common.Configuration.Linq.DoNotClearOrderBys = true;
 
-				using (var db = GetDataContext(context))
-				{
+				var expected =
+					from ch in Child
+					orderby ch.ChildID % 2, ch.ChildID
+					select ch;
 
-					var expected =
-						from ch in Child
-						orderby ch.ChildID%2, ch.ChildID
-						select ch;
+				var qry =
+					from ch in db.Child
+					orderby ch.ChildID % 2
+					select new { ch };
 
-					var qry =
-						from ch in db.Child
-						orderby ch.ChildID%2
-						select new {ch};
+				var result = qry.OrderBy(x => x.ch.ChildID).Select(x => x.ch);
 
-					var result = qry.OrderBy(x => x.ch.ChildID).Select(x => x.ch);
-
-					AreEqual(expected, result);
-				}
-			}
-			finally
-			{
-				LinqToDB.Common.Configuration.Linq.DoNotClearOrderBys = false;
+				AreEqual(expected, result);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy8(string context)
+		[Test]
+		public void OrderBy8([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -211,15 +203,15 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy9(string context)
+		[Test]
+		public void OrderBy9([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 
 				var expected =
 					from ch in Child
-					orderby ch.ChildID%2, ch.ChildID descending 
+					orderby ch.ChildID%2, ch.ChildID descending
 					select ch;
 
 				var qry =
@@ -233,8 +225,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy10(string context)
+		[Test]
+		public void OrderBy10([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -246,7 +238,7 @@ namespace Tests.Linq
 
 				var qry =
 					from ch in db.Child
-					orderby ch.ChildID%2 
+					orderby ch.ChildID%2
 					select new {ch};
 
 				var result = qry.ThenOrByDescending(x => x.ch.ChildID).Select(x => x.ch);
@@ -255,8 +247,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy11(string context)
+		[Test]
+		public void OrderBy11([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -268,7 +260,7 @@ namespace Tests.Linq
 
 				var qry =
 					from ch in db.Child
-					orderby ch.ChildID%2 
+					orderby ch.ChildID%2
 					select ch;
 
 				var result = qry.ThenOrByDescending(x => x.ChildID).Select(x => x);
@@ -277,8 +269,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBy12(string context)
+		[Test]
+		public void OrderBy12([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -298,8 +290,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBySelf1(string context)
+		[Test]
+		public void OrderBySelf1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -309,8 +301,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBySelf2(string context)
+		[Test]
+		public void OrderBySelf2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -320,8 +312,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
-		public void OrderBySelectMany1(string context)
+		[Test]
+		public void OrderBySelectMany1([DataSources(ProviderName.Access)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -341,15 +333,15 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderBySelectMany2(string context)
+		[Test]
+		public void OrderBySelectMany2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var expected =
 					from p in Parent1.OrderBy(p => p.ParentID)
 					from c in Child.  OrderBy(c => c.ChildID)
-					where p.ParentID == c.Parent1.ParentID
+					where p.ParentID == c.Parent1!.ParentID
 					select new { p.ParentID, c.ChildID };
 
 				var result =
@@ -362,8 +354,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
-		public void OrderBySelectMany3(string context)
+		[Test]
+		public void OrderBySelectMany3([DataSources(ProviderName.Access)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -383,8 +375,59 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void OrderAscDesc(string context)
+		[Test]
+		public void OrderByContinuous([DataSources(ProviderName.Access)] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var firstOrder =
+					from p in db.Parent
+					orderby (p.Children.Count)
+					select p;
+
+				var secondOrder =
+					from p in firstOrder
+					join pp in db.Parent on p.Value1 equals pp.Value1 
+					orderby pp.ParentID
+					select p;
+
+				var selectQuery = secondOrder.GetSelectQuery();
+				Assert.That(selectQuery.OrderBy.Items.Count, Is.EqualTo(2));
+				var field = QueryHelper.GetUnderlyingField(selectQuery.OrderBy.Items[0].Expression);
+				Assert.That(field, Is.Not.Null);
+				Assert.That(field!.Name, Is.EqualTo("ParentID"));
+			}
+		}
+
+		[Test]
+		public void OrderByContinuousDuplicates([DataSources(ProviderName.Access)] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var firstOrder =
+					from p in db.Parent
+					orderby p.ParentID
+					select p;
+
+				var secondOrder =
+					from p in firstOrder
+					join pp in db.Parent on p.ParentID equals pp.ParentID
+					orderby p.ParentID descending 
+					select p;
+
+				var selectQuery = secondOrder.GetSelectQuery();
+				Assert.That(selectQuery.OrderBy.Items.Count, Is.EqualTo(1));
+				Assert.That(selectQuery.OrderBy.Items[0].IsDescending, Is.True);
+				var field = QueryHelper.GetUnderlyingField(selectQuery.OrderBy.Items[0].Expression);
+				Assert.That(field, Is.Not.Null);
+				Assert.That(field!.Name, Is.EqualTo("ParentID"));
+
+				TestContext.WriteLine(secondOrder.ToString());
+			}
+		}
+
+		[Test]
+		public void OrderAscDesc([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -394,8 +437,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Count1(string context)
+		[Test]
+		public void Count1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -403,8 +446,8 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Count());
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase)]
-		public void Count2(string context)
+		[Test]
+		public void Count2([DataSources(TestProvName.AllSybase)] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -412,8 +455,8 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Take(3).Count());
 		}
 
-		[Test, DataContextSource]
-		public void Min1(string context)
+		[Test]
+		public void Min1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -421,8 +464,8 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Min(p => p.ParentID));
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase)]
-		public void Min2(string context)
+		[Test]
+		public void Min2([DataSources(TestProvName.AllSybase)] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -430,8 +473,8 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.ParentID).Take(3).Min(p => p.ParentID));
 		}
 
-		[Test, DataContextSource(ProviderName.Sybase, ProviderName.Informix)]
-		public void Min3(string context)
+		[Test]
+		public void Min3([DataSources(TestProvName.AllSybase, TestProvName.AllInformix)] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -439,8 +482,8 @@ namespace Tests.Linq
 					db.Parent.OrderBy(p => p.Value1).Take(3).Min(p => p.ParentID));
 		}
 
-		[Test, DataContextSource]
-		public void Distinct(string context)
+		[Test]
+		public void Distinct([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -455,8 +498,8 @@ namespace Tests.Linq
 					select p).Distinct().OrderBy(p => p.ParentID));
 		}
 
-		[Test, DataContextSource]
-		public void Take(string context)
+		[Test]
+		public void Take([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -469,5 +512,122 @@ namespace Tests.Linq
 				Assert.AreEqual(3, q.AsEnumerable().Count());
 			}
 		}
+
+
+		[Test]
+		public void OrderByConstant([IncludeDataSources(false, TestProvName.AllSQLite)] string context)
+		{
+			using (var db = (TestDataConnection)GetDataContext(context))
+			{
+				var param = 2;
+				var query =
+					from ch in db.Child
+					orderby "1" descending, param - 2
+					select ch;
+
+				query.ToArray();
+
+				Assert.That(db.LastQuery, Does.Not.Contain("ORDER BY"));
+			}
+		}
+
+		[Test]
+		public void OrderByConstant2([IncludeDataSources(false, TestProvName.AllSQLite)] string context)
+		{
+			using (var db = (TestDataConnection)GetDataContext(context))
+			{
+				var param = 2;
+				var query =
+					from ch in db.Child
+					orderby Sql.ToNullable((int)Sql.Abs(1)!) descending, Sql.ToNullable((int)Sql.Abs(param + 1)!)
+					select ch;
+
+				query.ToArray();
+
+				Assert.That(db.LastQuery, Does.Not.Contain("ORDER BY"));
+			}
+		}
+
+		[Test]
+		public void OrderByImmutableSubquery([IncludeDataSources(false, TestProvName.AllSQLite)] string context)
+		{
+			using (var db = (TestDataConnection)GetDataContext(context))
+			{
+				var param = 2;
+
+				var query =
+					from ch in db.Child
+					orderby Sql.ToNullable((int)Sql.Abs(1)!) descending, Sql.ToNullable((int)Sql.Abs(param + 1)!)
+					select new { ch.ChildID, ch.ParentID, OrderElement = (int?)param };
+
+				query.AsSubQuery().OrderBy(c => c.OrderElement).ToArray();
+
+				Assert.That(db.LastQuery, Does.Not.Contain("ORDER BY"));
+			}
+		}
+
+		[Test]
+		public void OrderByUnionImmutable([IncludeDataSources(false, TestProvName.AllSQLite)] string context)
+		{
+			using (var db = (TestDataConnection)GetDataContext(context))
+			{
+				var param = 2;
+
+				var query1 =
+					from ch in db.Child
+					orderby Sql.ToNullable((int)Sql.Abs(1)!) descending, Sql.ToNullable((int)Sql.Abs(param)!)
+					select new { ch.ChildID, ch.ParentID, OrderElement = Sql.ToNullable((int)Sql.Abs(1)!) };
+
+				var query2 =
+					from ch in db.Child
+					orderby "1" descending, param
+					select new { ch.ChildID, ch.ParentID, OrderElement = (int?)param };
+
+				var result = query1.Concat(query2).OrderBy(c => c.OrderElement)
+					.ToArray();
+
+				Assert.That(db.LastQuery, Does.Contain("ORDER BY"));
+			}
+		}
+
+		[Test]
+		public void OrderByInUnion([IncludeDataSources(TestProvName.AllSQLite, TestProvName.AllOracleManaged)] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+
+				var query1 =
+					db.Child.OrderBy(c => c.ChildID).Concat(db.Child.OrderByDescending(c => c.ChildID));
+				var query2 =
+					db.Child.Concat(db.Child.OrderByDescending(c => c.ChildID));
+
+				var query3 = query1.OrderBy(_ => _.ChildID);
+
+				Assert.DoesNotThrow(() => query1.ToArray());
+				Assert.DoesNotThrow(() => query2.ToArray());
+				Assert.DoesNotThrow(() => query3.ToArray());
+			}
+		}
+
+		[Test]
+		public void OrderByContains([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var ids = new int[]{ 1, 3 };
+				db.Person.OrderBy(_ => ids.Contains(_.ID)).ToList();
+			}
+		}
+
+		[Test]
+		public void OrderByContainsSubquery([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var ids = new int[]{ 1, 3 };
+				db.Person.Select(_ => new { _.ID, _.LastName, flag = ids.Contains(_.ID) }).OrderBy(_ => _.flag).ToList();
+			}
+		}
+
 	}
 }

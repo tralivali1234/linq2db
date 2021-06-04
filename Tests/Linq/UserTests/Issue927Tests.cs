@@ -1,5 +1,4 @@
-﻿using System;
-using System.Data;
+﻿using System.Data;
 
 using LinqToDB.Data;
 
@@ -29,13 +28,13 @@ namespace Tests.UserTests
 		[Test]
 		public void InternalConnectionDisposed()
 		{
-			TestNoopConnection connection;
+			TestNoopConnection? connection;
 
 			using (var db = new DataConnection(new TestNoopProvider(), ""))
 			{
 				connection = db.Connection as TestNoopConnection;
 				Assert.NotNull (connection);
-				Assert.AreEqual(ConnectionState.Open, connection.State);
+				Assert.AreEqual(ConnectionState.Open, connection!.State);
 			}
 
 			Assert.AreEqual(ConnectionState.Closed, connection.State);
@@ -68,7 +67,7 @@ namespace Tests.UserTests
 
 			Assert.AreEqual(ConnectionState.Open, connection.State);
 
-			TestNoopConnection cloneConnection;
+			TestNoopConnection? cloneConnection;
 
 			using (var db = new DataConnection(new TestNoopProvider(), connection, false))
 			{
@@ -80,7 +79,7 @@ namespace Tests.UserTests
 					cloneConnection = db2.Connection as TestNoopConnection;
 					Assert.NotNull    (cloneConnection);
 					Assert.AreNotEqual(cloneConnection,      connection);
-					Assert.AreEqual   (ConnectionState.Open, cloneConnection.State);
+					Assert.AreEqual   (ConnectionState.Open, cloneConnection!.State);
 				}
 			}
 

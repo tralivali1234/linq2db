@@ -1,63 +1,66 @@
-﻿using LinqToDB;
-using LinqToDB.Data;
-using LinqToDB.Mapping;
-using NUnit.Framework;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Tests.Model;
+using System.Threading.Tasks;
+using LinqToDB;
+using LinqToDB.Data;
+using LinqToDB.DataProvider.Informix;
+using LinqToDB.Mapping;
+using NUnit.Framework;
 
 namespace Tests.xUpdate
 {
+	using Model;
 
 	[TestFixture]
+	[Order(10000)]
 	public class BulkCopyTests : TestBase
 	{
+		// TODO: update Sybase.sql to use proper type for identity. now it uses INT for most of tables, which
+		// is silently treated as non-identity field
 		[Table("KeepIdentityTest", Configuration = ProviderName.DB2)]
-		[Table("alltypes", Configuration = ProviderName.PostgreSQL)]
+		[Table("KeepIdentityTest", Configuration = ProviderName.Sybase)]
 		[Table("AllTypes")]
 		public class TestTable1
 		{
 			[Identity]
-			[Column("id", Configuration = ProviderName.PostgreSQL)]
 			public int ID { get; set; }
 
 			[Column("intDataType")]
 			[Column("Value", Configuration = ProviderName.DB2)]
-			[Column("intdatatype", Configuration = ProviderName.PostgreSQL)]
+			[Column("Value", Configuration = ProviderName.Sybase)]
 			public int Value { get; set; }
-
-			[Column("bitDataType", Configuration = ProviderName.Sybase)]
-			public bool ThisIsSYBASE;
 		}
 
 		[Table("KeepIdentityTest", Configuration = ProviderName.DB2)]
-		[Table("alltypes", Configuration = ProviderName.PostgreSQL)]
+		[Table("KeepIdentityTest", Configuration = ProviderName.Sybase)]
 		[Table("AllTypes")]
 		public class TestTable2
 		{
 			[Identity, Column(SkipOnInsert = true)]
-			[Column("id", Configuration = ProviderName.PostgreSQL)]
 			public int ID { get; set; }
 
 			[Column("intDataType")]
 			[Column("Value", Configuration = ProviderName.DB2)]
-			[Column("intdatatype", Configuration = ProviderName.PostgreSQL)]
+			[Column("Value", Configuration = ProviderName.Sybase)]
 			public int Value { get; set; }
-
-			[Column("bitDataType", Configuration = ProviderName.Sybase)]
-			public bool ThisIsSYBASE;
 		}
 
-		[Test, Combinatorial]
-		public void KeepIdentity_SkipOnInsertTrue(
+		[ActiveIssue("Sybase: Bulk insert failed. Null value is not allowed in not null column.", Configuration = ProviderName.Sybase)]
+		[Test]
+		public async Task KeepIdentity_SkipOnInsertTrue(
 			[DataSources(false)]string context,
 			[Values(null, true, false)]bool? keepIdentity,
-			[Values] BulkCopyType copyType)
+			[Values] BulkCopyType copyType,
+			[Values(0, 1, 2)] int asyncMode) // 0 == sync, 1 == async, 2 == async with IAsyncEnumerable
 		{
+			ResetAllTypesIdentity(context);
+
+			if ((context == ProviderName.OracleNative || context == TestProvName.Oracle11Native) && copyType == BulkCopyType.ProviderSpecific)
+				Assert.Inconclusive("Oracle BulkCopy doesn't support identity triggers");
+
 			// don't use transactions as some providers will fallback to non-provider-specific implementation then
 			using (var db = new TestDataConnection(context))
-			using (db.BeginTransaction())
 			{
 				var lastId = db.InsertWithInt32Identity(new TestTable2());
 				try
@@ -68,7 +71,7 @@ namespace Tests.xUpdate
 						BulkCopyType = copyType
 					};
 
-					if (!Execute(context, perform, keepIdentity, copyType))
+					if (!await ExecuteAsync(db, context, perform, keepIdentity, copyType))
 						return;
 
 					var data = db.GetTable<TestTable2>().Where(_ => _.ID > lastId).OrderBy(_ => _.ID).ToArray();
@@ -77,20 +80,16 @@ namespace Tests.xUpdate
 
 					// oracle supports identity insert only starting from version 12c, which is not used yet for tests
 					var useGenerated = keepIdentity != true
-						|| context == ProviderName.Oracle
-						|| context == ProviderName.OracleNative
-						|| context == ProviderName.OracleManaged;
+						|| context.Contains("Oracle");
 
 					Assert.AreEqual(lastId + (!useGenerated ? 10 : 1), data[0].ID);
 					Assert.AreEqual(200, data[0].Value);
 					Assert.AreEqual(lastId + (!useGenerated ? 20 : 2), data[1].ID);
 					Assert.AreEqual(300, data[1].Value);
 
-					void perform()
+					async Task perform()
 					{
-						db.BulkCopy(
-							options,
-							new[]
+						var values = new[]
 							{
 								new TestTable2()
 								{
@@ -102,7 +101,25 @@ namespace Tests.xUpdate
 									ID = lastId + 20,
 									Value = 300
 								}
-							});
+							};
+						if (asyncMode == 0) // synchronous 
+						{
+							db.BulkCopy(
+								options,
+								values);
+						} 
+						else if (asyncMode == 1) // asynchronous
+						{
+							await db.BulkCopyAsync(
+								options,
+								values);
+						}
+						else // asynchronous with IAsyncEnumerable
+						{
+							await db.BulkCopyAsync(
+								options,
+								AsAsyncEnumerable(values));
+						}
 					}
 				}
 				finally
@@ -113,31 +130,29 @@ namespace Tests.xUpdate
 			}
 		}
 
-		[Test, Combinatorial]
-		public void KeepIdentity_SkipOnInsertFalse(
-			[DataSources(false)]string context,
-			[Values(null, true, false)]bool? keepIdentity,
-			[Values] BulkCopyType copyType)
+		[ActiveIssue("Unsupported column datatype for BulkCopyType.ProviderSpecific", Configurations = new[] { TestProvName.AllOracleNative , ProviderName.Sybase } )]
+		[Test]
+		public async Task KeepIdentity_SkipOnInsertFalse(
+			[DataSources(false)]        string       context,
+			[Values(null, true, false)] bool?        keepIdentity,
+			[Values]                    BulkCopyType copyType,
+			[Values(0, 1, 2)]           int          asyncMode) // 0 == sync, 1 == async, 2 == async with IAsyncEnumerable
 		{
-			List<TestTable1> list = null;
+			ResetAllTypesIdentity(context);
 
 			// don't use transactions as some providers will fallback to non-provider-specific implementation then
 			using (var db = new TestDataConnection(context))
-			//using (db.BeginTransaction())
 			{
 				var lastId = db.InsertWithInt32Identity(new TestTable1());
 				try
 				{
-					list = db.GetTable<TestTable1>().ToList();
-					db.GetTable<TestTable1>().Delete();
-
 					var options = new BulkCopyOptions()
 					{
 						KeepIdentity = keepIdentity,
 						BulkCopyType = copyType
 					};
 
-					if (!Execute(context, perform, keepIdentity, copyType))
+					if (!await ExecuteAsync(db, context, perform, keepIdentity, copyType))
 						return;
 
 					var data = db.GetTable<TestTable1>().Where(_ => _.ID > lastId).OrderBy(_ => _.ID).ToArray();
@@ -146,20 +161,16 @@ namespace Tests.xUpdate
 
 					// oracle supports identity insert only starting from version 12c, which is not used yet for tests
 					var useGenerated = keepIdentity != true
-						|| context == ProviderName.Oracle
-						|| context == ProviderName.OracleNative
-						|| context == ProviderName.OracleManaged;
+						|| context.Contains("Oracle");
 
 					Assert.AreEqual(lastId + (!useGenerated ? 10 : 1), data[0].ID);
 					Assert.AreEqual(200, data[0].Value);
 					Assert.AreEqual(lastId + (!useGenerated ? 20 : 2), data[1].ID);
 					Assert.AreEqual(300, data[1].Value);
 
-					void perform()
+					async Task perform()
 					{
-						db.BulkCopy(
-							options,
-							new[]
+						var values = new[]
 							{
 								new TestTable1()
 								{
@@ -171,50 +182,190 @@ namespace Tests.xUpdate
 									ID = lastId + 20,
 									Value = 300
 								}
-							});
+							};
+						if (asyncMode == 0) // synchronous
+						{
+							db.BulkCopy(
+								options,
+								values);
+						}
+						else if (asyncMode == 1) // asynchronous
+						{
+							await db.BulkCopyAsync(
+								options,
+								values);
+						}
+						else // asynchronous with IAsyncEnumerable
+						{
+							await db.BulkCopyAsync(
+								options,
+								AsAsyncEnumerable(values));
+						}
 					}
 				}
 				finally
 				{
 					// cleanup
-					db.GetTable<TestTable2>().Delete(_ => _.ID >= lastId);
-					if (list != null)
-						foreach (var item in list)
-							db.Insert(item);
+					db.GetTable<TestTable1>().Delete(_ => _.ID >= lastId);
 				}
 			}
 		}
 
-		private bool Execute(string context, Action perform, bool? keepIdentity, BulkCopyType copyType)
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+		private async IAsyncEnumerable<T> AsAsyncEnumerable<T>(IEnumerable<T> enumerable)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
-			if ((context == ProviderName.Firebird || context == TestProvName.Firebird3)
+			var enumerator = enumerable.GetEnumerator();
+			while (enumerator.MoveNext())
+			{
+				yield return enumerator.Current;
+			}
+		}
+
+		private async Task<bool> ExecuteAsync(DataConnection db, string context, Func<Task> perform, bool? keepIdentity, BulkCopyType copyType)
+		{
+			if (context.Contains("Firebird")
 				&& keepIdentity == true
 				&& (copyType    == BulkCopyType.Default
 					|| copyType == BulkCopyType.MultipleRows
 					|| copyType == BulkCopyType.ProviderSpecific))
 			{
-				var ex = Assert.Catch(() => perform());
+				var ex = Assert.CatchAsync(async () => await perform())!;
 				Assert.IsInstanceOf<LinqToDBException>(ex);
 				Assert.AreEqual("BulkCopyOptions.KeepIdentity = true is not supported by Firebird provider. If you use generators with triggers, you should disable triggers during BulkCopy execution manually.", ex.Message);
 				return false;
 			}
 
+			bool notSupported = false;
+			if (context.Contains(ProviderName.Informix))
+			{
+				notSupported = !((InformixDataProvider)db.DataProvider).Adapter.IsIDSProvider
+					|| copyType == BulkCopyType.MultipleRows;
+			}
+
 			// RowByRow right now uses DataConnection.Insert which doesn't support identity insert
 			if ((copyType       == BulkCopyType.RowByRow
 					|| context  == ProviderName.Access
-					|| context  == ProviderName.Informix
-					|| (context == ProviderName.SapHana
-						&& (copyType == BulkCopyType.MultipleRows || copyType == BulkCopyType.Default)))
+					|| context  == ProviderName.AccessOdbc
+					|| notSupported
+					|| (context.StartsWith(ProviderName.SapHana)
+						&& (copyType == BulkCopyType.MultipleRows || copyType == BulkCopyType.Default))
+					|| (context == ProviderName.SapHanaOdbc && copyType == BulkCopyType.ProviderSpecific))
 				&& keepIdentity == true)
 			{
-				var ex = Assert.Catch(() => perform());
+				var ex = Assert.CatchAsync(async () => await perform())!;
 				Assert.IsInstanceOf<LinqToDBException>(ex);
 				Assert.AreEqual("BulkCopyOptions.KeepIdentity = true is not supported by BulkCopyType.RowByRow mode", ex.Message);
 				return false;
 			}
 
-			perform();
+			await perform();
 			return true;
+		}
+
+		// DB2: 
+		[Test]
+		public void ReuseOptionTest([DataSources(false, ProviderName.DB2)] string context)
+		{
+			using (var db = new TestDataConnection(context))
+			using (db.BeginTransaction())
+			{
+				var options = new BulkCopyOptions();
+
+				db.Parent.BulkCopy(options, new[] { new Parent { ParentID = 111001 } });
+				db.Child. BulkCopy(options, new[] { new Child  { ParentID = 111001 } });
+			}
+		}
+		
+		[Test]
+		public void UseParametersTest([DataSources(false)] string context)
+		{
+			using (var db = new TestDataConnection(context))
+			using (db.BeginTransaction())
+			{
+				var options = new BulkCopyOptions(){ UseParameters = true, MaxBatchSize = 50, BulkCopyType = BulkCopyType.MultipleRows };
+				var start   = 111001;
+
+				var rowsToInsert = Enumerable.Range(start, 149)
+					.Select(r => new Parent() {ParentID = r, Value1 = r-start}).ToList();
+
+				db.Parent.BulkCopy(options, rowsToInsert);
+
+				Assert.AreEqual(rowsToInsert.Count,
+					db.Parent.Where(r =>
+						r.ParentID >= rowsToInsert[0].ParentID && r.ParentID <= rowsToInsert.Last().ParentID).Count());
+			}
+		}
+
+		[Table]
+		public class SimpleBulkCopyTable
+		{
+			[Column] public int Id { get; set; }
+		}
+
+		[Test]
+		public void BulkCopyWithDataContext(
+			[DataSources(false)]        string       context,
+			[Values]                    BulkCopyType copyType)
+		{
+			using (var db = new DataContext(context))
+			using (var table = db.CreateLocalTable<SimpleBulkCopyTable>())
+			{
+				db.DataProvider.BulkCopy(table, new BulkCopyOptions() { BulkCopyType = copyType }, new[] { new SimpleBulkCopyTable() { Id = 1 } });
+			}
+		}
+
+		[Test]
+		public async Task BulkCopyWithDataContextAsync(
+			[DataSources(false)] string context,
+			[Values] BulkCopyType copyType)
+		{
+			using (var db = new DataContext(context))
+			using (var table = db.CreateLocalTable<SimpleBulkCopyTable>())
+			{
+				await db.DataProvider.BulkCopyAsync(table, new BulkCopyOptions() { BulkCopyType = copyType }, new[] { new SimpleBulkCopyTable() { Id = 1 } }, default);
+				await db.DataProvider.BulkCopyAsync(table, new BulkCopyOptions() { BulkCopyType = copyType }, AsyncEnumerableData(2, 1), default);
+			}
+		}
+
+		[Test]
+		public void BulkCopyWithDataContextFromTable(
+			[DataSources(false)] string context,
+			[Values] BulkCopyType copyType)
+		{
+			using (var db = new DataContext(context))
+			using (var table = db.CreateLocalTable<SimpleBulkCopyTable>())
+			{
+				table.BulkCopy(new[] { new SimpleBulkCopyTable() { Id = 1 } });
+				table.BulkCopy(5, new[] { new SimpleBulkCopyTable() { Id = 2 } });
+				table.BulkCopy(new BulkCopyOptions() { BulkCopyType = copyType }, new[] { new SimpleBulkCopyTable() { Id = 3 } });
+			}
+		}
+
+		[Test]
+		public async Task BulkCopyWithDataContextFromTableAsync(
+			[DataSources(false)] string context,
+			[Values] BulkCopyType copyType)
+		{
+			using (var db = new DataContext(context))
+			using (var table = db.CreateLocalTable<SimpleBulkCopyTable>())
+			{
+				await table.BulkCopyAsync(new[] { new SimpleBulkCopyTable() { Id = 1 } });
+				await table.BulkCopyAsync(5, new[] { new SimpleBulkCopyTable() { Id = 2 } });
+				await table.BulkCopyAsync(new BulkCopyOptions() { BulkCopyType = copyType }, new[] { new SimpleBulkCopyTable() { Id = 3 } });
+
+				await table.BulkCopyAsync(AsyncEnumerableData(10, 1));
+				await table.BulkCopyAsync(5, AsyncEnumerableData(20, 1));
+				await table.BulkCopyAsync(new BulkCopyOptions() { BulkCopyType = copyType }, AsyncEnumerableData(30, 1));
+			}
+		}
+
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
+		private async IAsyncEnumerable<SimpleBulkCopyTable> AsyncEnumerableData(int start, int count)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+		{
+			for (var i = 0; i < count; i++)
+				yield return new SimpleBulkCopyTable() { Id = start + i };
 		}
 	}
 }

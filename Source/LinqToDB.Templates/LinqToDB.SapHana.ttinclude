@@ -1,21 +1,19 @@
-<#@ include file="LinqToDB.ttinclude" #>
-<#@ import namespace="LinqToDB.DataProvider.SapHana"   #>
+<#@ include file="T4Model.ttinclude"  once="true"    #>
+<#@ include file="LinqToDB.ttinclude" once="true"    #>
+<#@ import namespace="LinqToDB.DataProvider.SapHana" #>
 <#
-	LinqToDB.DataProvider.SapHana.SapHanaTools.ResolveSapHana(
-		typeof(Sap.Data.Hana.HanaConnection).Assembly);
-
 	Model.Usings.Add("LinqToDB.DataProvider.SapHana");
 	Model.Usings.Add("System.Reflection");
 
 	GenerateProviderSpecificTable = t =>
 	{
 		var method = new Method(
-			String.Format("ITable<{0}>", t.TypeName),
+			() => string.Format("ITable<{0}>", t.TypeName),
 			t.DataContextPropertyName,
-			t.Parameters.Select(p => p.ParameterType + " " + p.ParameterName),
-			new []
+			t.Parameters.Select(p => (Func<string>)(() => p.Type.ToTypeName() + " " + p.ParameterName)),
+			() => new []
 			{
-				String.Concat("return GetTable<",t.TypeName,">(this, (MethodInfo) MethodBase.GetCurrentMethod(),"),
+				String.Concat("return GetTable<",t.TypeName,">(this, (MethodInfo) MethodBase.GetCurrentMethod()", EnableNullableReferenceTypes ? "!" : "" ,","),
 				String.Join(",", t.Parameters.Select(p => p.ParameterName)),
 				");"
 			});
@@ -43,7 +41,7 @@
 				Description             = t.Description,
 				Columns                 = t.Columns.ToDictionary(
 				c => c.ColumnName,
-				c => new Column
+				c => new Column(new ModelType(c.MemberType, !IsValueType(c.MemberType), c.IsNullable))
 				{
 					ColumnName      = c.ColumnName,
 					ColumnType      = c.ColumnType,
@@ -52,7 +50,6 @@
 					IsPrimaryKey    = c.IsPrimaryKey,
 					PrimaryKeyOrder = c.PrimaryKeyOrder,
 					MemberName      = CheckType(c.SystemType, c.MemberName),
-					Type            = c.MemberType,
 					SkipOnInsert    = c.SkipOnInsert,
 					SkipOnUpdate    = c.SkipOnUpdate,
 					Description     = c.Description,
@@ -69,6 +66,7 @@
 					ParameterType = pr.ParameterType,
 					SystemType    = pr.SystemType,
 					DataType      = pr.DataType.ToString(),
+					IsNullable    = pr.IsNullable
 				})
 				.ToList()
 			};
@@ -90,20 +88,20 @@
 		return GetSapHanaConnection(string.Format("Server={0};Current Schema={1};UserID={2};Password={3};", server, schema, uid, password));
 	}
 
-	void LoadSapHanaMetadata(DataConnection dataConnection)
+	public void LoadSapHanaMetadata(DataConnection dataConnection)
 	{
 		LoadMetadata(dataConnection);
 	}
 
-	void LoadSapHanaMetadata(string connectionString)
+	public void LoadSapHanaMetadata(string connectionString)
 	{
-		var dataConnection = GetSapHanaConnection(connectionString);
-		LoadMetadata(dataConnection);
+		using (var dataConnection = GetSapHanaConnection(connectionString))
+			LoadMetadata(dataConnection);
 	}
 
-	void LoadSapHanaMetadata(string server, string schema, string uid, string password)
+	public void LoadSapHanaMetadata(string server, string schema, string uid, string password)
 	{
-		var dataConnection = GetSapHanaConnection(server, schema, uid, password);
-		LoadMetadata(dataConnection);
+		using (var dataConnection = GetSapHanaConnection(server, schema, uid, password))
+			LoadMetadata(dataConnection);
 	}
 #>

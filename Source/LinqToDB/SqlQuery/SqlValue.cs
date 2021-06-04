@@ -1,34 +1,62 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace LinqToDB.SqlQuery
 {
-	public class SqlValue : ISqlExpression, IValueContainer
+	using Common;
+
+	public class SqlValue : ISqlExpression
 	{
-		public SqlValue(Type systemType, object value)
+		public SqlValue(Type systemType, object? value)
 		{
-			SystemType = systemType;
-			Value      = value;
+			_valueType  = new DbDataType(systemType);
+			_value     = value;
+		}
+
+		public SqlValue(DbDataType valueType, object? value)
+		{
+			_valueType = valueType;
+			_value     = value;
 		}
 
 		public SqlValue(object value)
 		{
-			Value = value;
-
-			if (value != null)
-				SystemType = value.GetType();
+			_value     = value ?? throw new ArgumentNullException(nameof(value), "Untyped null value");
+			_valueType = new DbDataType(value.GetType());
 		}
 
-		public   object    Value      { get; internal set; }
-		public   Type      SystemType { get; }
+		object? _value;
+		
+		public object? Value
+		{
+			get => _value;
+			internal set
+			{
+				if (_value == value)
+					return;
+				
+				_value    = value;
+				_hashCode = null;
+			}
+		}
 
-		// TODO refactor this to make DataType required parameter for SqlValue
-		/// <summary>
-		/// This implementation is hack to fix <a href="https://github.com/linq2db/linq2db/issues/271">issue 271</a>
-		/// <a href="https://github.com/linq2db/linq2db/pull/608">PR</a>.
-		/// </summary>
-		internal DataType? DataType   { get; set; }
+		DbDataType _valueType;
+		
+		public DbDataType ValueType
+		{
+			get => _valueType;
+			set
+			{
+				if (_valueType == value)
+					return;
+				_valueType = value;
+				_hashCode  = null;
+			}
+		}
+
+		Type ISqlExpression.SystemType => ValueType.SystemType;
 
 		#region Overrides
 
@@ -51,7 +79,7 @@ namespace LinqToDB.SqlQuery
 
 		#region ISqlExpressionWalkable Members
 
-		ISqlExpression ISqlExpressionWalkable.Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> func)
+		ISqlExpression ISqlExpressionWalkable.Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 		{
 			return func(this);
 		}
@@ -60,15 +88,34 @@ namespace LinqToDB.SqlQuery
 
 		#region IEquatable<ISqlExpression> Members
 
-		bool IEquatable<ISqlExpression>.Equals(ISqlExpression other)
+		bool IEquatable<ISqlExpression>.Equals(ISqlExpression? other)
 		{
 			if (this == other)
 				return true;
 
 			return
-				other is SqlValue value        &&
-				SystemType == value.SystemType &&
+				other is SqlValue value           &&
+				ValueType.Equals(value.ValueType) &&
 				(Value == null && value.Value == null || Value != null && Value.Equals(value.Value));
+		}
+
+		int? _hashCode;
+
+		[SuppressMessage("ReSharper", "NonReadonlyMemberInGetHashCode")]
+		public override int GetHashCode()
+		{
+			if (_hashCode.HasValue)
+				return _hashCode.Value;
+
+			var hashCode = 17;
+
+			hashCode = unchecked(hashCode + (hashCode * 397) ^ ValueType.GetHashCode());
+
+			if (Value != null)
+				hashCode = unchecked(hashCode + (hashCode * 397) ^ Value.GetHashCode());
+
+			_hashCode = hashCode;
+			return hashCode;
 		}
 
 		#endregion
@@ -84,21 +131,6 @@ namespace LinqToDB.SqlQuery
 
 		#endregion
 
-		#region ICloneableElement Members
-
-		public ICloneableElement Clone(Dictionary<ICloneableElement,ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
-		{
-			if (!doClone(this))
-				return this;
-
-			if (!objectTree.TryGetValue(this, out var clone))
-				objectTree.Add(this, clone = new SqlValue(SystemType, Value));
-
-			return clone;
-		}
-
-		#endregion
-
 		#region IQueryElement Members
 
 		public QueryElementType ElementType => QueryElementType.SqlValue;
@@ -108,10 +140,10 @@ namespace LinqToDB.SqlQuery
 			return
 				Value == null ?
 					sb.Append("NULL") :
-				Value is string ?
+				Value is string strVal ?
 					sb
 						.Append('\'')
-						.Append(Value.ToString().Replace("\'", "''"))
+						.Append(strVal.Replace("\'", "''"))
 						.Append('\'')
 				:
 					sb.Append(Value);

@@ -1,216 +1,277 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Linq;
 
 namespace LinqToDB.DataProvider.Oracle
 {
-	using Configuration;
+	using System.Threading;
+	using System.Threading.Tasks;
 	using Data;
+	using LinqToDB.Common;
 	using SqlProvider;
-	using Extensions;
 
 	class OracleBulkCopy : BasicBulkCopy
 	{
-		public OracleBulkCopy(OracleDataProvider dataProvider, Type connectionType)
+		/// <remarks>
+		/// Settings based on https://www.jooq.org/doc/3.12/manual/sql-building/dsl-context/custom-settings/settings-inline-threshold/
+		/// We subtract 1 based on possibility of provider using parameter for command.
+		/// </remarks>
+		private const      int                _maxParameters = 32766;
+		/// <summary>
+		/// Setting is conservative, based on https://docs.oracle.com/cd/A58617_01/server.804/a58242/ch5.htm
+		/// Max is actually more arbitrary in later versions than Oracle 8.
+		/// </summary>
+		private const      int                _maxSqlLength  = 65535;
+		protected override int                MaxParameters => _maxParameters;
+		protected override int                MaxSqlLength  => _maxSqlLength;
+		private readonly   OracleDataProvider _provider;
+		public OracleBulkCopy(OracleDataProvider provider)
 		{
-			_dataProvider   = dataProvider;
-			_connectionType = connectionType;
+			_provider = provider;
 		}
 
-		readonly OracleDataProvider _dataProvider;
-		readonly Type               _connectionType;
-
-		Func<IDbConnection,int,IDisposable> _bulkCopyCreator;
-		Func<int,string,object>             _columnMappingCreator;
-		Action<object,Action<object>>       _bulkCopySubscriber;
-
 		protected override BulkCopyRowsCopied ProviderSpecificCopy<T>(
-			[JetBrains.Annotations.NotNull] DataConnection dataConnection,
+			ITable<T> table,
 			BulkCopyOptions options,
 			IEnumerable<T>  source)
 		{
-			if (dataConnection == null) throw new ArgumentNullException(nameof(dataConnection));
+			// database name is not a part of table FQN in oracle
+			var serverName   = options.ServerName ?? table.ServerName;
 
-			var sqlBuilder = dataConnection.DataProvider.CreateSqlBuilder();
-			var descriptor = dataConnection.MappingSchema.GetEntityDescriptor(typeof(T));
-			var tableName  = GetTableName(sqlBuilder, options, descriptor);
-
-			if (dataConnection.Transaction == null)
+			if (table.TryGetDataConnection(out var dataConnection) && _provider.Adapter.BulkCopy != null
+				&& serverName == null)
 			{
-				if (_bulkCopyCreator == null)
+				var connection = _provider.TryGetProviderConnection(dataConnection.Connection, table.DataContext.MappingSchema);
+
+				if (connection != null)
 				{
-					var clientNamespace    = ((OracleDataProvider)dataConnection.DataProvider).AssemblyName + ".Client.";
-					var bulkCopyType       = _connectionType.AssemblyEx().GetType(clientNamespace + "OracleBulkCopy",              false);
-					var bulkCopyOptionType = _connectionType.AssemblyEx().GetType(clientNamespace + "OracleBulkCopyOptions",       false);
-					var columnMappingType  = _connectionType.AssemblyEx().GetType(clientNamespace + "OracleBulkCopyColumnMapping", false);
+					var ed        = table.DataContext.MappingSchema.GetEntityDescriptor(typeof(T));
+					var columns   = ed.Columns.Where(c => !c.SkipOnInsert || options.KeepIdentity == true && c.IsIdentity).ToList();
+					var sb        = _provider.CreateSqlBuilder(table.DataContext.MappingSchema);
 
-					if (bulkCopyType != null)
-					{
-						_bulkCopyCreator      = CreateBulkCopyCreator(_connectionType, bulkCopyType, bulkCopyOptionType);
-						_columnMappingCreator = CreateColumnMappingCreator(columnMappingType);
-					}
-				}
-
-				if (_bulkCopyCreator != null)
-				{
-					var columns = descriptor.Columns.Where(c => !c.SkipOnInsert || options.KeepIdentity == true && c.IsIdentity).ToList();
-					var rd      = new BulkCopyReader(_dataProvider, dataConnection.MappingSchema, columns, source);
-					var rc      = new BulkCopyRowsCopied();
-
-					var bcOptions = 0; // Default
-
-					if (options.UseInternalTransaction == true) bcOptions |= 1; // UseInternalTransaction = 1,
-
-					using (var bc = _bulkCopyCreator(Proxy.GetUnderlyingObject((DbConnection)dataConnection.Connection), bcOptions))
-					{
-						dynamic dbc = bc;
-
-						var notifyAfter = options.NotifyAfter == 0 && options.MaxBatchSize.HasValue ?
-							options.MaxBatchSize.Value : options.NotifyAfter;
-
-						if (notifyAfter != 0 && options.RowsCopiedCallback != null)
+					// ODP.NET doesn't bulk copy doesn't work if columns that require escaping:
+					// - if escaping applied, pre-flight validation fails as it performs uppercase comparison and quotes make it fail with
+					//   InvalidOperationException: Column mapping is invalid
+					// - if escaping not applied - if fails as expected on server, because it treats passed name as uppercased name
+					//   and gives "ORA-00904: "STRINGVALUE": invalid identifier" error
+					// That's quite common error in bulk copy implementation error by providers...
+					var supported = true;
+					foreach (var column in columns)
+						if (column.ColumnName != sb.ConvertInline(column.ColumnName, ConvertType.NameToQueryField))
 						{
-							if (_bulkCopySubscriber == null)
-								_bulkCopySubscriber = CreateBulkCopySubscriber(bc, "OracleRowsCopied");
-
-							dbc.NotifyAfter = notifyAfter;
-
-							_bulkCopySubscriber(bc, arg =>
-							{
-								dynamic darg = arg;
-								rc.RowsCopied = darg.RowsCopied;
-								options.RowsCopiedCallback(rc);
-								if (rc.Abort)
-									darg.Abort = true;
-							});
+							// fallback to sql-based copy
+							// TODO: we should add support for by-ordinal column mapping to workaround it
+							supported = false;
+							break;
 						}
 
-						if (options.MaxBatchSize.   HasValue) dbc.BatchSize       = options.MaxBatchSize.   Value;
-						if (options.BulkCopyTimeout.HasValue) dbc.BulkCopyTimeout = options.BulkCopyTimeout.Value;
-
-						dbc.DestinationTableName = tableName;
-
-						for (var i = 0; i < columns.Count; i++)
-							dbc.ColumnMappings.Add((dynamic)_columnMappingCreator(i, columns[i].ColumnName));
-
-						TraceAction(
-							dataConnection,
-							"INSERT BULK " + tableName + Environment.NewLine,
-							() => { dbc.WriteToServer(rd); return rd.Count; });
-					}
-
-					if (rc.RowsCopied != rd.Count)
+					if (supported)
 					{
-						rc.RowsCopied = rd.Count;
+						var rd         = new BulkCopyReader<T>(dataConnection, columns, source);
+						var sqlopt     = OracleProviderAdapter.OracleBulkCopyOptions.Default;
+						var rc         = new BulkCopyRowsCopied();
 
-						if (options.NotifyAfter != 0 && options.RowsCopiedCallback != null)
-							options.RowsCopiedCallback(rc);
+						var tableName   = sb.ConvertInline(options.TableName  ?? table.TableName , ConvertType.NameToQueryTable);
+						var schemaName  = options.SchemaName ?? table.SchemaName;
+						if (schemaName != null)
+							schemaName  = sb.ConvertInline(schemaName, ConvertType.NameToSchema);
+
+						if (options.UseInternalTransaction == true) sqlopt |= OracleProviderAdapter.OracleBulkCopyOptions.UseInternalTransaction;
+
+						using (var bc = _provider.Adapter.BulkCopy.Create(connection, sqlopt))
+						{
+							var notifyAfter = options.NotifyAfter == 0 && options.MaxBatchSize.HasValue
+							? options.MaxBatchSize.Value
+							: options.NotifyAfter;
+
+							if (notifyAfter != 0 && options.RowsCopiedCallback != null)
+							{
+								bc.NotifyAfter = options.NotifyAfter;
+
+								bc.OracleRowsCopied += (sender, args) =>
+								{
+									rc.RowsCopied = args.RowsCopied;
+									options.RowsCopiedCallback(rc);
+									if (rc.Abort)
+										args.Abort = true;
+								};
+							}
+
+							if (options.MaxBatchSize.HasValue)
+								bc.BatchSize = options.MaxBatchSize.Value;
+
+							if (options.BulkCopyTimeout.HasValue)
+								bc.BulkCopyTimeout = options.BulkCopyTimeout.Value;
+							else if (Configuration.Data.BulkCopyUseConnectionCommandTimeout)
+								bc.BulkCopyTimeout = connection.ConnectionTimeout;
+
+							bc.DestinationTableName  = tableName;
+							bc.DestinationSchemaName = schemaName;
+
+							for (var i = 0; i < columns.Count; i++)
+								bc.ColumnMappings.Add(_provider.Adapter.BulkCopy.CreateColumnMapping(i, columns[i].ColumnName));
+
+							TraceAction(
+								dataConnection,
+								() => "INSERT BULK " + (schemaName == null ? tableName : schemaName + "." + tableName) + "(" + string.Join(", ", columns.Select(x => x.ColumnName)) + ")" + Environment.NewLine,
+								() => { bc.WriteToServer(rd); return rd.Count; });
+						}
+
+						if (rc.RowsCopied != rd.Count)
+						{
+							rc.RowsCopied = rd.Count;
+
+							if (options.NotifyAfter != 0 && options.RowsCopiedCallback != null)
+								options.RowsCopiedCallback(rc);
+						}
+
+						return rc;
 					}
-
-					return rc;
 				}
 			}
+			
 
-			options.BulkCopyType = BulkCopyType.MultipleRows;
-
-			return MultipleRowsCopy(dataConnection, options, source);
+			return MultipleRowsCopy(table, options, source);
 		}
 
+		protected override Task<BulkCopyRowsCopied> ProviderSpecificCopyAsync<T>(
+			ITable<T> table, BulkCopyOptions options, IEnumerable<T> source, CancellationToken cancellationToken)
+		{
+			// call the synchronous provider-specific implementation
+			return Task.FromResult(ProviderSpecificCopy(table, options, source));
+		}
+
+#if NATIVE_ASYNC
+		protected override async Task<BulkCopyRowsCopied> ProviderSpecificCopyAsync<T>(
+			ITable<T> table, BulkCopyOptions options, IAsyncEnumerable<T> source, CancellationToken cancellationToken)
+		{
+			var enumerator = source.GetAsyncEnumerator(cancellationToken);
+			await using (enumerator.ConfigureAwait(Configuration.ContinueOnCapturedContext))
+			{
+				// call the synchronous provider-specific implementation
+				return ProviderSpecificCopy(table, options, EnumerableHelper.AsyncToSyncEnumerable(enumerator));
+			}
+		}
+#endif
+
 		protected override BulkCopyRowsCopied MultipleRowsCopy<T>(
-			DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+			ITable<T> table, BulkCopyOptions options, IEnumerable<T> source)
+		{
+			return OracleTools.UseAlternativeBulkCopy switch
+			{
+				AlternativeBulkCopy.InsertInto => OracleMultipleRowsCopy2(new MultipleRowsHelper<T>(table, options), source),
+				AlternativeBulkCopy.InsertDual => OracleMultipleRowsCopy3(new MultipleRowsHelper<T>(table, options), source),
+				_                              => OracleMultipleRowsCopy1(new MultipleRowsHelper<T>(table, options), source),
+			};
+		}
+
+		protected override Task<BulkCopyRowsCopied> MultipleRowsCopyAsync<T>(
+			ITable<T> table, BulkCopyOptions options, IEnumerable<T> source, CancellationToken cancellationToken)
 		{
 			switch (OracleTools.UseAlternativeBulkCopy)
 			{
-				case AlternativeBulkCopy.InsertInto:
-					return MultipleRowsCopy2(dataConnection, options, source);
-				case AlternativeBulkCopy.InsertDual:
-					return MultipleRowsCopy3(dataConnection, options, source);
-				default:
-					return MultipleRowsCopy1(dataConnection, options, source);
+				case AlternativeBulkCopy.InsertInto: return OracleMultipleRowsCopy2Async(new MultipleRowsHelper<T>(table, options), source, cancellationToken);
+				case AlternativeBulkCopy.InsertDual: return OracleMultipleRowsCopy3Async(new MultipleRowsHelper<T>(table, options), source, cancellationToken);
+				default                            : return OracleMultipleRowsCopy1Async(new MultipleRowsHelper<T>(table, options), source, cancellationToken);
 			}
 		}
 
-		BulkCopyRowsCopied MultipleRowsCopy1<T>(
-			DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+#if NATIVE_ASYNC
+		protected override Task<BulkCopyRowsCopied> MultipleRowsCopyAsync<T>(
+			ITable<T> table, BulkCopyOptions options, IAsyncEnumerable<T> source, CancellationToken cancellationToken)
 		{
-			var helper = new MultipleRowsHelper<T>(dataConnection, options);
+			switch (OracleTools.UseAlternativeBulkCopy)
+			{
+				case AlternativeBulkCopy.InsertInto: return OracleMultipleRowsCopy2Async(new MultipleRowsHelper<T>(table, options), source, cancellationToken);
+				case AlternativeBulkCopy.InsertDual: return OracleMultipleRowsCopy3Async(new MultipleRowsHelper<T>(table, options), source, cancellationToken);
+				default                            : return OracleMultipleRowsCopy1Async(new MultipleRowsHelper<T>(table, options), source, cancellationToken);
+			}
+		}
+#endif
 
+		static void OracleMultipleRowsCopy1Prep(MultipleRowsHelper helper)
+		{
 			helper.StringBuilder.AppendLine("INSERT ALL");
 			helper.SetHeader();
-
-			foreach (var item in source)
-			{
-				helper.StringBuilder.AppendFormat("\tINTO {0} (", helper.TableName);
-
-				foreach (var column in helper.Columns)
-					helper.StringBuilder
-						.Append(helper.SqlBuilder.Convert(column.ColumnName, ConvertType.NameToQueryField))
-						.Append(", ");
-
-				helper.StringBuilder.Length -= 2;
-
-				helper.StringBuilder.Append(") VALUES (");
-				helper.BuildColumns(item, _ => _.DataType == DataType.Text || _.DataType == DataType.NText);
-				helper.StringBuilder.AppendLine(")");
-
-				helper.RowsCopied.RowsCopied++;
-				helper.CurrentCount++;
-
-				if (helper.CurrentCount >= helper.BatchSize || helper.Parameters.Count > 10000 || helper.StringBuilder.Length > 100000)
-				{
-					helper.StringBuilder.AppendLine("SELECT * FROM dual");
-					if (!helper.Execute())
-						return helper.RowsCopied;
-				}
-			}
-
-			if (helper.CurrentCount > 0)
-			{
-				helper.StringBuilder.AppendLine("SELECT * FROM dual");
-				helper.Execute();
-			}
-
-			return helper.RowsCopied;
 		}
 
-		BulkCopyRowsCopied MultipleRowsCopy2<T>(
-			DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+		static void OracleMultipleRowsCopy1Add(MultipleRowsHelper helper, object item, string? from)
 		{
-			var helper = new MultipleRowsHelper<T>(dataConnection, options);
+			helper.StringBuilder.AppendFormat("\tINTO {0} (", helper.TableName);
 
+			foreach (var column in helper.Columns)
+			{
+				helper.SqlBuilder.Convert(helper.StringBuilder, column.ColumnName, ConvertType.NameToQueryField);
+				helper.StringBuilder.Append(", ");
+			}
+
+			helper.StringBuilder.Length -= 2;
+
+			helper.StringBuilder.Append(") VALUES (");
+			helper.BuildColumns(item, _ => _.DataType == DataType.Text || _.DataType == DataType.NText);
+			helper.StringBuilder.AppendLine(")");
+
+			helper.RowsCopied.RowsCopied++;
+			helper.CurrentCount++;
+		}
+
+		static void OracleMultipleRowsCopy1Finish(MultipleRowsHelper helper)
+		{
+			helper.StringBuilder.AppendLine("SELECT * FROM dual");
+		}
+
+		static BulkCopyRowsCopied OracleMultipleRowsCopy1(MultipleRowsHelper helper, IEnumerable source)
+			=> MultipleRowsCopyHelper(helper, source, null, OracleMultipleRowsCopy1Prep, OracleMultipleRowsCopy1Add, OracleMultipleRowsCopy1Finish, _maxParameters,_maxSqlLength);
+
+		static Task<BulkCopyRowsCopied> OracleMultipleRowsCopy1Async(MultipleRowsHelper helper, IEnumerable source, CancellationToken cancellationToken)
+			=> MultipleRowsCopyHelperAsync(helper, source, null, OracleMultipleRowsCopy1Prep, OracleMultipleRowsCopy1Add, OracleMultipleRowsCopy1Finish, cancellationToken, _maxParameters,_maxSqlLength);
+
+#if NATIVE_ASYNC
+		static Task<BulkCopyRowsCopied> OracleMultipleRowsCopy1Async<T>(MultipleRowsHelper helper, IAsyncEnumerable<T> source, CancellationToken cancellationToken)
+			=> MultipleRowsCopyHelperAsync(helper, source, null, OracleMultipleRowsCopy1Prep, OracleMultipleRowsCopy1Add, OracleMultipleRowsCopy1Finish, cancellationToken, _maxParameters,_maxSqlLength);
+#endif
+
+		static List<object> OracleMultipleRowsCopy2Prep(MultipleRowsHelper helper)
+		{
 			helper.StringBuilder.AppendFormat("INSERT INTO {0} (", helper.TableName);
 
 			foreach (var column in helper.Columns)
-				helper.StringBuilder
-					.Append(helper.SqlBuilder.Convert(column.ColumnName, ConvertType.NameToQueryField))
-					.Append(", ");
+			{
+				helper.SqlBuilder.Convert(helper.StringBuilder, column.ColumnName, ConvertType.NameToQueryField);
+				helper.StringBuilder.Append(", ");
+			}
 
 			helper.StringBuilder.Length -= 2;
 
 			helper.StringBuilder.Append(") VALUES (");
 
 			for (var i = 0; i < helper.Columns.Length; i++)
-				helper.StringBuilder.Append(":p" + ( i + 1)).Append(", ");
+				helper.StringBuilder.Append(":p" + (i + 1)).Append(", ");
 
 			helper.StringBuilder.Length -= 2;
 
 			helper.StringBuilder.AppendLine(")");
 			helper.SetHeader();
 
-			var list = new List<T>(31);
+			return new List<object>(31);
+		}
+
+		static BulkCopyRowsCopied OracleMultipleRowsCopy2(MultipleRowsHelper helper, IEnumerable source)
+		{
+			var list = OracleMultipleRowsCopy2Prep(helper);
 
 			foreach (var item in source)
 			{
-				list.Add(item);
+				list.Add(item!);
 
 				helper.RowsCopied.RowsCopied++;
 				helper.CurrentCount++;
 
 				if (helper.CurrentCount >= helper.BatchSize)
 				{
-					if (!Execute(dataConnection, helper, list))
+					if (!Execute(helper, list))
 						return helper.RowsCopied;
 
 					list.Clear();
@@ -219,81 +280,80 @@ namespace LinqToDB.DataProvider.Oracle
 
 			if (helper.CurrentCount > 0)
 			{
-				Execute(dataConnection, helper, list);
+				Execute(helper, list);
 			}
 
 			return helper.RowsCopied;
 		}
 
-		BulkCopyRowsCopied MultipleRowsCopy3<T>(DataConnection dataConnection, BulkCopyOptions options, IEnumerable<T> source)
+		static async Task<BulkCopyRowsCopied> OracleMultipleRowsCopy2Async(MultipleRowsHelper helper, IEnumerable source, CancellationToken cancellationToken)
 		{
-			var helper = new MultipleRowsHelper<T>(dataConnection, options);
-
-			helper.StringBuilder
-				.AppendFormat("INSERT INTO {0}", helper.TableName).AppendLine()
-				.Append("(");
-
-			foreach (var column in helper.Columns)
-				helper.StringBuilder
-					.AppendLine()
-					.Append("\t")
-					.Append(helper.SqlBuilder.Convert(column.ColumnName, ConvertType.NameToQueryField))
-					.Append(",");
-
-			helper.StringBuilder.Length--;
-			helper.StringBuilder
-				.AppendLine()
-				.AppendLine(")")
-				;
-
-			helper.SetHeader();
+			var list = OracleMultipleRowsCopy2Prep(helper);
 
 			foreach (var item in source)
 			{
-				helper.StringBuilder
-					.AppendLine()
-					.Append("\tSELECT ");
-				helper.BuildColumns(item, _ => _.DataType == DataType.Text || _.DataType == DataType.NText);
-				helper.StringBuilder.Append(" FROM DUAL ");
-				helper.StringBuilder.Append(" UNION ALL");
+				list.Add(item!);
 
 				helper.RowsCopied.RowsCopied++;
 				helper.CurrentCount++;
 
-				if (helper.CurrentCount >= helper.BatchSize || helper.Parameters.Count > 10000 || helper.StringBuilder.Length > 100000)
+				if (helper.CurrentCount >= helper.BatchSize)
 				{
-					helper.StringBuilder.Length -= " UNION ALL".Length;
-					helper.StringBuilder
-						.AppendLine()
-						;
-					if (!helper.Execute())
+					if (!await ExecuteAsync(helper, list, cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext))
 						return helper.RowsCopied;
+
+					list.Clear();
 				}
 			}
 
 			if (helper.CurrentCount > 0)
 			{
-				helper.StringBuilder.Length -= " UNION ALL".Length;
-				helper.StringBuilder
-					.AppendLine()
-					;
-				helper.Execute();
+				await ExecuteAsync(helper, list, cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext);
 			}
 
 			return helper.RowsCopied;
 		}
 
-		bool Execute<T>(DataConnection dataConnection, MultipleRowsHelper<T> helper, List<T> list)
+#if NATIVE_ASYNC
+		static async Task<BulkCopyRowsCopied> OracleMultipleRowsCopy2Async<T>(MultipleRowsHelper helper, IAsyncEnumerable<T> source, CancellationToken cancellationToken)
+		{
+			var list = OracleMultipleRowsCopy2Prep(helper);
+
+			await foreach (var item in source.WithCancellation(cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext))
+			{
+				list.Add(item!);
+
+				helper.RowsCopied.RowsCopied++;
+				helper.CurrentCount++;
+
+				if (helper.CurrentCount >= helper.BatchSize)
+				{
+					if (!await ExecuteAsync(helper, list, cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext))
+						return helper.RowsCopied;
+
+					list.Clear();
+				}
+			}
+
+			if (helper.CurrentCount > 0)
+			{
+				await ExecuteAsync(helper, list, cancellationToken).ConfigureAwait(Configuration.ContinueOnCapturedContext);
+			}
+
+			return helper.RowsCopied;
+		}
+#endif
+
+		static bool Execute(MultipleRowsHelper helper, List<object> list)
 		{
 			for (var i = 0; i < helper.Columns.Length; i++)
 			{
 				var column   = helper.Columns[i];
 				var dataType = column.DataType == DataType.Undefined
-					? dataConnection.MappingSchema.GetDataType(column.MemberType).DataType
+					? helper.MappingSchema.GetDataType(column.MemberType).Type.DataType
 					: column.DataType;
-				//var type     = dataConnection.DataProvider.ConvertParameterType(column.MemberType, dataType);
 
-				helper.Parameters.Add(new DataParameter(":p" + (i + 1), list.Select(o => column.GetValue(dataConnection.MappingSchema, o)).ToArray(), dataType)
+				helper.Parameters.Add(new DataParameter(":p" + (i + 1), list.Select(o => column.GetValue(o)).ToArray(), dataType, column.DbType)
 				{
 					Direction = ParameterDirection.Input,
 					IsArray   = true,
@@ -302,5 +362,78 @@ namespace LinqToDB.DataProvider.Oracle
 
 			return helper.Execute();
 		}
+
+		static Task<bool> ExecuteAsync(MultipleRowsHelper helper, List<object> list, CancellationToken cancellationToken)
+		{
+			for (var i = 0; i < helper.Columns.Length; i++)
+			{
+				var column   = helper.Columns[i];
+				var dataType = column.DataType == DataType.Undefined
+					? helper.MappingSchema.GetDataType(column.MemberType).Type.DataType
+					: column.DataType;
+
+				helper.Parameters.Add(new DataParameter(":p" + (i + 1), list.Select(o => column.GetValue(o)).ToArray(), dataType, column.DbType)
+				{
+					Direction = ParameterDirection.Input,
+					IsArray   = true,
+				});
+			}
+
+			return helper.ExecuteAsync(cancellationToken);
+		}
+
+		static void OracleMultipleRowsCopy3Prep(MultipleRowsHelper helper)
+		{
+			helper.StringBuilder
+				.AppendFormat("INSERT INTO {0}", helper.TableName).AppendLine()
+				.Append('(');
+
+			foreach (var column in helper.Columns)
+			{
+				helper.StringBuilder
+					.AppendLine()
+					.Append('\t');
+				helper.SqlBuilder.Convert(helper.StringBuilder, column.ColumnName, ConvertType.NameToQueryField);
+				helper.StringBuilder.Append(',');
+			}
+
+			helper.StringBuilder.Length--;
+			helper.StringBuilder
+				.AppendLine()
+				.AppendLine(")")
+				;
+
+			helper.SetHeader();
+		}
+
+		static void OracleMultipleRowsCopy3Add(MultipleRowsHelper helper, object item, string? from)
+		{
+			helper.StringBuilder
+				.AppendLine()
+				.Append("\tSELECT ");
+			helper.BuildColumns(item, _ => _.DataType == DataType.Text || _.DataType == DataType.NText);
+			helper.StringBuilder.Append(" FROM DUAL ");
+			helper.StringBuilder.Append(" UNION ALL");
+
+			helper.RowsCopied.RowsCopied++;
+			helper.CurrentCount++;
+		}
+
+		static void OracleMultipleRowsCopy3Finish(MultipleRowsHelper helper)
+		{
+			helper.StringBuilder.Length -= " UNION ALL".Length;
+			helper.StringBuilder.AppendLine();
+		}
+
+		static BulkCopyRowsCopied OracleMultipleRowsCopy3(MultipleRowsHelper helper, IEnumerable source)
+			=> MultipleRowsCopyHelper(helper, source, null, OracleMultipleRowsCopy3Prep, OracleMultipleRowsCopy3Add, OracleMultipleRowsCopy3Finish, _maxParameters, _maxSqlLength);
+
+		static Task<BulkCopyRowsCopied> OracleMultipleRowsCopy3Async(MultipleRowsHelper helper, IEnumerable source, CancellationToken cancellationToken)
+			=> MultipleRowsCopyHelperAsync(helper, source, null, OracleMultipleRowsCopy3Prep, OracleMultipleRowsCopy3Add, OracleMultipleRowsCopy3Finish, cancellationToken, _maxParameters, _maxSqlLength);
+
+#if NATIVE_ASYNC
+		static Task<BulkCopyRowsCopied> OracleMultipleRowsCopy3Async<T>(MultipleRowsHelper helper, IAsyncEnumerable<T> source, CancellationToken cancellationToken)
+			=> MultipleRowsCopyHelperAsync(helper, source, null, OracleMultipleRowsCopy3Prep, OracleMultipleRowsCopy3Add, OracleMultipleRowsCopy3Finish, cancellationToken, _maxParameters, _maxSqlLength);
+#endif
 	}
 }

@@ -1,16 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace LinqToDB.SqlQuery
 {
 	public class SqlColumn : IEquatable<SqlColumn>, ISqlExpression
 	{
-		public SqlColumn(SelectQuery parent, ISqlExpression expression, string alias)
+		public SqlColumn(SelectQuery? parent, ISqlExpression expression, string? alias)
 		{
-			Parent     = parent;
-			Expression = expression ?? throw new ArgumentNullException(nameof(expression));
-			RawAlias     = alias;
+			Parent      = parent;
+			_expression = expression ?? throw new ArgumentNullException(nameof(expression));
+			RawAlias    = alias;
 
 #if DEBUG
 			_columnNumber = ++_columnCounter;
@@ -24,14 +25,52 @@ namespace LinqToDB.SqlQuery
 
 #if DEBUG
 		readonly int _columnNumber;
+		public   int  ColumnNumber => _columnNumber;
 		static   int _columnCounter;
 #endif
 
-		public   ISqlExpression Expression { get; set; }
-		public   SelectQuery    Parent     { get; set; }
-		internal string         RawAlias   { get; set; }
+		ISqlExpression _expression;
+		
+		public ISqlExpression Expression
+		{
+			get => _expression;
+			set
+			{
+				if (_expression == value)
+					return;
+				_expression = value;
+				_hashCode   = null;
+			}
+		}
 
-		public string Alias
+		SelectQuery? _parent;
+		
+		public SelectQuery? Parent
+		{
+			get => _parent;
+			set
+			{
+				if (_parent == value)
+					return;
+				_parent   = value;
+				_hashCode = null;
+			}
+		}
+
+		internal string? RawAlias   { get; set; }
+
+		public ISqlExpression UnderlyingExpression()
+		{
+			var current = Expression;
+			while (current.ElementType == QueryElementType.Column)
+			{
+				current = ((SqlColumn)current).Expression;
+			}
+
+			return current;
+		}
+
+		public string? Alias
 		{
 			get
 			{
@@ -39,8 +78,14 @@ namespace LinqToDB.SqlQuery
 				{
 					switch (Expression)
 					{
-						case SqlField  field  : return field.Alias ?? field.PhysicalName;
-						case SqlColumn column : return column.Alias;
+						case SqlField    field  : return field.Alias ?? field.PhysicalName;
+						case SqlColumn   column : return column.Alias;
+						case SelectQuery query:
+							{
+								if (query.Select.Columns.Count == 1 && query.Select.Columns[0].Alias != "*")
+									return query.Select.Columns[0].Alias;
+								break;
+							}
 					}
 				}
 
@@ -49,93 +94,72 @@ namespace LinqToDB.SqlQuery
 			set => RawAlias = value;
 		}
 
-		private bool   _underlyingColumnSet;
+		int? _hashCode;
 
-		private SqlColumn _underlyingColumn;
-		public  SqlColumn  UnderlyingColumn
+		[SuppressMessage("ReSharper", "NonReadonlyMemberInGetHashCode")]
+		public override int GetHashCode()
 		{
-			get
-			{
-				if (_underlyingColumnSet)
-					return _underlyingColumn;
+			if (_hashCode.HasValue)
+				return _hashCode.Value;
 
-				var columns = new List<SqlColumn>(10);
-				var column  = Expression as SqlColumn;
+			var hashCode = Parent?.GetHashCode() ?? 0;
 
-				while (column != null)
-				{
-					if (column._underlyingColumn != null)
-					{
-						columns.Add(column._underlyingColumn);
-						break;
-					}
+			hashCode = unchecked(hashCode + (hashCode * 397) ^ Expression.GetHashCode());
 
-					columns.Add(column);
-					column = column.Expression as SqlColumn;
-				}
+			_hashCode = hashCode;
 
-				_underlyingColumnSet = true;
-				if (columns.Count == 0)
-					return null;
-
-				_underlyingColumn = columns[columns.Count - 1];
-
-				for (var i = 0; i < columns.Count - 1; i++)
-				{
-					var c = columns[i];
-					c._underlyingColumn    = _underlyingColumn;
-					c._underlyingColumnSet = true;
-				}
-
-				return _underlyingColumn;
-			}
+			return hashCode;
 		}
 
-		public bool Equals(SqlColumn other)
+		public bool Equals(SqlColumn? other)
 		{
 			if (other == null)
 				return false;
+
+			if (ReferenceEquals(this, other))
+				return true;
 
 			if (!Equals(Parent, other.Parent))
 				return false;
 
 			if (Expression.Equals(other.Expression))
-				return true;
+				return false;
 
-			//return false;
-			return UnderlyingColumn != null && UnderlyingColumn.Equals(other.UnderlyingColumn);
-
-			//var found =
-			//
-			//	|| new QueryVisitor().Find(other, e =>
-			//		{
-			//			switch(e.ElementType)
-			//			{
-			//				case QueryElementType.Column: return ((Column)e).Expression.Equals(Expression);
-			//			}
-			//			return false;
-			//		}) != null
-			//	|| new QueryVisitor().Find(Expression, e =>
-			//		{
-			//			switch (e.ElementType)
-			//			{
-			//				case QueryElementType.Column: return ((Column)e).Expression.Equals(other.Expression);
-			//			}
-			//			return false;
-			//		}) != null;
-
-			//return found;
+			return false;
 		}
 
 		public override string ToString()
 		{
 #if OVERRIDETOSTRING
-				return ((IQueryElement)this).ToString(new StringBuilder(), new Dictionary<IQueryElement,IQueryElement>()).ToString();
+			var sb  = new StringBuilder();
+			var dic = new Dictionary<IQueryElement, IQueryElement>();
+
+			sb
+				.Append('t')
+				.Append(Parent?.SourceID ?? -1)
+#if DEBUG
+				.Append('[').Append(_columnNumber).Append(']')
+#endif
+				.Append('.')
+				.Append(Alias ?? "c")
+				.Append(" => ");
+
+			Expression.ToString(sb, dic);
+
+			var underlying = UnderlyingExpression();
+			if (!ReferenceEquals(underlying, Expression))
+			{
+				sb.Append(" == ");
+				underlying.ToString(sb, dic);
+			}
+
+			return sb.ToString();
+
 #else
 			if (Expression is SqlField)
 				return ((IQueryElement)this).ToString(new StringBuilder(), new Dictionary<IQueryElement,IQueryElement>()).ToString();
 
-			return base.ToString();
+			return base.ToString()!;
 #endif
 		}
 
@@ -148,15 +172,13 @@ namespace LinqToDB.SqlQuery
 			if (this == other)
 				return true;
 
-			var otherColumn = other as SqlColumn;
-
-			if (otherColumn == null)
+			if (!(other is SqlColumn otherColumn))
 				return false;
 
 			if (Parent != otherColumn.Parent)
 				return false;
 
-			if (Parent.HasUnion)
+			if (Parent!.HasSetOperators)
 				return false;
 
 			return
@@ -176,45 +198,32 @@ namespace LinqToDB.SqlQuery
 				comparer(this, other);
 		}
 
-		public int  Precedence => SqlQuery.Precedence.Primary;
-		public Type SystemType => Expression.SystemType;
-
-		public ICloneableElement Clone(Dictionary<ICloneableElement, ICloneableElement> objectTree, Predicate<ICloneableElement> doClone)
-		{
-			if (!doClone(this))
-				return this;
-
-			var parent = (SelectQuery)Parent.Clone(objectTree, doClone);
-
-			if (!objectTree.TryGetValue(this, out var clone))
-				objectTree.Add(this, clone = new SqlColumn(
-					parent,
-					(ISqlExpression)Expression.Clone(objectTree, doClone),
-					RawAlias));
-
-			return clone;
-		}
+		public int   Precedence => SqlQuery.Precedence.Primary;
+		public Type? SystemType => Expression.SystemType;
 
 		#endregion
 
 		#region IEquatable<ISqlExpression> Members
 
-		bool IEquatable<ISqlExpression>.Equals(ISqlExpression other)
+		bool IEquatable<ISqlExpression>.Equals(ISqlExpression? other)
 		{
 			if (this == other)
 				return true;
 
-			return other is SqlColumn && Equals((SqlColumn)other);
+			return other is SqlColumn column && Equals(column);
 		}
 
 		#endregion
 
 		#region ISqlExpressionWalkable Members
 
-		public ISqlExpression Walk(bool skipColumns, Func<ISqlExpression,ISqlExpression> func)
+		public ISqlExpression Walk(WalkOptions options, Func<ISqlExpression,ISqlExpression> func)
 		{
-			if (!(skipColumns && Expression is SqlColumn))
-				Expression = Expression.Walk(skipColumns, func);
+			if (!(options.SkipColumns && Expression is SqlColumn))
+				Expression = Expression.Walk(options, func)!;
+
+			if (options.ProcessParent)
+				Parent = (SelectQuery)func(Parent!);
 
 			return func(this);
 		}
@@ -227,33 +236,20 @@ namespace LinqToDB.SqlQuery
 
 		StringBuilder IQueryElement.ToString(StringBuilder sb, Dictionary<IQueryElement,IQueryElement> dic)
 		{
-			if (dic.ContainsKey(this))
-				return sb.Append("...");
-
-			dic.Add(this, this);
+			var parentIndex = -1;
+			if (Parent != null)
+			{
+				parentIndex = Parent.Select.Columns.IndexOf(this);
+			}
 
 			sb
 				.Append('t')
-				.Append(Parent.SourceID)
-				.Append(".");
-
+				.Append(Parent?.SourceID ?? - 1)
 #if DEBUG
-			sb.Append('[').Append(_columnNumber).Append(']');
+				.Append('[').Append(_columnNumber).Append(']')
 #endif
-
-			if (Expression is SelectQuery)
-			{
-				sb.Append("(\n\t\t");
-				var len = sb.Length;
-				Expression.ToString(sb, dic).Replace("\n", "\n\t\t", len, sb.Length - len);
-				sb.Append("\n\t)");
-			}
-			else
-			{
-				Expression.ToString(sb, dic);
-			}
-
-			dic.Remove(this);
+				.Append('.')
+				.Append(Alias ?? "c" + (parentIndex >= 0 ? parentIndex + 1 : parentIndex));
 
 			return sb;
 		}

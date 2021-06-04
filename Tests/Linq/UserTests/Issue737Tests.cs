@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-
-using LinqToDB;
+﻿using System.Linq;
 using LinqToDB.Data;
 
 using NUnit.Framework;
@@ -13,8 +10,8 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue737Tests : TestBase
 	{
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2014)]
-		public void Test(string context)
+		[Test]
+		public void Test([IncludeDataSources(TestProvName.AllSqlServer)] string context)
 		{
 			using (var db = new DataConnection(context))
 			{
@@ -23,9 +20,9 @@ namespace Tests.UserTests
 			}
 		}
 
-		private class QueryOne
+		class QueryOne
 		{
-			private readonly DataConnection _db;
+			readonly DataConnection _db;
 
 			public QueryOne(DataConnection db)
 			{
@@ -36,9 +33,9 @@ namespace Tests.UserTests
 				=> _db.GetTable<Person>().SelectMany(x => _db.GetTable<Person>().Where(y => false), (x, y) => x);
 		}
 
-		private class QueryTwo
+		class QueryTwo
 		{
-			private readonly DataConnection _db;
+			readonly DataConnection _db;
 
 			public QueryTwo(DataConnection db)
 			{

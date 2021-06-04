@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using LinqToDB.Mapping;
 
 namespace LinqToDB.Reflection
 {
 	using Extensions;
+	using LinqToDB.Common;
 
 	public class TypeAccessor<T> : TypeAccessor
 	{
@@ -17,55 +17,55 @@ namespace LinqToDB.Reflection
 			//
 			var type = typeof(T);
 
-			if (type.IsValueTypeEx())
+			if (type.IsValueType)
 			{
-				_createInstance = () => default;
+				_createInstance = () => default!;
 			}
 			else
 			{
-				var ctor = type.IsAbstractEx() ? null : type.GetDefaultConstructorEx();
+				var ctor = type.IsAbstract ? null : type.GetDefaultConstructorEx();
 
 				if (ctor == null)
 				{
 					Expression<Func<T>> mi;
 
-					if (type.IsAbstractEx()) mi = () => ThrowAbstractException();
+					if (type.IsAbstract) mi = () => ThrowAbstractException();
 					else                     mi = () => ThrowException();
 
 					var body = Expression.Call(null, ((MethodCallExpression)mi.Body).Method);
 
-					_createInstance = Expression.Lambda<Func<T>>(body).Compile();
+					_createInstance = Expression.Lambda<Func<T>>(body).CompileExpression();
 				}
 				else
 				{
-					_createInstance = Expression.Lambda<Func<T>>(Expression.New(ctor)).Compile();
+					_createInstance = Expression.Lambda<Func<T>>(Expression.New(ctor)).CompileExpression();
 				}
 			}
 
-			foreach (var memberInfo in type.GetPublicInstanceMembersEx())
-			{
-				if (memberInfo.IsFieldEx() || memberInfo.IsPropertyEx() && ((PropertyInfo)memberInfo).GetIndexParameters().Length == 0)
-					_members.Add(memberInfo);
-			}
+			_members.AddRange(type.GetPublicInstanceValueMembers());
 
 			// Add explicit interface implementation properties support
 			// Or maybe we should support all private fields/properties?
 			//
-			var interfaceMethods = type.GetInterfacesEx().SelectMany(ti => type.GetInterfaceMapEx(ti).TargetMethods).ToList();
-
-			if (interfaceMethods.Count > 0)
+			if (!type.IsInterface && !type.IsArray)
 			{
-				foreach (var pi in type.GetNonPublicPropertiesEx())
-				{
-					if (pi.GetIndexParameters().Length == 0)
-					{
-						var getMethod = pi.GetGetMethodEx(true);
-						var setMethod = pi.GetSetMethodEx(true);
+				var interfaceMethods = type.GetInterfaces().SelectMany(ti => type.GetInterfaceMapEx(ti).TargetMethods)
+					.ToList();
 
-						if ((getMethod == null || interfaceMethods.Contains(getMethod)) &&
-							(setMethod == null || interfaceMethods.Contains(setMethod)))
+				if (interfaceMethods.Count > 0)
+				{
+					foreach (var pi in type.GetNonPublicPropertiesEx())
+					{
+						if (pi.GetIndexParameters().Length == 0)
 						{
-							_members.Add(pi);
+							var getMethod = pi.GetGetMethod(true);
+							var setMethod = pi.GetSetMethod(true);
+
+							if ((getMethod == null || interfaceMethods.Contains(getMethod)) &&
+								(setMethod == null || interfaceMethods.Contains(setMethod)))
+							{
+								_members.Add(pi);
+							}
 						}
 					}
 				}
@@ -89,20 +89,15 @@ namespace LinqToDB.Reflection
 			throw new LinqToDBException($"Cant create an instance of abstract class '{typeof(T).FullName}'.");
 		}
 
-		static readonly List<MemberInfo> _members = new List<MemberInfo>();
-		static readonly IObjectFactory   _objectFactory;
+		static readonly List<MemberInfo> _members = new();
+		static readonly IObjectFactory?  _objectFactory;
 
 		internal TypeAccessor()
 		{
-			// set DynamicColumnStoreAccessor
-			var columnStoreProperty = typeof(T).GetMembers().FirstOrDefault(m => m.GetCustomAttributes<DynamicColumnsStoreAttribute>().Any());
-
-			if (columnStoreProperty != null)
-				DynamicColumnsStoreAccessor = new MemberAccessor(this, columnStoreProperty);
-
 			// init members
 			foreach (var member in _members)
-				AddMember(new MemberAccessor(this, member));
+				if (!member.GetMemberType().IsByRef)
+					AddMember(new MemberAccessor(this, member, null));
 
 			ObjectFactory = _objectFactory;
 		}
@@ -110,7 +105,7 @@ namespace LinqToDB.Reflection
 		static readonly Func<T> _createInstance;
 		public override object   CreateInstance()
 		{
-			return _createInstance();
+			return _createInstance()!;
 		}
 
 		public T Create()
@@ -118,9 +113,6 @@ namespace LinqToDB.Reflection
 			return _createInstance();
 		}
 
-		public override Type Type { get { return typeof(T); } }
-
-		/// <inheritdoc cref="TypeAccessor.DynamicColumnsStoreAccessor"/>
-		public override MemberAccessor DynamicColumnsStoreAccessor { get; }
+		public override Type Type => typeof(T);
 	}
 }

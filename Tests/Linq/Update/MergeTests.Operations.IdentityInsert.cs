@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 using LinqToDB.Data;
@@ -12,9 +11,11 @@ namespace Tests.xUpdate
 
 	public partial class MergeTests
 	{
-		[Test, IdentityInsertMergeDataContextSource]
-		public void ImplicitIdentityInsert(string context)
+		[Test]
+		public void ImplicitIdentityInsert([IdentityInsertMergeDataContextSource(false)] string context)
 		{
+			ResetPersonIdentity(context);
+
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
 			{
@@ -56,9 +57,14 @@ namespace Tests.xUpdate
 		}
 
 		// ASE: server dies
-		[Test, IdentityInsertMergeDataContextSource(ProviderName.Sybase)]
-		public void ExplicitIdentityInsert(string context)
+		[Test]
+		public void ExplicitIdentityInsert([IdentityInsertMergeDataContextSource(
+			false,
+			TestProvName.AllSybase)]
+			string context)
 		{
+			ResetPersonIdentity(context);
+
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
 			{
@@ -71,7 +77,7 @@ namespace Tests.xUpdate
 					.Using(db.Person)
 					.On((t, s) => t.ID == s.ID && t.FirstName != "first 3")
 					.InsertWhenNotMatchedAnd(
-						s => s.Patient.Diagnosis.Contains("sick")
+						s => s.Patient!.Diagnosis.Contains("sick")
 						, s => new Model.Person()
 						{
 							ID = nextId + 1,
@@ -103,9 +109,14 @@ namespace Tests.xUpdate
 		}
 
 		// ASE: server dies
-		[Test, IdentityInsertMergeDataContextSource(ProviderName.Sybase)]
-		public void ExplicitNoIdentityInsert(string context)
+		[Test]
+		public void ExplicitNoIdentityInsert([IdentityInsertMergeDataContextSource(
+			false,
+			TestProvName.AllSybase)]
+			string context)
 		{
+			ResetPersonIdentity(context);
+
 			using (var db = new TestDataConnection(context))
 			using (db.BeginTransaction())
 			{
@@ -118,7 +129,7 @@ namespace Tests.xUpdate
 					.Using(db.Person)
 					.On((t, s) => t.ID == s.ID && t.FirstName != "first 3")
 					.InsertWhenNotMatchedAnd(
-						s => s.Patient.Diagnosis.Contains("sick"),
+						s => s.Patient!.Diagnosis.Contains("sick"),
 						s => new Model.Person()
 						{
 							FirstName = "Inserted 1",
@@ -151,10 +162,11 @@ namespace Tests.xUpdate
 		// see https://github.com/linq2db/linq2db/issues/914
 		// rationale:
 		// we shouldn't ignore SkipOnInsert attribute for insert operation with implicit field list
-		[Test, IdentityInsertMergeDataContextSource]
-		public void ImplicitInsertIdentityWithSkipOnInsert(string context)
+		[Test]
+		public void ImplicitInsertIdentityWithSkipOnInsert(
+			[IdentityInsertMergeDataContextSource] string context)
 		{
-			using (var db = new TestDataConnection(context))
+			using (var db = GetDataContext(context))
 			{
 				var table = db.GetTable<TestMappingWithIdentity>();
 				table.Delete();

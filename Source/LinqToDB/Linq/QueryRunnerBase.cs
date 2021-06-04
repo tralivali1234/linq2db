@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Data;
 using System.Linq.Expressions;
 using System.Threading;
@@ -7,40 +6,39 @@ using System.Threading.Tasks;
 
 namespace LinqToDB.Linq
 {
-	using Data;
+	using SqlQuery;
 
 	abstract class QueryRunnerBase : IQueryRunner
 	{
-		protected QueryRunnerBase(Query query, int queryNumber, IDataContext dataContext, Expression expression, object[] parameters)
+		protected QueryRunnerBase(Query query, int queryNumber, IDataContext dataContext, Expression expression, object?[]? parameters, object?[]? preambles)
 		{
 			Query        = query;
 			DataContext  = dataContext;
 			Expression   = expression;
 			QueryNumber  = queryNumber;
 			Parameters   = parameters;
+			Preambles    = preambles;
 		}
 
 		protected readonly Query    Query;
 
-		protected List<string>      QueryHints = new List<string>();
-		protected DataParameter[]   DataParameters;
+		protected List<string>?     QueryHints;
 
 		public IDataContext         DataContext      { get; set; }
 		public Expression           Expression       { get; set; }
-		public object[]             Parameters       { get; set; }
-		public abstract Expression  MapperExpression { get; set; }
+		public object?[]?           Parameters       { get; set; }
+		public object?[]?           Preambles        { get; set; }
+		public abstract Expression? MapperExpression { get; set; }
 
 		public abstract int                    ExecuteNonQuery();
-		public abstract object                 ExecuteScalar  ();
+		public abstract object?                ExecuteScalar  ();
 		public abstract IDataReader            ExecuteReader  ();
-		public abstract Task<object>           ExecuteScalarAsync  (CancellationToken cancellationToken);
+		public abstract Task<object?>          ExecuteScalarAsync  (CancellationToken cancellationToken);
 		public abstract Task<IDataReaderAsync> ExecuteReaderAsync  (CancellationToken cancellationToken);
 		public abstract Task<int>              ExecuteNonQueryAsync(CancellationToken cancellationToken);
 
-		public Func<int> SkipAction  { get; set; }
-		public Func<int> TakeAction  { get; set; }
-		public int       RowsCount   { get; set; }
-		public int       QueryNumber { get; set; }
+		public int RowsCount   { get; set; }
+		public int QueryNumber { get; set; }
 
 		public virtual void Dispose()
 		{
@@ -48,30 +46,51 @@ namespace LinqToDB.Linq
 				DataContext.Close();
 		}
 
+#if !NATIVE_ASYNC
+		public virtual Task DisposeAsync()
+		{
+			if (DataContext.CloseAfterUse)
+				return DataContext.CloseAsync();
+
+			return TaskEx.CompletedTask;
+		}
+#else
+		public virtual ValueTask DisposeAsync()
+		{
+			if (DataContext.CloseAfterUse)
+				return new ValueTask(DataContext.CloseAsync());
+
+			return default;
+		}
+#endif
+
+
 		protected virtual void SetCommand(bool clearQueryHints)
 		{
-			lock (Query)
+			if (QueryNumber == 0 && (DataContext.QueryHints.Count > 0 || DataContext.NextQueryHints.Count > 0))
 			{
-				if (QueryNumber == 0 && (DataContext.QueryHints.Count > 0 || DataContext.NextQueryHints.Count > 0))
-				{
-					var queryContext = Query.Queries[QueryNumber];
+				var queryContext = Query.Queries[QueryNumber];
 
-					queryContext.QueryHints = new List<string>(DataContext.QueryHints);
-					queryContext.QueryHints.AddRange(DataContext.NextQueryHints);
+				queryContext.QueryHints = new List<string>(DataContext.QueryHints);
+				queryContext.QueryHints.AddRange(DataContext.NextQueryHints);
 
-					QueryHints.AddRange(DataContext.QueryHints);
-					QueryHints.AddRange(DataContext.NextQueryHints);
+				if (QueryHints == null)
+					QueryHints = new List<string>(DataContext.QueryHints.Count + DataContext.NextQueryHints.Count);
 
-					if (clearQueryHints)
-						DataContext.NextQueryHints.Clear();
-				}
+				QueryHints.AddRange(DataContext.QueryHints);
+				QueryHints.AddRange(DataContext.NextQueryHints);
 
-				QueryRunner.SetParameters(Query, DataContext, Expression, Parameters, QueryNumber);
-				SetQuery();
+				if (clearQueryHints)
+					DataContext.NextQueryHints.Clear();
 			}
+
+			var parameterValues = new SqlParameterValues();
+			QueryRunner.SetParameters(Query, Expression, DataContext, Parameters, QueryNumber, parameterValues);
+
+			SetQuery(parameterValues);
 		}
 
-		protected abstract void   SetQuery  ();
+		protected abstract void SetQuery(IReadOnlyParameterValues parameterValues);
 
 		public    abstract string GetSqlText();
 	}

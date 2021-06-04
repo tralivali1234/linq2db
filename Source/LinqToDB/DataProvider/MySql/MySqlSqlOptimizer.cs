@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Xml.Schema;
+﻿using System.Collections.Generic;
 
 namespace LinqToDB.DataProvider.MySql
 {
 	using Extensions;
+	using LinqToDB.Mapping;
 	using SqlProvider;
 	using SqlQuery;
 
@@ -14,23 +13,44 @@ namespace LinqToDB.DataProvider.MySql
 		{
 		}
 
-		public override ISqlExpression ConvertExpression(ISqlExpression expr)
+		public override bool CanCompareSearchConditions => true;
+		
+		public override SqlStatement TransformStatement(SqlStatement statement)
 		{
-			expr = base.ConvertExpression(expr);
-
-			if (expr is SqlBinaryExpression)
+			return statement.QueryType switch
 			{
-				var be = (SqlBinaryExpression)expr;
+				QueryType.Update => CorrectMySqlUpdate((SqlUpdateStatement)statement),
+				_                => statement,
+			};
+		}
 
+		private SqlUpdateStatement CorrectMySqlUpdate(SqlUpdateStatement statement)
+		{
+			if (statement.SelectQuery.Select.SkipValue != null)
+				throw new LinqToDBException("MySql does not support Skip in update query");
+
+			statement = CorrectUpdateTable(statement);
+
+			if (!statement.SelectQuery.OrderBy.IsEmpty)
+				statement.SelectQuery.OrderBy.Items.Clear();
+
+			return statement;
+		}
+
+		public override ISqlExpression ConvertExpressionImpl<TContext>(ISqlExpression expression, ConvertVisitor<TContext> visitor,
+			EvaluationContext context)
+		{
+			expression = base.ConvertExpressionImpl(expression, visitor, context);
+
+			if (expression is SqlBinaryExpression be)
+			{
 				switch (be.Operation)
 				{
 					case "+":
 						if (be.SystemType == typeof(string))
 						{
-							if (be.Expr1 is SqlFunction)
+							if (be.Expr1 is SqlFunction func)
 							{
-								var func = (SqlFunction)be.Expr1;
-
 								if (func.Name == "Concat")
 								{
 									var list = new List<ISqlExpression>(func.Parameters) { be.Expr2 };
@@ -61,10 +81,8 @@ namespace LinqToDB.DataProvider.MySql
 						break;
 				}
 			}
-			else if (expr is SqlFunction)
+			else if (expression is SqlFunction func)
 			{
-				var func = (SqlFunction) expr;
-
 				switch (func.Name)
 				{
 					case "Convert" :
@@ -77,31 +95,42 @@ namespace LinqToDB.DataProvider.MySql
 								return ex;
 						}
 
-						if ((ftype == typeof(double) || ftype == typeof(float)) && func.Parameters[1].SystemType.ToUnderlying() == typeof(decimal))
+						if ((ftype == typeof(double) || ftype == typeof(float)) && func.Parameters[1].SystemType!.ToUnderlying() == typeof(decimal))
 							return func.Parameters[1];
 
 						return new SqlExpression(func.SystemType, "Cast({0} as {1})", Precedence.Primary, FloorBeforeConvert(func), func.Parameters[0]);
 				}
 			}
-			else if (expr is SqlExpression)
+
+			return expression;
+		}
+
+		public override ISqlPredicate ConvertSearchStringPredicate<TContext>(MappingSchema mappingSchema, SqlPredicate.SearchString predicate,
+			ConvertVisitor<RunOptimizationContext<TContext>> visitor,
+			OptimizationContext optimizationContext)
+		{
+			var caseSensitive = predicate.CaseSensitive.EvaluateBoolExpression(optimizationContext.Context);
+
+			if (caseSensitive == false)
 			{
-				var e = (SqlExpression)expr;
-
-				if (e.Expr.StartsWith("Extract(DayOfYear"))
-					return new SqlFunction(e.SystemType, "DayOfYear", e.Parameters);
-
-				if (e.Expr.StartsWith("Extract(WeekDay"))
-					return Inc(
-						new SqlFunction(e.SystemType,
-							"WeekDay",
-							new SqlFunction(
-								null,
-								"Date_Add",
-								e.Parameters[0],
-								new SqlExpression(null, "interval 1 day"))));
+				predicate = new SqlPredicate.SearchString(
+					new SqlFunction(typeof(string), "$ToLower$", predicate.Expr1),
+					predicate.IsNot,
+					new SqlFunction(typeof(string), "$ToLower$", predicate.Expr2),
+					predicate.Kind,
+					new SqlValue(false));
+			}
+			else if (caseSensitive == true)
+			{
+				predicate = new SqlPredicate.SearchString(
+					new SqlExpression(typeof(string), $"{{0}} COLLATE utf8_bin", Precedence.Primary, predicate.Expr1),
+					predicate.IsNot,
+					predicate.Expr2,
+					predicate.Kind,
+					new SqlValue(false));
 			}
 
-			return expr;
+			return ConvertSearchStringPredicateViaLike(mappingSchema, predicate, visitor, optimizationContext);
 		}
 	}
 }

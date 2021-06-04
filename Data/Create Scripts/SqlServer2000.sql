@@ -43,7 +43,7 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
 GO
-INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+INSERT INTO Person (FirstName, LastName, MiddleName, Gender) VALUES ('Jürgen', 'König', 'Ko', 'M')
 GO
 -- Doctor Table Extension
 
@@ -96,6 +96,22 @@ SELECT * FROM Person WHERE PersonID = @id
 GO
 
 GRANT EXEC ON Person_SelectByKey TO PUBLIC
+GO
+
+-- Person_SelectByKeyLowercase
+
+DROP Procedure Person_SelectByKeyLowercase
+GO
+
+CREATE Procedure Person_SelectByKeyLowercase
+	@id int
+AS
+
+SELECT personid, firstname FROM Person WHERE PersonID = @id
+
+GO
+
+GRANT EXEC ON Person_SelectByKeyLowercase TO PUBLIC
 GO
 
 -- Person_SelectAll
@@ -395,7 +411,7 @@ GO
 INSERT INTO AllTypes
 (
 	bigintDataType, numericDataType, bitDataType, smallintDataType, decimalDataType, smallmoneyDataType,
-	intDataType, tinyintDataType, moneyDataType, floatDataType, realDataType, 
+	intDataType, tinyintDataType, moneyDataType, floatDataType, realDataType,
 
 	datetimeDataType, smalldatetimeDataType,
 
@@ -461,7 +477,7 @@ GO
 CREATE FUNCTION GetParentByID(@id int)
 RETURNS TABLE
 AS
-RETURN 
+RETURN
 (
 	SELECT * FROM Parent WHERE ParentID = @id
 )
@@ -665,4 +681,39 @@ END
 GO
 
 GRANT EXEC ON AddIssue792Record TO PUBLIC
+GO
+DROP Procedure Issue1897
+GO
+
+CREATE PROCEDURE Issue1897
+AS
+BEGIN
+	RETURN 4
+END
+GO
+DROP Procedure OutRefTest
+GO
+
+CREATE Procedure OutRefTest
+	@ID             int,
+	@outputID       int output,
+	@inputOutputID  int output,
+	@str            varchar(50),
+	@outputStr      varchar(50) output,
+	@inputOutputStr varchar(50) output
+AS
+
+SET @outputID       = @ID
+SET @inputOutputID  = @ID + @inputOutputID
+SET @outputStr      = @str
+SET @inputOutputStr = @str + @inputOutputStr
+GO
+DROP TABLE CollatedTable
+GO
+CREATE TABLE CollatedTable
+(
+	Id				INT NOT NULL,
+	CaseSensitive	NVARCHAR(20) COLLATE Latin1_General_100_CS_AI NOT NULL,
+	CaseInsensitive	NVARCHAR(20) COLLATE Latin1_General_100_CI_AI NOT NULL
+)
 GO

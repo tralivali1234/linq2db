@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.IO;
 using System.Linq;
-using System.Data;
 
 /*
 
@@ -33,13 +33,14 @@ FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
 */
 namespace LinqToDB.DataProvider.SqlCe
 {
+	using System.Data.SqlTypes;
 	using Common;
 	using Data;
 	using SchemaProvider;
 
 	class SqlCeSchemaProvider : SchemaProviderBase
 	{
-		protected override List<TableInfo> GetTables(DataConnection dataConnection)
+		protected override List<TableInfo> GetTables(DataConnection dataConnection, GetSchemaOptions options)
 		{
 			var tables = ((DbConnection)dataConnection.Connection).GetSchema("Tables");
 
@@ -62,7 +63,8 @@ namespace LinqToDB.DataProvider.SqlCe
 			).ToList();
 		}
 
-		protected override List<PrimaryKeyInfo> GetPrimaryKeys(DataConnection dataConnection)
+		protected override IReadOnlyCollection<PrimaryKeyInfo> GetPrimaryKeys(DataConnection dataConnection,
+			IEnumerable<TableSchema> tables, GetSchemaOptions options)
 		{
 			var data = dataConnection.Query<PrimaryKeyInfo>(
 				@"
@@ -77,7 +79,7 @@ WHERE PRIMARY_KEY = 1");
 			return data.ToList();
 		}
 
-		protected override List<ColumnInfo> GetColumns(DataConnection dataConnection)
+		protected override List<ColumnInfo> GetColumns(DataConnection dataConnection, GetSchemaOptions options)
 		{
 			var cs = ((DbConnection)dataConnection.Connection).GetSchema("Columns");
 
@@ -99,7 +101,8 @@ WHERE PRIMARY_KEY = 1");
 			).ToList();
 		}
 
-		protected override List<ForeignKeyInfo> GetForeignKeys(DataConnection dataConnection)
+		protected override IReadOnlyCollection<ForeignKeyInfo> GetForeignKeys(DataConnection dataConnection,
+			IEnumerable<TableSchema> tables, GetSchemaOptions options)
 		{
 			var data = dataConnection.Query<ForeignKeyInfo>(
 				@"
@@ -116,76 +119,71 @@ INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE oc ON oc.CONSTRAINT_NAME = rc.UNI
 			return data.ToList();
 		}
 
-		protected override string GetDatabaseName(DbConnection dbConnection)
+		protected override string GetDatabaseName(DataConnection dbConnection)
 		{
-			return Path.GetFileNameWithoutExtension(dbConnection.Database);
+			return Path.GetFileNameWithoutExtension(((DbConnection)dbConnection.Connection).Database);
 		}
 
-		protected override Type GetSystemType(string dataType, string columnType, DataTypeInfo dataTypeInfo, long? length, int? precision, int? scale)
+		protected override Type? GetSystemType(string? dataType, string? columnType, DataTypeInfo? dataTypeInfo, long? length, int? precision, int? scale, GetSchemaOptions options)
 		{
-			switch (dataType.ToLower())
+			return (dataType?.ToLower()) switch
 			{
-				case "tinyint" : return typeof(byte);
-			}
-
-			return base.GetSystemType(dataType, columnType, dataTypeInfo, length, precision, scale);
+				"tinyint" => typeof(byte),
+				_         => base.GetSystemType(dataType, columnType, dataTypeInfo, length, precision, scale, options),
+			};
 		}
 
-		protected override DataType GetDataType(string dataType, string columnType, long? length, int? prec, int? scale)
+		protected override DataType GetDataType(string? dataType, string? columnType, long? length, int? prec, int? scale)
 		{
-			switch (dataType.ToLower())
+			return dataType?.ToLower() switch
 			{
-				case "smallint"         : return DataType.Int16;
-				case "int"              : return DataType.Int32;
-				case "real"             : return DataType.Single;
-				case "float"            : return DataType.Double;
-				case "money"            : return DataType.Money;
-				case "bit"              : return DataType.Boolean;
-				case "tinyint"          : return DataType.Byte;
-				case "bigint"           : return DataType.Int64;
-				case "uniqueidentifier" : return DataType.Guid;
-				case "varbinary"        : return DataType.VarBinary;
-				case "binary"           : return DataType.Binary;
-				case "image"            : return DataType.Image;
-				case "nvarchar"         : return DataType.NVarChar;
-				case "nchar"            : return DataType.NChar;
-				case "ntext"            : return DataType.NText;
-				case "numeric"          : return DataType.Decimal;
-				case "datetime"         : return DataType.DateTime;
-				case "rowversion"       : return DataType.Timestamp;
-			}
-
-			return DataType.Undefined;
+				"smallint"         => DataType.Int16,
+				"int"              => DataType.Int32,
+				"real"             => DataType.Single,
+				"float"            => DataType.Double,
+				"money"            => DataType.Money,
+				"bit"              => DataType.Boolean,
+				"tinyint"          => DataType.Byte,
+				"bigint"           => DataType.Int64,
+				"uniqueidentifier" => DataType.Guid,
+				"varbinary"        => DataType.VarBinary,
+				"binary"           => DataType.Binary,
+				"image"            => DataType.Image,
+				"nvarchar"         => DataType.NVarChar,
+				"nchar"            => DataType.NChar,
+				"ntext"            => DataType.NText,
+				"numeric"          => DataType.Decimal,
+				"datetime"         => DataType.DateTime,
+				"rowversion"       => DataType.Timestamp,
+				_           	   => DataType.Undefined,
+			};
 		}
 
-		protected override string GetProviderSpecificTypeNamespace()
-		{
-			return "System.Data.SqlTypes";
-		}
+		protected override string GetProviderSpecificTypeNamespace() => SqlTypes.TypesNamespace;
 
-		protected override string GetProviderSpecificType(string dataType)
+		protected override string? GetProviderSpecificType(string? dataType)
 		{
 			switch (dataType)
 			{
 				case "varbinary"        :
 				case "rowversion"       :
-				case "image"            : return "SqlBinary";
-				case "binary"           : return "SqlBinary";
-				case "tinyint"          : return "SqlByte";
-				case "datetime"         : return "SqlDateTime";
-				case "bit"              : return "SqlBoolean";
-				case "smallint"         : return "SqlInt16";
+				case "image"            :
+				case "binary"           : return nameof(SqlBinary);
+				case "tinyint"          : return nameof(SqlByte);
+				case "datetime"         : return nameof(SqlDateTime);
+				case "bit"              : return nameof(SqlBoolean);
+				case "smallint"         : return nameof(SqlInt16);
 				case "numeric"          :
-				case "decimal"          : return "SqlDecimal";
-				case "int"              : return "SqlInt32";
-				case "real"             : return "SqlSingle";
-				case "float"            : return "SqlDouble";
-				case "money"            : return "SqlMoney";
-				case "bigint"           : return "SqlInt64";
+				case "decimal"          : return nameof(SqlDecimal);
+				case "int"              : return nameof(SqlInt32);
+				case "real"             : return nameof(SqlSingle);
+				case "float"            : return nameof(SqlDouble);
+				case "money"            : return nameof(SqlMoney);
+				case "bigint"           : return nameof(SqlInt64);
 				case "nvarchar"         :
 				case "nchar"            :
-				case "ntext"            : return "SqlString";
-				case "uniqueidentifier" : return "SqlGuid";
+				case "ntext"            : return nameof(SqlString);
+				case "uniqueidentifier" : return nameof(SqlGuid);
 			}
 
 			return base.GetProviderSpecificType(dataType);

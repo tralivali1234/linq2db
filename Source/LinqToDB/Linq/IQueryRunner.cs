@@ -7,6 +7,11 @@ using System.Threading.Tasks;
 namespace LinqToDB.Linq
 {
 	public interface IQueryRunner: IDisposable
+#if NATIVE_ASYNC
+		, IAsyncDisposable
+#else
+		, Async.IAsyncDisposable
+#endif
 	{
 		/// <summary>
 		/// Executes query and returns number of affected records.
@@ -17,7 +22,7 @@ namespace LinqToDB.Linq
 		/// Executes query and returns scalar value.
 		/// </summary>
 		/// <returns>Scalar value.</returns>
-		object                ExecuteScalar  ();
+		object?               ExecuteScalar  ();
 		/// <summary>
 		/// Executes query and returns data reader.
 		/// </summary>
@@ -35,7 +40,7 @@ namespace LinqToDB.Linq
 		/// </summary>
 		/// <param name="cancellationToken">Asynchronous operation cancellation token.</param>
 		/// <returns>Scalar value.</returns>
-		Task<object>           ExecuteScalarAsync  (CancellationToken cancellationToken);
+		Task<object?>          ExecuteScalarAsync  (CancellationToken cancellationToken);
 		/// <summary>
 		/// Executes query asynchronously and returns data reader.
 		/// </summary>
@@ -49,12 +54,11 @@ namespace LinqToDB.Linq
 		/// <returns>Query SQL text.</returns>
 		string                GetSqlText           ();
 
-		Func<int>      SkipAction       { get; set; }
-		Func<int>      TakeAction       { get; set; }
 		Expression     Expression       { get; set; }
 		IDataContext   DataContext      { get; set; }
-		object[]       Parameters       { get; set; }
-		Expression     MapperExpression { get; set; }
+		object?[]?     Parameters       { get; set; }
+		object?[]?     Preambles        { get; set; }
+		Expression?    MapperExpression { get; set; }
 		int            RowsCount        { get; set; }
 		int            QueryNumber      { get; set; }
 	}

@@ -14,10 +14,10 @@ namespace LinqToDB.Common
 		public class LambdaInfo
 		{
 			public LambdaInfo(
-				LambdaExpression checkNullLambda,
-				LambdaExpression lambda,
-				Delegate         @delegate,
-				bool             isSchemaSpecific)
+				LambdaExpression  checkNullLambda,
+				LambdaExpression? lambda,
+				Delegate?         @delegate,
+				bool              isSchemaSpecific)
 			{
 				CheckNullLambda  = checkNullLambda;
 				Lambda           = lambda ?? checkNullLambda;
@@ -27,21 +27,21 @@ namespace LinqToDB.Common
 
 			public LambdaExpression Lambda;
 			public LambdaExpression CheckNullLambda;
-			public Delegate         Delegate;
+			public Delegate?        Delegate;
 			public bool             IsSchemaSpecific;
 
-			private Func<object, DataParameter> _convertValueToParameter = null;
-			public Func<object, DataParameter> ConvertValueToParameter
+			private Func<object?, DataParameter>? _convertValueToParameter;
+			public  Func<object?, DataParameter>   ConvertValueToParameter
 			{
 				get
 				{
 					if (_convertValueToParameter == null)
 					{
-						var type = this.Lambda.Parameters[0].Type;
+						var type = Lambda.Parameters[0].Type;
 						var parameterExpression = Expression.Parameter(typeof(object));
-						var lambdaExpression = Expression.Lambda<Func<object, DataParameter>>(
-							Expression.Invoke(this.Lambda, Expression.Convert(parameterExpression, type)), parameterExpression);
-						var convertFunc = lambdaExpression.Compile();
+						var lambdaExpression = Expression.Lambda<Func<object?, DataParameter>>(
+							Expression.Invoke(Lambda, Expression.Convert(parameterExpression, type)), parameterExpression);
+						var convertFunc = lambdaExpression.CompileExpression();
 						_convertValueToParameter = convertFunc;
 					}
 
@@ -50,36 +50,46 @@ namespace LinqToDB.Common
 			}
 		}
 
-		readonly ConcurrentDictionary<Type,ConcurrentDictionary<Type,LambdaInfo>> _expressions =
-			new ConcurrentDictionary<Type,ConcurrentDictionary<Type,LambdaInfo>>();
+		readonly ConcurrentDictionary<DbDataType,ConcurrentDictionary<DbDataType,LambdaInfo>> _expressions =
+			new ConcurrentDictionary<DbDataType,ConcurrentDictionary<DbDataType,LambdaInfo>>();
 
 		public void Set(Type from, Type to, LambdaInfo expr)
+		{
+			Set(_expressions, new DbDataType(from), new DbDataType(to), expr);
+		}
+
+		public void Set(DbDataType from, DbDataType to, LambdaInfo expr)
 		{
 			Set(_expressions, from, to, expr);
 		}
 
-		static void Set(ConcurrentDictionary<Type,ConcurrentDictionary<Type,LambdaInfo>> expressions, Type from, Type to, LambdaInfo expr)
+		static void Set(ConcurrentDictionary<DbDataType,ConcurrentDictionary<DbDataType,LambdaInfo>> expressions, DbDataType from, DbDataType to, LambdaInfo expr)
 		{
-			ConcurrentDictionary<Type,LambdaInfo> dic;
-
-			if (!expressions.TryGetValue(from, out dic))
-				expressions[from] = dic = new ConcurrentDictionary<Type, LambdaInfo>();
+			if (!expressions.TryGetValue(from, out var dic))
+				expressions[from] = dic = new ConcurrentDictionary<DbDataType, LambdaInfo>();
 
 			dic[to] = expr;
 		}
 
-		public LambdaInfo Get(Type from, Type to)
+		public LambdaInfo? Get(DbDataType from, DbDataType to)
 		{
-			ConcurrentDictionary<Type,LambdaInfo> dic;
-			LambdaInfo li;
-
-			return _expressions.TryGetValue(@from, out dic) && dic.TryGetValue(to, out li) ? li : null;
+			return _expressions.TryGetValue(from, out var dic) && dic.TryGetValue(to, out var li) ? li : null;
 		}
 
-		public LambdaInfo Create(MappingSchema mappingSchema, Type from, Type to)
+		public LambdaInfo? Get(Type from, Type to)
 		{
-			var ex  = ConvertBuilder.GetConverter(mappingSchema, from, to);
-			var lm  = ex.Item1.Compile();
+			return _expressions.TryGetValue(new DbDataType(from), out var dic) && dic.TryGetValue(new DbDataType(to), out var li) ? li : null;
+		}
+
+		public LambdaInfo Create(MappingSchema? mappingSchema, Type from, Type to)
+		{
+			return Create(mappingSchema, new DbDataType(from), new DbDataType(to));
+		}
+
+		public LambdaInfo Create(MappingSchema? mappingSchema, DbDataType from, DbDataType to)
+		{
+			var ex  = ConvertBuilder.GetConverter(mappingSchema, from.SystemType, to.SystemType);
+			var lm  = ex.Item1.CompileExpression();
 			var ret = new LambdaInfo(ex.Item1, ex.Item2, lm, ex.Item3);
 
 			Set(_expressions, from, to , ret);

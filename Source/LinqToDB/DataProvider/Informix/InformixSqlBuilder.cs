@@ -6,22 +6,40 @@ using System.Text;
 
 namespace LinqToDB.DataProvider.Informix
 {
-	using Common;
 	using SqlQuery;
 	using SqlProvider;
 	using System.Globalization;
+	using Mapping;
 
-	class InformixSqlBuilder : BasicSqlBuilder
+	partial class InformixSqlBuilder : BasicSqlBuilder
 	{
-		public InformixSqlBuilder(ISqlOptimizer sqlOptimizer, SqlProviderFlags sqlProviderFlags, ValueToSqlConverter valueToSqlConverter)
-			: base(sqlOptimizer, sqlProviderFlags, valueToSqlConverter)
+		private readonly InformixDataProvider? _provider;
+
+		public InformixSqlBuilder(
+			InformixDataProvider? provider,
+			MappingSchema         mappingSchema,
+			ISqlOptimizer         sqlOptimizer,
+			SqlProviderFlags      sqlProviderFlags)
+			: this(mappingSchema, sqlOptimizer, sqlProviderFlags)
+		{
+			_provider = provider;
+		}
+
+		// remote context
+		public InformixSqlBuilder(
+			MappingSchema    mappingSchema,
+			ISqlOptimizer    sqlOptimizer,
+			SqlProviderFlags sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
 		{
 		}
+
+		protected override bool SupportsNullInColumn => false;
 
 		public override int CommandCount(SqlStatement statement)
 		{
 			if (statement is SqlTruncateTableStatement trun)
-				return trun.ResetIdentity ? 1 + trun.Table.Fields.Values.Count(f => f.IsIdentity) : 1;
+				return trun.ResetIdentity ? 1 + trun.Table!.IdentityFields.Count : 1;
 			return statement.NeedsIdentity() ? 2 : 1;
 		}
 
@@ -29,15 +47,13 @@ namespace LinqToDB.DataProvider.Informix
 		{
 			if (statement is SqlTruncateTableStatement trun)
 			{
-				var field = trun.Table.Fields.Values.Skip(commandNumber - 1).First(f => f.IsIdentity);
+				var field = trun.Table!.IdentityFields[commandNumber - 1];
 
 				StringBuilder.Append("ALTER TABLE ");
-				ConvertTableName(StringBuilder, trun.Table.Database, trun.Table.Schema, trun.Table.PhysicalName);
-				StringBuilder
-					.Append(" MODIFY ")
-					.Append(Convert(field.PhysicalName, ConvertType.NameToQueryField))
-					.AppendLine(" SERIAL(1)")
-					;
+				ConvertTableName(StringBuilder, trun.Table.Server, trun.Table.Database, trun.Table.Schema, trun.Table.PhysicalName!, trun.Table.TableOptions);
+				StringBuilder.Append(" MODIFY ");
+				Convert(StringBuilder, field.PhysicalName, ConvertType.NameToQueryField);
+				StringBuilder.AppendLine(" SERIAL(1)");
 			}
 			else
 			{
@@ -52,30 +68,25 @@ namespace LinqToDB.DataProvider.Informix
 
 		protected override ISqlBuilder CreateSqlBuilder()
 		{
-			return new InformixSqlBuilder(SqlOptimizer, SqlProviderFlags, ValueToSqlConverter);
+			return new InformixSqlBuilder(_provider, MappingSchema, SqlOptimizer, SqlProviderFlags);
 		}
 
-		protected override void BuildSql(int commandNumber, SqlStatement statement, StringBuilder sb, int indent, bool skipAlias)
+		protected override void BuildSql(int commandNumber, SqlStatement statement, StringBuilder sb, OptimizationContext optimizationContext, int indent, bool skipAlias)
 		{
-			base.BuildSql(commandNumber, statement, sb, indent, skipAlias);
+			base.BuildSql(commandNumber, statement, sb, optimizationContext, indent, skipAlias);
 
 			sb
 				.Replace("NULL IS NOT NULL", "1=0")
 				.Replace("NULL IS NULL",     "1=1");
 		}
 
-//		protected override bool ParenthesizeJoin(List<SelectQuery.JoinedTable> joins)
-//		{
-//			return joins.Any(j => j.JoinType == SelectQuery.JoinType.Inner && j.Condition.Conditions.IsNullOrEmpty());
-//		}
-
 		protected override void BuildSelectClause(SelectQuery selectQuery)
 		{
 			if (selectQuery.From.Tables.Count == 0)
 			{
-				AppendIndent().Append("SELECT FIRST 1").AppendLine();
+				AppendIndent().Append("SELECT").AppendLine();
 				BuildColumns(selectQuery);
-				AppendIndent().Append("FROM SYSTABLES").AppendLine();
+				AppendIndent().Append("FROM ").Append(FakeTable).AppendLine();
 			}
 			else if (selectQuery.Select.IsDistinct)
 			{
@@ -92,6 +103,8 @@ namespace LinqToDB.DataProvider.Informix
 
 		protected override string FirstFormat(SelectQuery selectQuery) => "FIRST {0}";
 		protected override string SkipFormat  => "SKIP {0}";
+
+		protected override void BuildIsDistinctPredicate(SqlPredicate.IsDistinct expr) => BuildIsDistinctPredicateFallback(expr);
 
 		protected override void BuildLikePredicate(SqlPredicate.Like predicate)
 		{
@@ -111,77 +124,102 @@ namespace LinqToDB.DataProvider.Informix
 			}
 		}
 
-		protected override void BuildFunction(SqlFunction func)
+		protected override void BuildDataTypeFromDataType(SqlDataType type, bool forCreateTable)
 		{
-			func = ConvertFunctionParameters(func);
-			base.BuildFunction(func);
-		}
-
-		protected override void BuildDataType(SqlDataType type, bool createDbType)
-		{
-			switch (type.DataType)
+			switch (type.Type.DataType)
 			{
-				case DataType.VarBinary  : StringBuilder.Append("BYTE");                      break;
-				case DataType.Boolean    : StringBuilder.Append("BOOLEAN");                   break;
-				case DataType.DateTime   : StringBuilder.Append("datetime year to second");   break;
-				case DataType.DateTime2  : StringBuilder.Append("datetime year to fraction"); break;
+				case DataType.VarBinary  : StringBuilder.Append("BYTE");                      return;
+				case DataType.Boolean    : StringBuilder.Append("BOOLEAN");                   return;
+				case DataType.DateTime   : StringBuilder.Append("datetime year to second");   return;
+				case DataType.DateTime2  : StringBuilder.Append("datetime year to fraction"); return;
 				case DataType.Time       :
 					StringBuilder.Append("INTERVAL HOUR TO FRACTION");
-					StringBuilder.AppendFormat("({0})", (type.Length ?? 5).ToString(CultureInfo.InvariantCulture));
-					break;
-				case DataType.Date       : StringBuilder.Append("DATETIME YEAR TO DAY");      break;
+					StringBuilder.AppendFormat("({0})", (type.Type.Length ?? 5).ToString(CultureInfo.InvariantCulture));
+					return;
+				case DataType.Date       : StringBuilder.Append("DATETIME YEAR TO DAY");      return;
 				case DataType.SByte      :
-				case DataType.Byte       : StringBuilder.Append("SmallInt");                  break;
-				case DataType.SmallMoney : StringBuilder.Append("Decimal(10,4)");             break;
+				case DataType.Byte       : StringBuilder.Append("SmallInt");                  return;
+				case DataType.SmallMoney : StringBuilder.Append("Decimal(10, 4)");            return;
 				case DataType.Decimal    :
 					StringBuilder.Append("Decimal");
-					if (type.Precision != null && type.Scale != null)
+					if (type.Type.Precision != null && type.Type.Scale != null)
 						StringBuilder.AppendFormat(
 							"({0}, {1})",
-							type.Precision.Value.ToString(CultureInfo.InvariantCulture),
-							type.Scale.Value.ToString(CultureInfo.InvariantCulture));
-					break;
-				default                  : base.BuildDataType(type, createDbType);            break;
-			}
-		}
-
-		protected override void BuildFromClause(SqlStatement statement, SelectQuery selectQuery)
-		{
-			if (!statement.IsUpdate())
-				base.BuildFromClause(statement, selectQuery);
-		}
-
-		public override object Convert(object value, ConvertType convertType)
-		{
-			switch (convertType)
-			{
-				case ConvertType.NameToQueryParameter   : return "?";
-				case ConvertType.NameToCommandParameter :
-				case ConvertType.NameToSprocParameter   : return ":" + value;
-				case ConvertType.SprocParameterToName   :
-					if (value != null)
+							type.Type.Precision.Value.ToString(CultureInfo.InvariantCulture),
+							type.Type.Scale.Value.ToString(CultureInfo.InvariantCulture));
+					return;
+				case DataType.NVarChar:
+					if (type.Type.Length == null || type.Type.Length > 255 || type.Type.Length < 1)
 					{
-						var str = value.ToString();
-						return (str.Length > 0 && str[0] == ':')? str.Substring(1): str;
+						StringBuilder
+							.Append(type.Type.DataType)
+							.Append("(255)");
+						return;
 					}
 
 					break;
 			}
 
-			return value;
+			base.BuildDataTypeFromDataType(type, forCreateTable);
+		}
+
+		/// <summary>
+		/// Check if identifier is valid without quotation. Expects non-zero length string as input.
+		/// </summary>
+		private bool IsValidIdentifier(string name)
+		{
+			// https://www.ibm.com/support/knowledgecenter/en/SSGU8G_12.1.0/com.ibm.sqls.doc/ids_sqs_1660.htm
+			// TODO: add informix-specific reserved words list
+			// TODO: Letter definitions is: In the default locale, must be an ASCII character in the range A to Z or a to z
+			// add support for other locales later
+			return !IsReserved(name) &&
+				((name[0] >= 'a' && name[0] <= 'z') || (name[0] >= 'A' && name[0] <= 'Z') || name[0] == '_') &&
+				name.All(c =>
+					(c >= 'a' && c <= 'z') ||
+					(c >= 'A' && c <= 'Z') ||
+					(c >= '0' && c <= '9') ||
+					c == '$' ||
+					c == '_');
+		}
+
+		public override StringBuilder Convert(StringBuilder sb, string value, ConvertType convertType)
+		{
+			switch (convertType)
+			{
+				case ConvertType.NameToQueryFieldAlias:
+				case ConvertType.NameToQueryField:
+				case ConvertType.NameToQueryTable:
+					if (value.Length > 0 && !IsValidIdentifier(value))
+						// I wonder what to do if identifier has " in name?
+						return sb.Append('"').Append(value).Append('"');
+
+					break;
+				case ConvertType.NameToQueryParameter   :
+					return SqlProviderFlags.IsParameterOrderDependent
+						? sb.Append('?')
+						: sb.Append('@').Append(value);
+				case ConvertType.NameToCommandParameter :
+				case ConvertType.NameToSprocParameter   : return sb.Append(':').Append(value);
+				case ConvertType.SprocParameterToName   :
+					return (value.Length > 0 && value[0] == ':')
+						? sb.Append(value.Substring(1))
+						: sb.Append(value);
+			}
+
+			return sb.Append(value);
 		}
 
 		protected override void BuildCreateTableFieldType(SqlField field)
 		{
 			if (field.IsIdentity)
 			{
-				if (field.DataType == DataType.Int32)
+				if (field.Type!.Value.DataType == DataType.Int32)
 				{
 					StringBuilder.Append("SERIAL");
 					return;
 				}
 
-				if (field.DataType == DataType.Int64)
+				if (field.Type!.Value.DataType == DataType.Int64)
 				{
 					StringBuilder.Append("SERIAL8");
 					return;
@@ -195,30 +233,105 @@ namespace LinqToDB.DataProvider.Informix
 		{
 			AppendIndent();
 			StringBuilder.Append("PRIMARY KEY (");
-			StringBuilder.Append(fieldNames.Aggregate((f1,f2) => f1 + ", " + f2));
-			StringBuilder.Append(")");
+			StringBuilder.Append(string.Join(InlineComma, fieldNames));
+			StringBuilder.Append(')');
 		}
 
-		public override StringBuilder BuildTableName(StringBuilder sb, string database, string schema, string table)
+		// https://www.ibm.com/support/knowledgecenter/en/SSGU8G_12.1.0/com.ibm.sqls.doc/ids_sqs_1652.htm
+		public override StringBuilder BuildTableName(StringBuilder sb, string? server, string? database, string? schema, string table, TableOptions tableOptions)
 		{
+			if (server   != null && server  .Length == 0) server   = null;
 			if (database != null && database.Length == 0) database = null;
 			if (schema   != null && schema.  Length == 0) schema   = null;
 
-			// TODO: FQN could also contain server name, but we don't have such API for now
-			// https://www.ibm.com/support/knowledgecenter/en/SSGU8G_12.1.0/com.ibm.sqls.doc/ids_sqs_1652.htm
+			if (server != null && database == null)
+				throw new LinqToDBException("You must specify database for linked server query");
+
 			if (database != null)
-				sb.Append(database).Append(":");
+				sb.Append(database);
+
+			if (server != null)
+				sb.Append('@').Append(server);
+
+			if (database != null)
+				sb.Append(':');
 
 			if (schema != null)
-				sb.Append(schema).Append(".");
+				sb.Append(schema).Append('.');
 
 			return sb.Append(table);
 		}
 
-		protected override string GetProviderTypeName(IDbDataParameter parameter)
+		protected override string? GetProviderTypeName(IDbDataParameter parameter)
 		{
-			dynamic p = parameter;
-			return p.IfxType.ToString();
+			if (_provider != null)
+			{
+				var param = _provider.TryGetProviderParameter(parameter, MappingSchema);
+				if (param != null)
+					if (_provider.Adapter.GetIfxType != null)
+						return _provider.Adapter.GetIfxType(param).ToString();
+					else
+						return _provider.Adapter.GetDB2Type!(param).ToString();
+			}
+
+			return base.GetProviderTypeName(parameter);
 		}
+
+		protected override void BuildTypedExpression(SqlDataType dataType, ISqlExpression value)
+		{
+			BuildExpression(value);
+			StringBuilder.Append("::");
+			BuildDataType(dataType, false);
+		}
+
+		protected override void BuildCreateTableCommand(SqlTable table)
+		{
+			string command;
+
+			if (table.TableOptions.IsTemporaryOptionSet())
+			{
+				switch (table.TableOptions & TableOptions.IsTemporaryOptionSet)
+				{
+					case TableOptions.IsTemporary                                                                              :
+					case TableOptions.IsTemporary |                                          TableOptions.IsLocalTemporaryData :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure                                     :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData :
+					case                                                                     TableOptions.IsLocalTemporaryData :
+					case                            TableOptions.IsLocalTemporaryStructure                                     :
+					case                            TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData :
+						command = "CREATE TEMP TABLE ";
+						break;
+					case var value :
+						throw new InvalidOperationException($"Incompatible table options '{value}'");
+				}
+			}
+			else
+			{
+				command = "CREATE TABLE ";
+			}
+
+			StringBuilder.Append(command);
+
+			if (table.TableOptions.HasCreateIfNotExists())
+				StringBuilder.Append("IF NOT EXISTS ");
+		}
+
+		protected override void BuildDropTableStatement(SqlDropTableStatement dropTable)
+		{
+			BuildDropTableStatementIfExists(dropTable);
+		}
+
+		protected override ISqlExpression WrapBooleanExpression(ISqlExpression expr)
+		{
+			var newExpr = base.WrapBooleanExpression(expr);
+			if (!ReferenceEquals(newExpr, expr))
+			{
+				return new SqlFunction(typeof(bool), "Convert", false, new SqlDataType(DataType.Boolean),
+					newExpr);
+			}
+
+			return newExpr;
+		}
+
 	}
 }

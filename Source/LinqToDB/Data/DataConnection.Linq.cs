@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Data;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -7,11 +8,10 @@ namespace LinqToDB.Data
 {
 	using DataProvider;
 	using Linq;
-	using Mapping;
-	using SqlQuery;
 	using SqlProvider;
+	using SqlQuery;
 
-	public partial class DataConnection : IDataContext
+	public partial class DataConnection
 	{
 		/// <summary>
 		/// Returns queryable source for specified mapping class for current connection, mapped to database table or view.
@@ -30,30 +30,31 @@ namespace LinqToDB.Data
 		/// </summary>
 		/// <typeparam name="T">Mapping class type.</typeparam>
 		/// <param name="instance">Instance object for <paramref name="methodInfo"/> method or null for static method.</param>
-		/// <param name="methodInfo">Method, decorated with expression attribute, based on <see cref="LinqToDB.Sql.TableFunctionAttribute"/>.</param>
+		/// <param name="methodInfo">Method, decorated with expression attribute, based on <see cref="Sql.TableFunctionAttribute"/>.</param>
 		/// <param name="parameters">Parameters for <paramref name="methodInfo"/> method.</param>
 		/// <returns>Queryable source.</returns>
-		public ITable<T> GetTable<T>(object instance, MethodInfo methodInfo, params object[] parameters)
+		public ITable<T> GetTable<T>(object instance, MethodInfo methodInfo, params object?[] parameters)
 			where T : class
 		{
 			return DataExtensions.GetTable<T>(this, instance, methodInfo, parameters);
 		}
 
-		protected virtual SqlStatement ProcessQuery(SqlStatement statement)
+		protected virtual SqlStatement ProcessQuery(SqlStatement statement, EvaluationContext context)
 		{
 			return statement;
 		}
 
 		#region IDataContext Members
 
-		SqlProviderFlags IDataContext.SqlProviderFlags { get { return DataProvider.SqlProviderFlags; } }
-		Type             IDataContext.DataReaderType   { get { return DataProvider.DataReaderType;   } }
+		SqlProviderFlags IDataContext.SqlProviderFlags      => DataProvider.SqlProviderFlags;
+		TableOptions     IDataContext.SupportedTableOptions => DataProvider.SupportedTableOptions;
+		Type             IDataContext.DataReaderType        => DataProvider.DataReaderType;
 
 		bool             IDataContext.CloseAfterUse    { get; set; }
 
-		Expression IDataContext.GetReaderExpression(MappingSchema mappingSchema, IDataReader reader, int idx, Expression readerExpression, Type toType)
+		Expression IDataContext.GetReaderExpression(IDataReader reader, int idx, Expression readerExpression, Type toType)
 		{
-			return DataProvider.GetReaderExpression(mappingSchema, reader, idx, readerExpression, toType);
+			return DataProvider.GetReaderExpression(reader, idx, readerExpression, toType);
 		}
 
 		bool? IDataContext.IsDBNullAllowed(IDataReader reader, int idx)
@@ -68,39 +69,38 @@ namespace LinqToDB.Data
 			if (forNestedQuery && _connection != null && IsMarsEnabled)
 				return new DataConnection(DataProvider, _connection)
 				{
-					MappingSchema    = MappingSchema,
-					Transaction      = Transaction,
-					IsMarsEnabled    = IsMarsEnabled,
-					ConnectionString = ConnectionString,
+					MappingSchema               = MappingSchema,
+					TransactionAsync            = TransactionAsync,
+					IsMarsEnabled               = IsMarsEnabled,
+					ConnectionString            = ConnectionString,
+					OnEntityCreated             = OnEntityCreated,
+					RetryPolicy                 = RetryPolicy,
+					CommandTimeout              = CommandTimeout,
+					InlineParameters            = InlineParameters,
+					ThrowOnDisposed             = ThrowOnDisposed,
+					_queryHints                 = _queryHints?.Count > 0 ? _queryHints.ToList() : null,
+					OnTraceConnection           = OnTraceConnection,
+					OnClosed                    = OnClosed,
+					OnClosing                   = OnClosing,
+					OnBeforeConnectionOpen      = OnBeforeConnectionOpen,
+					OnConnectionOpened          = OnConnectionOpened,
+					OnBeforeConnectionOpenAsync = OnBeforeConnectionOpenAsync,
+					OnConnectionOpenedAsync     = OnConnectionOpenedAsync,
 				};
 
 			return (DataConnection)Clone();
 		}
 
-		string IDataContext.ContextID
-		{
-			get { return DataProvider.Name; }
-		}
+		string IDataContext.ContextID => DataProvider.Name;
 
-		static Func<ISqlBuilder> GetCreateSqlProvider(IDataProvider dp)
-		{
-			return dp.CreateSqlBuilder;
-		}
-
-		Func<ISqlBuilder> IDataContext.CreateSqlProvider
-		{
-			get { return GetCreateSqlProvider(DataProvider); }
-		}
+		Func<ISqlBuilder> IDataContext.CreateSqlProvider => () => DataProvider.CreateSqlBuilder(MappingSchema);
 
 		static Func<ISqlOptimizer> GetGetSqlOptimizer(IDataProvider dp)
 		{
 			return dp.GetSqlOptimizer;
 		}
 
-		Func<ISqlOptimizer> IDataContext.GetSqlOptimizer
-		{
-			get { return GetGetSqlOptimizer(DataProvider); }
-		}
+		Func<ISqlOptimizer> IDataContext.GetSqlOptimizer => GetGetSqlOptimizer(DataProvider);
 
 		#endregion
 	}

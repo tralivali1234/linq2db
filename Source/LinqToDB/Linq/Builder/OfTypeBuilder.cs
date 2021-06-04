@@ -18,11 +18,11 @@ namespace LinqToDB.Linq.Builder
 		protected override IBuildContext BuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
 			var sequence = builder.BuildSequence(new BuildInfo(buildInfo, methodCall.Arguments[0]));
-			var table    = sequence as TableBuilder.TableContext;
 
-			if (table != null && table.InheritanceMapping.Count > 0)
+			if (sequence is TableBuilder.TableContext table 
+				&& table.InheritanceMapping.Count > 0)
 			{
-				var objectType = methodCall.Type.GetGenericArgumentsEx()[0];
+				var objectType = methodCall.Type.GetGenericArguments()[0];
 
 				if (table.ObjectType.IsSameOrParentOf(objectType))
 				{
@@ -34,13 +34,13 @@ namespace LinqToDB.Linq.Builder
 			}
 			else
 			{
-				var toType   = methodCall.Type.GetGenericArgumentsEx()[0];
+				var toType   = methodCall.Type.GetGenericArguments()[0];
 				var gargs    = methodCall.Arguments[0].Type.GetGenericArguments(typeof(IQueryable<>));
 				var fromType = gargs == null ? typeof(object) : gargs[0];
 
-				if (toType.IsSubclassOfEx(fromType))
+				if (toType.IsSubclassOf(fromType))
 				{
-					for (var type = toType.BaseTypeEx(); type != null && type != typeof(object); type = type.BaseTypeEx())
+					for (var type = toType.BaseType; type != null && type != typeof(object); type = type.BaseType)
 					{
 						var mapping = builder.MappingSchema.GetEntityDescriptor(type).InheritanceMapping;
 
@@ -68,7 +68,7 @@ namespace LinqToDB.Linq.Builder
 			return builder.MakeIsPredicate(context, discriminators, toType,
 				name =>
 				{
-					var field  = table.Fields.Values.First(f => f.Name == name);
+					var field  = table[name] ?? throw new LinqException($"Field {name} not found in table {table}");
 					var member = field.ColumnDescriptor.MemberInfo;
 					var expr   = Expression.MakeMemberAccess(Expression.Parameter(member.DeclaringType, "p"), member);
 					var sql    = context.ConvertToSql(expr, 1, ConvertFlags.Field)[0].Sql;
@@ -77,8 +77,8 @@ namespace LinqToDB.Linq.Builder
 				});
 		}
 
-		protected override SequenceConvertInfo Convert(
-			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression param)
+		protected override SequenceConvertInfo? Convert(
+			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression? param)
 		{
 			return null;
 		}
@@ -103,7 +103,7 @@ namespace LinqToDB.Linq.Builder
 				QueryRunner.SetRunQuery(query, mapper);
 			}
 
-			public override Expression BuildExpression(Expression expression, int level, bool enforceServerSide)
+			public override Expression BuildExpression(Expression? expression, int level, bool enforceServerSide)
 			{
 				var expr = base.BuildExpression(expression, level, enforceServerSide);
 				var type = _methodCall.Method.GetGenericArguments()[0];

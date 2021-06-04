@@ -1,24 +1,38 @@
-﻿using System;
-
-namespace LinqToDB.DataProvider.SqlServer
+﻿namespace LinqToDB.DataProvider.SqlServer
 {
 	using SqlProvider;
 	using SqlQuery;
 
 	class SqlServer2000SqlOptimizer : SqlServerSqlOptimizer
 	{
-		public SqlServer2000SqlOptimizer(SqlProviderFlags sqlProviderFlags) : base(sqlProviderFlags)
+		public SqlServer2000SqlOptimizer(SqlProviderFlags sqlProviderFlags) : base(sqlProviderFlags, SqlServerVersion.v2000)
 		{
 		}
 
-		public override ISqlExpression ConvertExpression(ISqlExpression expr)
+		public override SqlStatement TransformStatement(SqlStatement statement)
 		{
-			expr = base.ConvertExpression(expr);
+			// very limited provider, it do not support Window functions.
 
-			if (expr is SqlFunction)
-				return ConvertConvertFunction((SqlFunction)expr);
+			if (statement.IsUpdate())
+			{
+				var selectQuery = statement.SelectQuery!;
+				if (selectQuery.Select.SkipValue != null || selectQuery.Select.TakeValue != null)
+					throw new LinqToDBException("SQL Server 2000 do not support Skip, Take in Update statement.");
 
-			return expr;
+				if (!statement.SelectQuery!.OrderBy.IsEmpty)
+				{
+					statement.SelectQuery.OrderBy.Items.Clear();
+				}
+			}
+
+			return statement;
 		}
+
+		protected override ISqlExpression ConvertFunction(SqlFunction func)
+		{
+			func = ConvertFunctionParameters(func, false);
+			return base.ConvertFunction(func);
+		}
+
 	}
 }

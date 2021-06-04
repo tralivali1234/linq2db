@@ -6,13 +6,16 @@ using NUnit.Framework;
 
 namespace Tests.Linq
 {
+	using System.Threading.Tasks;
+	using LinqToDB;
+	using LinqToDB.Tools;
 	using Model;
 
 	[TestFixture]
 	public class SetTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void Except1(string context)
+		[Test]
+		public void Except1([DataSources(ProviderName.SqlServer2000)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -20,8 +23,8 @@ namespace Tests.Linq
 					db.Child.Except(db.Child.Where(p => p.ParentID == 3)));
 		}
 
-		//[Test, DataContextSource]
-		public void Except2(string context)
+		//[Test]
+		public void Except2([DataSources(ProviderName.SqlServer2000)] string context)
 		{
 			var ids = new[] { 1, 2 };
 
@@ -31,8 +34,8 @@ namespace Tests.Linq
 					db.Child.Where(c => c.GrandChildren.Select(_ => _.ParentID ?? 0).Except(ids).Count() == 0));
 		}
 
-		[Test, DataContextSource]
-		public void Intersect(string context)
+		[Test]
+		public void Intersect([DataSources(ProviderName.SqlServer2000)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -40,8 +43,8 @@ namespace Tests.Linq
 					db.Child.Intersect(db.Child.Where(p => p.ParentID == 3)));
 		}
 
-		[Test, DataContextSource]
-		public void Contains1(string context)
+		[Test]
+		public void Contains1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -49,8 +52,8 @@ namespace Tests.Linq
 					from p in db.Parent select db.Child.Select(c => c.Parent).Contains(p));
 		}
 
-		[Test, DataContextSource]
-		public void Contains2(string context)
+		[Test]
+		public void Contains2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -58,8 +61,8 @@ namespace Tests.Linq
 					from p in db.Parent select db.Child.Select(c => c.ParentID).Contains(p.ParentID));
 		}
 
-		[Test, DataContextSource]
-		public void Contains201(string context)
+		[Test]
+		public void Contains201([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -67,8 +70,8 @@ namespace Tests.Linq
 					from p in db.Parent select db.Child.Select(c => c.ParentID).Contains(p.ParentID - 1));
 		}
 
-		[Test, DataContextSource]
-		public void Contains3(string context)
+		[Test]
+		public void Contains3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -76,8 +79,8 @@ namespace Tests.Linq
 					from p in db.Parent where db.Child.Select(c => c.Parent).Contains(p) select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains4(string context)
+		[Test]
+		public void Contains4([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -85,8 +88,8 @@ namespace Tests.Linq
 					from p in db.Parent where db.Child.Select(c => c.ParentID).Contains(p.ParentID) select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains5(string context)
+		[Test]
+		public void Contains5([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -94,8 +97,8 @@ namespace Tests.Linq
 					from p in db.Parent where db.Child.Select(c => c.ParentID).Contains(p.ParentID + 1) select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains6(string context)
+		[Test]
+		public void Contains6([DataSources] string context)
 		{
 			var n = 1;
 
@@ -105,8 +108,8 @@ namespace Tests.Linq
 					from p in db.Parent where db.Child.Select(c => c.ParentID).Contains(p.ParentID + n) select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains7(string context)
+		[Test]
+		public void Contains7([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -114,8 +117,8 @@ namespace Tests.Linq
 					db.Child.Select(c => c.ParentID).Contains(11));
 		}
 
-		[Test, DataContextSource]
-		public void Contains701(string context)
+		[Test]
+		public void Contains701([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -123,8 +126,8 @@ namespace Tests.Linq
 					db.Child.Select(c => c.Parent).Contains(new Parent { ParentID = 11, Value1 = 11}));
 		}
 
-		[Test, DataContextSource]
-		public void Contains8(string context)
+		[Test]
+		public void Contains8([DataSources] string context)
 		{
 			var arr = new[] { GrandChild.ElementAt(0), GrandChild.ElementAt(1) };
 
@@ -143,8 +146,28 @@ namespace Tests.Linq
 					select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains801(string context)
+		[Test]
+		public void NotContains8([DataSources] string context)
+		{
+			var arr = new[] { GrandChild.ElementAt(0), GrandChild.ElementAt(1) };
+
+			using (var db = GetDataContext(context))
+				AreEqual(
+					from p in Parent
+					join ch in Child on p.ParentID equals ch.ParentID
+					join gc in GrandChild on ch.ChildID equals gc.ChildID
+					where !arr.Contains(gc)
+					select p
+					,
+					from p in db.Parent
+					join ch in db.Child on p.ParentID equals ch.ParentID
+					join gc in db.GrandChild on ch.ChildID equals gc.ChildID
+					where !arr.Contains(gc)
+					select p);
+		}
+
+		[Test]
+		public void Contains801([DataSources] string context)
 		{
 			var arr = new[] { GrandChild.ElementAt(0), GrandChild.ElementAt(1) };
 
@@ -165,8 +188,8 @@ namespace Tests.Linq
 					select gc);
 		}
 
-		[Test, DataContextSource]
-		public void Contains802(string context)
+		[Test]
+		public void Contains802([DataSources] string context)
 		{
 			var arr = new[] { GrandChild.ElementAt(0), GrandChild.ElementAt(1) };
 
@@ -185,8 +208,8 @@ namespace Tests.Linq
 					select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains803(string context)
+		[Test]
+		public void Contains803([DataSources] string context)
 		{
 			var arr = new[] { GrandChild.ElementAt(0), GrandChild.ElementAt(1) };
 
@@ -205,8 +228,8 @@ namespace Tests.Linq
 					select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains9(string context)
+		[Test]
+		public void Contains9([DataSources] string context)
 		{
 			var arr = Parent1.Take(2).ToArray();
 
@@ -216,8 +239,8 @@ namespace Tests.Linq
 					from p in db.Parent1 where arr.Contains(p) select p);
 		}
 
-		[Test, NorthwindDataContext]
-		public void Contains10(string context)
+		[Test]
+		public void Contains10([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -242,8 +265,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void Contains11(string context)
+		[Test]
+		public void Contains11([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -261,8 +284,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void Contains12(string context)
+		[Test]
+		public void Contains12([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -280,8 +303,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void Contains13(string context)
+		[Test]
+		public void Contains13([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -312,8 +335,8 @@ namespace Tests.Linq
 				db.Parent1.Where(p => p.ParentID == 1).Contains(parent));
 		}
 
-		[Test, DataContextSource]
-		public void Contains14(string context)
+		[Test]
+		public void Contains14([DataSources] string context)
 		{
 			var ps = Parent1.OrderBy(p => p.ParentID).Take(2).ToArray();
 
@@ -322,8 +345,8 @@ namespace Tests.Linq
 					TestContains(db, p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains15(string context)
+		[Test]
+		public void Contains15([DataSources] string context)
 		{
 			var arr = Parent1.Take(2).ToArray();
 
@@ -333,8 +356,8 @@ namespace Tests.Linq
 					from p in db.Child where arr.Contains(p.Parent1) select p);
 		}
 
-		[Test, DataContextSource]
-		public void Contains16(string context)
+		[Test]
+		public void Contains16([DataSources] string context)
 		{
 			var arr = Child.Take(2).ToArray();
 
@@ -352,17 +375,48 @@ namespace Tests.Linq
 
 			foreach (var g in r1)
 			{
-				Assert.AreEqual(d.First().Value, g.ParentID);
+				Assert.AreEqual(d.First()!.Value, g.ParentID);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TestForGroupBy(string context)
+		[Test]
+		public void TestForGroupBy([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				GetData(db, new List<int?> { 2 });
 				GetData(db, new List<int?> { 3 });
+			}
+		}
+
+		[Test]
+		public void Issue3017([IncludeDataSources(TestProvName.AllSqlServer2005Plus)] string context)
+		{
+			using var scope = new DisableBaseline("Multithreading");
+
+			var tasks = new List<Task>();
+
+			for (var i = 0; i < 30; i++)
+			{
+				var local = i;
+				tasks.Add(Task.Run(() => Issue3017Action(context)));
+			}
+
+			Task.WaitAll(tasks.ToArray());
+
+			foreach (var task in tasks)
+				Assert.False(task.IsFaulted);
+		}
+
+		private async Task Issue3017Action(string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var targets = db.Person.ToArray();
+
+				var keys = targets.Select(r => new { r.ID, r.FirstName, r.LastName });
+
+				await db.Person.Where(r => new { r.ID, r.FirstName, r.LastName }.In(keys)).ToListAsync();
 			}
 		}
 	}

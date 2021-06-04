@@ -6,13 +6,32 @@ using System.Text;
 
 namespace LinqToDB.DataProvider.MySql
 {
-	using SqlQuery;
+	using Extensions;
+	using Mapping;
 	using SqlProvider;
+	using SqlQuery;
+	using Tools;
 
 	class MySqlSqlBuilder : BasicSqlBuilder
 	{
-		public MySqlSqlBuilder(ISqlOptimizer sqlOptimizer, SqlProviderFlags sqlProviderFlags, ValueToSqlConverter valueToSqlConverter)
-			: base(sqlOptimizer, sqlProviderFlags, valueToSqlConverter)
+		private readonly MySqlDataProvider? _provider;
+
+		public MySqlSqlBuilder(
+			MySqlDataProvider? provider,
+			MappingSchema      mappingSchema,
+			ISqlOptimizer      sqlOptimizer,
+			SqlProviderFlags   sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
+		{
+			_provider = provider;
+		}
+
+		// remote context
+		public MySqlSqlBuilder(
+			MappingSchema    mappingSchema,
+			ISqlOptimizer    sqlOptimizer,
+			SqlProviderFlags sqlProviderFlags)
+			: base(mappingSchema, sqlOptimizer, sqlProviderFlags)
 		{
 		}
 
@@ -21,9 +40,36 @@ namespace LinqToDB.DataProvider.MySql
 			ParameterSymbol = '@';
 		}
 
+		protected override bool IsRecursiveCteKeywordRequired   => true;
+		public    override bool IsNestedJoinParenthesisRequired => true;
+
+		protected override bool CanSkipRootAliases(SqlStatement statement)
+		{
+			if (statement.SelectQuery != null)
+			{
+				return statement.SelectQuery.From.Tables.Count > 0;
+			}
+
+			return true;
+		}
+
 		public override int CommandCount(SqlStatement statement)
 		{
 			return statement.NeedsIdentity() ? 2 : 1;
+		}
+
+		protected override void BuildSelectClause(SelectQuery selectQuery)
+		{
+			// mysql <= 5.5 doesn't support WHERE without FROM
+			// https://docs.oracle.com/cd/E19957-01/mysql-refman-5.5/sql-syntax.html#select
+			if (selectQuery.From.Tables.Count == 0 && !selectQuery.Where.IsEmpty)
+			{
+				AppendIndent().Append("SELECT").AppendLine();
+				BuildColumns(selectQuery);
+				AppendIndent().Append("FROM DUAL").AppendLine();
+			}
+			else
+				base.BuildSelectClause(selectQuery);
 		}
 
 		protected override void BuildCommand(SqlStatement statement, int commandNumber)
@@ -33,15 +79,13 @@ namespace LinqToDB.DataProvider.MySql
 
 		protected override ISqlBuilder CreateSqlBuilder()
 		{
-			return new MySqlSqlBuilder(SqlOptimizer, SqlProviderFlags, ValueToSqlConverter);
+			return new MySqlSqlBuilder(MappingSchema, SqlOptimizer, SqlProviderFlags);
 		}
 
 		protected override string LimitFormat(SelectQuery selectQuery)
 		{
 			return "LIMIT {0}";
 		}
-
-		public override bool IsNestedJoinParenthesisRequired { get { return true; } }
 
 		protected override void BuildOffsetLimit(SelectQuery selectQuery)
 		{
@@ -51,7 +95,7 @@ namespace LinqToDB.DataProvider.MySql
 			{
 				AppendIndent()
 					.AppendFormat(
-						"LIMIT {0},{1}",
+						"LIMIT {0}, {1}",
 						WithStringBuilder(new StringBuilder(), () => BuildExpression(selectQuery.Select.SkipValue)),
 						selectQuery.Select.TakeValue == null ?
 							long.MaxValue.ToString() :
@@ -60,38 +104,207 @@ namespace LinqToDB.DataProvider.MySql
 			}
 		}
 
-		protected override void BuildDataType(SqlDataType type, bool createDbType)
+		protected override void BuildDataTypeFromDataType(SqlDataType type, bool forCreateTable)
 		{
-			switch (type.DataType)
+			// mysql has limited support for types in type-CAST expressions
+			if (!forCreateTable)
 			{
-				case DataType.Int16         :
-				case DataType.Int32         :
-				case DataType.Int64         :
-					if (createDbType) goto default;
-					StringBuilder.Append("Signed");
+				switch (type.Type.DataType)
+				{
+					case DataType.Boolean       :
+					case DataType.SByte         :
+					case DataType.Int16         :
+					case DataType.Int32         :
+					case DataType.Int64         : StringBuilder.Append("SIGNED");         break;
+					case DataType.BitArray      : // wild guess
+					case DataType.Byte          :
+					case DataType.UInt16        :
+					case DataType.UInt32        :
+					case DataType.UInt64        : StringBuilder.Append("UNSIGNED");       break;
+					case DataType.Money         : StringBuilder.Append("DECIMAL(19, 4)"); break;
+					case DataType.SmallMoney    : StringBuilder.Append("DECIMAL(10, 4)"); break;
+					case DataType.DateTime      :
+					case DataType.DateTime2     :
+					case DataType.SmallDateTime :
+					case DataType.DateTimeOffset: StringBuilder.Append("DATETIME");       break;
+					case DataType.Time          : StringBuilder.Append("TIME");           break;
+					case DataType.Date          : StringBuilder.Append("DATE");           break;
+					case DataType.Json          : StringBuilder.Append("JSON");           break;
+					case DataType.Guid          : StringBuilder.Append("CHAR(36)");       break;
+					// TODO: FLOAT/DOUBLE support in CAST added just recently (v8.0.17)
+					// and needs version sniffing
+					case DataType.Double        :
+					case DataType.Single        : base.BuildDataTypeFromDataType(SqlDataType.Decimal, forCreateTable); break;
+					case DataType.Decimal       :
+						if (type.Type.Scale != null && type.Type.Scale != 0)
+							StringBuilder.Append($"DECIMAL({type.Type.Precision ?? 10}, {type.Type.Scale})");
+						else if (type.Type.Precision != null && type.Type.Precision != 10)
+							StringBuilder.Append($"DECIMAL({type.Type.Precision})");
+						else
+							StringBuilder.Append("DECIMAL"); break;
+					case DataType.Char          :
+					case DataType.NChar         :
+					case DataType.VarChar       :
+					case DataType.NVarChar      :
+					case DataType.NText         :
+					case DataType.Text          :
+						if (type.Type.Length == null || type.Type.Length > 255 || type.Type.Length < 0)
+							StringBuilder.Append("CHAR(255)");
+						else if (type.Type.Length == 1)
+							StringBuilder.Append("CHAR");
+						else
+							StringBuilder.Append($"CHAR({type.Type.Length})");
+						break;
+					case DataType.VarBinary     :
+					case DataType.Binary        :
+					case DataType.Blob          :
+						if (type.Type.Length == null || type.Type.Length < 0)
+							StringBuilder.Append("BINARY(255)");
+						else if (type.Type.Length == 1)
+							StringBuilder.Append("BINARY");
+						else
+							StringBuilder.Append($"BINARY({type.Type.Length})");
 					break;
-				case DataType.SByte         :
-				case DataType.Byte          :
-				case DataType.UInt16        :
-				case DataType.UInt32        :
-				case DataType.UInt64        :
-					if (createDbType) goto default;
-					StringBuilder.Append("Unsigned");
-					break;
-				case DataType.Money         : StringBuilder.Append("Decimal(19,4)");                 break;
-				case DataType.SmallMoney    : StringBuilder.Append("Decimal(10,4)");                 break;
+					default                     : base.BuildDataTypeFromDataType(type, forCreateTable); break;
+				}
+
+				return;
+			}
+
+			// types for CREATE TABLE statement
+			switch (type.Type.DataType)
+			{
+				case DataType.SByte         : StringBuilder.Append("TINYINT");                       break;
+				case DataType.Int16         : StringBuilder.Append("SMALLINT");                      break;
+				case DataType.Int32         : StringBuilder.Append("INT");                           break;
+				case DataType.Int64         : StringBuilder.Append("BIGINT");                        break;
+				case DataType.Byte          : StringBuilder.Append("TINYINT UNSIGNED");              break;
+				case DataType.UInt16        : StringBuilder.Append("SMALLINT UNSIGNED");             break;
+				case DataType.UInt32        : StringBuilder.Append("INT UNSIGNED");                  break;
+				case DataType.UInt64        : StringBuilder.Append("BIGINT UNSIGNED");               break;
+				case DataType.Money         : StringBuilder.Append("DECIMAL(19, 4)");                break;
+				case DataType.SmallMoney    : StringBuilder.Append("DECIMAL(10, 4)");                break;
+				case DataType.Decimal       :
+					if (type.Type.Scale != null && type.Type.Scale != 0)
+						StringBuilder.Append($"DECIMAL({type.Type.Precision ?? 10}, {type.Type.Scale})");
+					else if (type.Type.Precision != null && type.Type.Precision != 10)
+						StringBuilder.Append($"DECIMAL({type.Type.Precision})");
+					else
+						StringBuilder.Append("DECIMAL"); break;
+				case DataType.DateTime      :
 				case DataType.DateTime2     :
-				case DataType.SmallDateTime : StringBuilder.Append("DateTime");                      break;
-				case DataType.Boolean       : StringBuilder.Append("Boolean");                       break;
+				case DataType.SmallDateTime :
+					if (type.Type.Precision > 0 && type.Type.Precision <= 6)
+						StringBuilder.Append($"DATETIME({type.Type.Precision})");
+					else
+						StringBuilder.Append("DATETIME");
+					break;
+				case DataType.DateTimeOffset:
+					if (type.Type.Precision > 0 && type.Type.Precision <= 6)
+						StringBuilder.Append($"TIMESTAMP({type.Type.Precision})");
+					else
+						StringBuilder.Append("TIMESTAMP");
+					break;
+				case DataType.Time:
+					if (type.Type.Precision > 0 && type.Type.Precision <= 6)
+						StringBuilder.Append($"TIME({type.Type.Precision})");
+					else
+						StringBuilder.Append("TIME");
+					break;
+				case DataType.Boolean       : StringBuilder.Append("BOOLEAN");                       break;
 				case DataType.Double        :
-				case DataType.Single        : base.BuildDataType(SqlDataType.Decimal, createDbType); break;
+					if (type.Type.Precision >= 0 && type.Type.Precision <= 53)
+						StringBuilder.Append($"FLOAT({type.Type.Precision})"); // this is correct, FLOAT(p)
+					else
+						StringBuilder.Append("DOUBLE");
+					break;
+				case DataType.Single        :
+					if (type.Type.Precision >= 0 && type.Type.Precision <= 53)
+						StringBuilder.Append($"FLOAT({type.Type.Precision})");
+					else
+						StringBuilder.Append("FLOAT");
+					break;
+				case DataType.BitArray:
+					{
+						var length = type.Type.Length;
+						if (length == null)
+						{
+							var columnType = type.Type.SystemType.ToNullableUnderlying();
+							if (columnType == typeof(byte) || columnType == typeof(sbyte))
+								length = 8;
+							else if (columnType == typeof(short) || columnType == typeof(ushort))
+								length = 16;
+							else if (columnType == typeof(int) || columnType == typeof(uint))
+								length = 32;
+							else if (columnType == typeof(long) || columnType == typeof(ulong))
+								length = 64;
+						}
+
+						if (length != null && length != 1 && length >= 0)
+							StringBuilder.Append($"BIT({length})");
+						else
+							StringBuilder.Append("BIT");
+					}
+					break;
+				case DataType.Date          : StringBuilder.Append("DATE");                          break;
+				case DataType.Json          : StringBuilder.Append("JSON");                          break;
+				case DataType.Guid          : StringBuilder.Append("CHAR(36)");                      break;
+				case DataType.Char          :
+				case DataType.NChar         :
+					if (type.Type.Length == null || type.Type.Length > 255 || type.Type.Length < 0)
+						StringBuilder.Append("CHAR(255)");
+					else if (type.Type.Length == 1)
+						StringBuilder.Append("CHAR");
+					else
+						StringBuilder.Append($"CHAR({type.Type.Length})");
+					break;
 				case DataType.VarChar       :
 				case DataType.NVarChar      :
-					StringBuilder.Append("Char");
-					if (type.Length > 0)
-						StringBuilder.Append('(').Append(type.Length).Append(')');
+					if (type.Type.Length == null || type.Type.Length > 255 || type.Type.Length < 0)
+						StringBuilder.Append("VARCHAR(255)");
+					else
+						StringBuilder.Append($"VARCHAR({type.Type.Length})");
 					break;
-				default: base.BuildDataType(type, createDbType);                                     break;
+				case DataType.Binary:
+					if (type.Type.Length == null || type.Type.Length < 0)
+						StringBuilder.Append("BINARY(255)");
+					else if (type.Type.Length == 1)
+						StringBuilder.Append("BINARY");
+					else
+						StringBuilder.Append($"BINARY({type.Type.Length})");
+					break;
+				case DataType.VarBinary:
+					if (type.Type.Length == null || type.Type.Length < 0)
+						StringBuilder.Append("VARBINARY(255)");
+					else
+						StringBuilder.Append($"VARBINARY({type.Type.Length})");
+					break;
+				case DataType.Blob:
+					if (type.Type.Length == null || type.Type.Length < 0)
+						StringBuilder.Append("BLOB");
+					else if (type.Type.Length <= 255)
+						StringBuilder.Append("TINYBLOB");
+					else if (type.Type.Length <= 65535)
+						StringBuilder.Append("BLOB");
+					else if (type.Type.Length <= 16777215)
+						StringBuilder.Append("MEDIUMBLOB");
+					else
+						StringBuilder.Append("LONGBLOB");
+					break;
+				case DataType.NText:
+				case DataType.Text:
+					if (type.Type.Length == null || type.Type.Length < 0)
+						StringBuilder.Append("TEXT");
+					else if (type.Type.Length <= 255)
+						StringBuilder.Append("TINYTEXT");
+					else if (type.Type.Length <= 65535)
+						StringBuilder.Append("TEXT");
+					else if (type.Type.Length <= 16777215)
+						StringBuilder.Append("MEDIUMTEXT");
+					else
+						StringBuilder.Append("LONGTEXT");
+					break;
+				default: base.BuildDataTypeFromDataType(type, forCreateTable);                       break;
 			}
 		}
 
@@ -101,17 +314,45 @@ namespace LinqToDB.DataProvider.MySql
 				(deleteStatement.SelectQuery.From.FindTableSource(deleteStatement.Table) ?? deleteStatement.Table) :
 				deleteStatement.SelectQuery.From.Tables[0];
 
-			AppendIndent()
-				.Append("DELETE ")
-				.Append(Convert(GetTableAlias(table), ConvertType.NameToQueryTableAlias))
-				.AppendLine();
+			AppendIndent().Append("DELETE ");
+			Convert(StringBuilder, GetTableAlias(table)!, ConvertType.NameToQueryTableAlias);
+			StringBuilder.AppendLine();
 		}
 
 		protected override void BuildUpdateClause(SqlStatement statement, SelectQuery selectQuery, SqlUpdateClause updateClause)
 		{
+			var pos = StringBuilder.Length;
+
 			base.BuildFromClause(statement, selectQuery);
-			StringBuilder.Remove(0, 4).Insert(0, "UPDATE");
+
+			StringBuilder.Remove(pos, 4).Insert(pos, "UPDATE");
+
 			base.BuildUpdateSet(selectQuery, updateClause);
+		}
+
+		protected override void BuildInsertQuery(SqlStatement statement, SqlInsertClause insertClause, bool addAlias)
+		{
+			BuildStep = Step.Tag;          BuildTag(statement);
+			BuildStep = Step.InsertClause; BuildInsertClause(statement, insertClause, addAlias);
+
+			if (statement.QueryType == QueryType.Insert && statement.SelectQuery!.From.Tables.Count != 0)
+			{
+				BuildStep = Step.WithClause;    BuildWithClause(statement.GetWithClause());
+				BuildStep = Step.SelectClause;  BuildSelectClause(statement.SelectQuery);
+				BuildStep = Step.FromClause;    BuildFromClause(statement, statement.SelectQuery);
+				BuildStep = Step.WhereClause;   BuildWhereClause(statement.SelectQuery);
+				BuildStep = Step.GroupByClause; BuildGroupByClause(statement.SelectQuery);
+				BuildStep = Step.HavingClause;  BuildHavingClause(statement.SelectQuery);
+				BuildStep = Step.OrderByClause; BuildOrderByClause(statement.SelectQuery);
+				BuildStep = Step.OffsetLimit;   BuildOffsetLimit(statement.SelectQuery);
+			}
+
+			if (insertClause.WithIdentity)
+				BuildGetIdentity(insertClause);
+			else
+			{
+				BuildReturningSubclause(statement);
+			}
 		}
 
 		protected override void BuildFromClause(SqlStatement statement, SelectQuery selectQuery)
@@ -126,99 +367,76 @@ namespace LinqToDB.DataProvider.MySql
 		private static string _commandParameterPrefix = string.Empty;
 		public  static string  CommandParameterPrefix
 		{
-			get { return _commandParameterPrefix; }
-			set { _commandParameterPrefix = value ?? string.Empty; }
+			get => _commandParameterPrefix;
+			set => _commandParameterPrefix = value ?? string.Empty;
 		}
 
 		private static string _sprocParameterPrefix = string.Empty;
 		public  static string  SprocParameterPrefix
 		{
-			get { return _sprocParameterPrefix; }
-			set { _sprocParameterPrefix = value ?? string.Empty; }
+			get => _sprocParameterPrefix;
+			set => _sprocParameterPrefix = value ?? string.Empty;
 		}
 
-		private static List<char> _convertParameterSymbols;
+		private static List<char>? _convertParameterSymbols;
 		public  static List<char>  ConvertParameterSymbols
 		{
-			get { return _convertParameterSymbols; }
-			set { _convertParameterSymbols = value ?? new List<char>(); }
+			get => _convertParameterSymbols ??= new List<char>();
+			set => _convertParameterSymbols = value ?? new List<char>();
 		}
 
-		public override object Convert(object value, ConvertType convertType)
+		public override StringBuilder Convert(StringBuilder sb, string value, ConvertType convertType)
 		{
 			switch (convertType)
 			{
 				case ConvertType.NameToQueryParameter:
-					return ParameterSymbol + value.ToString();
+					return sb.Append(ParameterSymbol).Append(value);
 
 				case ConvertType.NameToCommandParameter:
-					return ParameterSymbol + CommandParameterPrefix + value;
+					return sb.Append(ParameterSymbol).Append(CommandParameterPrefix).Append(value);
 
 				case ConvertType.NameToSprocParameter:
-					{
-						var valueStr = value.ToString();
-
-						if(string.IsNullOrEmpty(valueStr))
+					if(string.IsNullOrEmpty(value))
 							throw new ArgumentException("Argument 'value' must represent parameter name.");
 
-						if (valueStr[0] == ParameterSymbol)
-							valueStr = valueStr.Substring(1);
+					if (value[0] == ParameterSymbol)
+						value = value.Substring(1);
 
-						if (valueStr.StartsWith(SprocParameterPrefix, StringComparison.Ordinal))
-							valueStr = valueStr.Substring(SprocParameterPrefix.Length);
+					if (value.StartsWith(SprocParameterPrefix, StringComparison.Ordinal))
+						value = value.Substring(SprocParameterPrefix.Length);
 
-						return ParameterSymbol + SprocParameterPrefix + valueStr;
-					}
+					return sb.Append(ParameterSymbol).Append(SprocParameterPrefix).Append(value);
 
 				case ConvertType.SprocParameterToName:
-					{
-						var str = value.ToString();
-						str = (str.Length > 0 && (str[0] == ParameterSymbol || (TryConvertParameterSymbol && ConvertParameterSymbols.Contains(str[0])))) ? str.Substring(1) : str;
+					value = (value.Length > 0 && (value[0] == ParameterSymbol || (TryConvertParameterSymbol && ConvertParameterSymbols.Contains(value[0])))) ? value.Substring(1) : value;
 
-						if (!string.IsNullOrEmpty(SprocParameterPrefix) && str.StartsWith(SprocParameterPrefix))
-							str = str.Substring(SprocParameterPrefix.Length);
+					if (!string.IsNullOrEmpty(SprocParameterPrefix) && value.StartsWith(SprocParameterPrefix))
+						value = value.Substring(SprocParameterPrefix.Length);
 
-						return str;
-					}
+					return sb.Append(value);
 
 				case ConvertType.NameToQueryField     :
 				case ConvertType.NameToQueryFieldAlias:
 				case ConvertType.NameToQueryTableAlias:
-					{
-						var name = value.ToString();
-						if (name.Length > 0 && name[0] == '`')
-							return value;
-						return "`" + value + "`";
-					}
+				case ConvertType.NameToDatabase       :
+				case ConvertType.NameToSchema         :
+				case ConvertType.NameToQueryTable     :
+					// https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
+					if (value.Contains('`'))
+						value = value.Replace("`", "``");
 
-				case ConvertType.NameToDatabase   :
-				case ConvertType.NameToSchema     :
-				case ConvertType.NameToQueryTable :
-					if (value != null)
-					{
-						var name = value.ToString();
-						if (name.Length > 0 && name[0] == '`')
-							return value;
-
-						if (name.IndexOf('.') > 0)
-							value = string.Join("`.`", name.Split('.'));
-
-						return "`" + value + "`";
-					}
-
-					break;
+					return sb.Append('`').Append(value).Append('`');
 			}
 
-			return value;
+			return sb.Append(value);
 		}
 
-		protected override StringBuilder BuildExpression(
-			ISqlExpression expr,
-			bool           buildTableName,
-			bool           checkParentheses,
-			string         alias,
-			ref bool       addAlias,
-			bool           throwExceptionIfTableNotFound = true)
+		protected override StringBuilder BuildExpression(ISqlExpression expr,
+			bool buildTableName,
+			bool checkParentheses,
+			string? alias,
+			ref bool addAlias,
+			bool throwExceptionIfTableNotFound = true)
 		{
 			return base.BuildExpression(
 				expr,
@@ -229,11 +447,20 @@ namespace LinqToDB.DataProvider.MySql
 				throwExceptionIfTableNotFound);
 		}
 
+		protected override void BuildIsDistinctPredicate(SqlPredicate.IsDistinct expr)
+		{
+			if (!expr.IsNot)
+				StringBuilder.Append("NOT ");
+			BuildExpression(GetPrecedence(expr), expr.Expr1);
+			StringBuilder.Append(" <=> ");
+			BuildExpression(GetPrecedence(expr), expr.Expr2);
+		}
+
 		protected override void BuildInsertOrUpdateQuery(SqlInsertOrUpdateStatement insertOrUpdate)
 		{
 			var position = StringBuilder.Length;
 
-			BuildInsertQuery(insertOrUpdate, insertOrUpdate.Insert);
+			BuildInsertQuery(insertOrUpdate, insertOrUpdate.Insert, false);
 
 			if (insertOrUpdate.Update.Items.Count > 0)
 			{
@@ -246,13 +473,13 @@ namespace LinqToDB.DataProvider.MySql
 				foreach (var expr in insertOrUpdate.Update.Items)
 				{
 					if (!first)
-						StringBuilder.Append(',').AppendLine();
+						StringBuilder.AppendLine(Comma);
 					first = false;
 
 					AppendIndent();
 					BuildExpression(expr.Column, false, true);
 					StringBuilder.Append(" = ");
-					BuildExpression(expr.Expression, false, true);
+					BuildExpression(expr.Expression!, false, true);
 				}
 
 				Indent--;
@@ -285,32 +512,124 @@ namespace LinqToDB.DataProvider.MySql
 		{
 			AppendIndent();
 			StringBuilder.Append("CONSTRAINT ").Append(pkName).Append(" PRIMARY KEY CLUSTERED (");
-			StringBuilder.Append(fieldNames.Aggregate((f1,f2) => f1 + ", " + f2));
-			StringBuilder.Append(")");
+			StringBuilder.Append(string.Join(InlineComma, fieldNames));
+			StringBuilder.Append(')');
 		}
 
-		public override StringBuilder BuildTableName(StringBuilder sb, string database, string schema, string table)
+		public override StringBuilder BuildTableName(StringBuilder sb, string? server, string? database, string? schema, string table, TableOptions tableOptions)
 		{
 			if (database != null && database.Length == 0) database = null;
 
 			if (database != null)
-				sb.Append(database).Append(".");
+				sb.Append(database).Append('.');
 
 			return sb.Append(table);
 		}
 
-		protected override string GetProviderTypeName(IDbDataParameter parameter)
+		protected override string? GetProviderTypeName(IDbDataParameter parameter)
 		{
-			dynamic p = parameter;
-			return p.MySqlDbType.ToString();
+			if (_provider != null)
+			{
+				var param = _provider.TryGetProviderParameter(parameter, MappingSchema);
+				if (param != null)
+					return _provider.Adapter.GetDbType(param).ToString();
+			}
+
+			return base.GetProviderTypeName(parameter);
 		}
 
 		protected override void BuildTruncateTable(SqlTruncateTableStatement truncateTable)
 		{
-			if (truncateTable.ResetIdentity || truncateTable.Table.Fields.Values.All(f => !f.IsIdentity))
+			if (truncateTable.ResetIdentity || truncateTable.Table!.IdentityFields.Count == 0)
 				StringBuilder.Append("TRUNCATE TABLE ");
 			else
 				StringBuilder.Append("DELETE FROM ");
+		}
+
+		protected override void BuildDropTableStatement(SqlDropTableStatement dropTable)
+		{
+			BuildDropTableStatementIfExists(dropTable);
+		}
+
+		protected override void BuildMergeStatement(SqlMergeStatement merge)
+		{
+			throw new LinqToDBException($"{Name} provider doesn't support SQL MERGE statement");
+		}
+
+		protected override void BuildGroupByBody(GroupingType groupingType, List<ISqlExpression> items)
+		{
+			if (groupingType == GroupingType.GroupBySets || groupingType == GroupingType.Default)
+			{
+				base.BuildGroupByBody(groupingType, items);
+				return;
+			}
+
+			AppendIndent();
+
+			StringBuilder.Append("GROUP BY");
+
+			StringBuilder.AppendLine();
+
+			Indent++;
+
+			for (var i = 0; i < items.Count; i++)
+			{
+				AppendIndent();
+
+				var expr = WrapBooleanExpression(items[i]);
+				BuildExpression(expr);
+
+				if (i + 1 < items.Count)
+					StringBuilder.AppendLine(Comma);
+				else
+					StringBuilder.AppendLine();
+			}
+
+			Indent--;
+
+			switch (groupingType)
+			{
+				case GroupingType.Rollup:
+					StringBuilder.Append("WITH ROLLUP");
+					break;
+				case GroupingType.Cube:
+					StringBuilder.Append("WITH CUBE");
+					break;
+				default:
+					throw new InvalidOperationException($"Unexpected grouping type: {groupingType}");
+			}
+		}
+
+		protected override void BuildCreateTableCommand(SqlTable table)
+		{
+			string command;
+
+			if (table.TableOptions.IsTemporaryOptionSet())
+			{
+				switch (table.TableOptions & TableOptions.IsTemporaryOptionSet)
+				{
+					case TableOptions.IsTemporary                                                                              :
+					case TableOptions.IsTemporary |                                          TableOptions.IsLocalTemporaryData :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure                                     :
+					case TableOptions.IsTemporary | TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData :
+					case                                                                     TableOptions.IsLocalTemporaryData :
+					case                            TableOptions.IsLocalTemporaryStructure                                     :
+					case                            TableOptions.IsLocalTemporaryStructure | TableOptions.IsLocalTemporaryData :
+						command = "CREATE TEMPORARY TABLE ";
+						break;
+					case var value :
+						throw new InvalidOperationException($"Incompatible table options '{value}'");
+				}
+			}
+			else
+			{
+				command = "CREATE TABLE ";
+			}
+
+			StringBuilder.Append(command);
+
+			if (table.TableOptions.HasCreateIfNotExists())
+				StringBuilder.Append("IF NOT EXISTS ");
 		}
 	}
 }

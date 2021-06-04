@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using NUnit.Framework;
 
@@ -10,8 +9,8 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue395Tests : TestBase
 	{
-		[Test, NorthwindDataContext]
-		public void Test(string context)
+		[Test]
+		public void Test([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{

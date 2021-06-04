@@ -1,13 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk">
-	<Import Project="..\..\Build\linq2db.Default.props" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Build\linq2db.Tests.props" />
 
 	<PropertyGroup>
-		<TargetFrameworks>net45;netstandard1.6</TargetFrameworks>
-		<Configurations>Debug;Release</Configurations>
+		<LangVersion>latest</LangVersion>
+		<DefineConstants>$([System.String]::Copy('$(DefineConstants)').Replace(';',','))</DefineConstants>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Source\LinqToDB\LinqToDB.csproj" />
 		<ProjectReference Include="..\Model\Tests.Model.csproj" />
 	</ItemGroup>
 </Project>

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using NUnit.Framework;
 
@@ -10,8 +9,8 @@ namespace Tests.UserTests
 	[TestFixture]
 	public class Issue352Tests : TestBase
 	{
-		[Test, NorthwindDataContext]
-		public void Test(string context)
+		[Test]
+		public void Test([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -25,7 +24,7 @@ namespace Tests.UserTests
 					{
 						g.Key.EmployeeID,
 						//g.FirstOrDefault().FirstName,
-						db.Employee.FirstOrDefault(em => em.EmployeeID == g.Key.EmployeeID).FirstName,
+						db.Employee.FirstOrDefault(em => em.EmployeeID == g.Key.EmployeeID)!.FirstName,
 					};
 
 				//    zz = zz.OrderBy(a => a.FirstName);

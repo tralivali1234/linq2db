@@ -15,11 +15,11 @@ namespace LinqToDB.Linq
 			Init(dataContext, expression);
 		}
 
-		public string TableName    { get; set; }
+		public string? TableName { get; set; }
 
 		public string GetTableName() =>
 			DataContext.CreateSqlProvider()
-				.ConvertTableName(new StringBuilder(), "", "", TableName)
+				.ConvertTableName(new StringBuilder(), null, null, null, TableName!, TableOptions.None)
 				.ToString();
 
 		#region Overrides

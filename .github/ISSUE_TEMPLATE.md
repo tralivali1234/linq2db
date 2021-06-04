@@ -1,6 +1,6 @@
 Describe your issue.
 
-If you have a question, first try to check our [wiki](https://github.com/linq2db/linq2db/wiki) and search in [issues](https://github.com/linq2db/linq2db/issues) - maybe your question already answered there.
+If you have a question, first try to check our [documentation](https://linq2db.github.io/), especially [FAQ](https://linq2db.github.io/articles/FAQ.html) and search in [issues](https://github.com/linq2db/linq2db/issues) - maybe your question already answered there.
 
 If you are seeing an exception, include the full exceptions details (message and stack trace).
 
@@ -19,8 +19,8 @@ Partial code listings, or multiple fragments of code, will slow down our respons
 ```
 
 ### Environment details
-linq2db version: *1.10.0*  
-Database Server: *E.g. PostgreSQL 9.6.3*  
-Database Provider: *E.g. Npgsql 3.2.3*  
-Operating system: *E.g. Windows 10*  
-Framework version: *.NET Framework 4.6.2*
+linq2db version: *?*
+Database Server: *?*
+Database Provider: *?*
+Operating system: *?*
+.NET Framework: *?*

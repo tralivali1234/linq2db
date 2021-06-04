@@ -1,9 +1,10 @@
-﻿using System;
-
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
+﻿#if NET472
 using System.Data.Linq.Mapping;
+using ColumnAttribute = System.Data.Linq.Mapping.ColumnAttribute;
+using TableAttribute = System.Data.Linq.Mapping.TableAttribute;
 #else
-using System.Data;
+using ColumnAttribute = System.ComponentModel.DataAnnotations.Schema.ColumnAttribute;
+using TableAttribute = System.ComponentModel.DataAnnotations.Schema.TableAttribute;
 #endif
 
 using LinqToDB;
@@ -15,17 +16,17 @@ namespace Tests.Linq
 {
 	using Model;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-	[System.Data.Linq.Mapping.Table(Name = "Person")]
+#if NET472
+	[Table(Name = "Person")]
 #else
-	[System.ComponentModel.DataAnnotations.Schema.Table("Person")]
+	[Table("Person")]
 #endif
 	public class L2SPersons
 	{
 		private int _personID;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-		[System.Data.Linq.Mapping.Column(
+#if NET472
+		[Column(
 			Storage       = "_personID",
 			Name          = "PersonID",
 			DbType        = "integer(32,0)",
@@ -34,7 +35,7 @@ namespace Tests.Linq
 			AutoSync      = AutoSync.Never,
 			CanBeNull     = false)]
 #else
-		[System.ComponentModel.DataAnnotations.Schema.Column("PersonID",
+		[Column("PersonID",
 			TypeName      = "integer(32,0)")]
 #endif
 		public int PersonID
@@ -42,41 +43,27 @@ namespace Tests.Linq
 			get { return _personID;  }
 			set { _personID = value; }
 		}
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-		[System.Data.Linq.Mapping.Column]
-#else
-		[System.ComponentModel.DataAnnotations.Schema.Column]
-#endif
-		public string FirstName { get; set; }
+		[Column]
+		public string FirstName { get; set; } = null!;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-		[System.Data.Linq.Mapping.Column]
-#else
-		[System.ComponentModel.DataAnnotations.Schema.Column]
-#endif
-		public string LastName;
+		[Column]
+		public string LastName = null!;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-		[System.Data.Linq.Mapping.Column]
-#else
-		[System.ComponentModel.DataAnnotations.Schema.Column]
-#endif
-		public string MiddleName;
+		[Column]
+		public string? MiddleName;
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-		[System.Data.Linq.Mapping.Column]
-#else
-		[System.ComponentModel.DataAnnotations.Schema.Column]
-#endif
-		public string Gender;
+		[Column]
+		public string Gender = null!;
 	}
 
 	[TestFixture]
 	public class L2SAttributeTests : TestBase
 	{
-		[Test, IncludeDataContextSource(false, ProviderName.SQLiteClassic, ProviderName.SQLiteMS)]
-		public void IsDbGeneratedTest(string context)
+		[Test]
+		public void IsDbGeneratedTest([IncludeDataSources(TestProvName.AllSQLite)] string context)
 		{
+			ResetPersonIdentity(context);
+
 			using (var db = GetDataContext(context))
 			{
 				db.BeginTransaction();

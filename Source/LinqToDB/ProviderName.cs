@@ -1,18 +1,25 @@
-﻿using System;
+﻿using JetBrains.Annotations;
 
 namespace LinqToDB
 {
-#pragma warning disable 1574
 	/// <summary>
 	/// Default names for providers.
 	/// </summary>
+	[PublicAPI]
 	public static class ProviderName
 	{
 		/// <summary>
-		/// Microsoft Access provider.
+		/// Microsoft Access OleDb provider (both JET or ACE).
 		/// Used as configuration name for Access mapping schema <see cref="DataProvider.Access.AccessMappingSchema"/>.
 		/// </summary>
 		public const string Access        = "Access";
+
+		/// <summary>
+		/// Microsoft Access ODBC provider.
+		/// Used as configuration name for Access mapping schema <see cref="DataProvider.Access.AccessMappingSchema"/>.
+		/// </summary>
+		public const string AccessOdbc    = "Access.Odbc";
+
 		/// <summary>
 		/// IBM DB2 default provider (DB2 LUW).
 		/// Used as configuration name for both DB2 base mapping schema <see cref="DataProvider.DB2.DB2MappingSchema"/>.
@@ -34,10 +41,15 @@ namespace LinqToDB
 		/// </summary>
 		public const string Firebird      = "Firebird";
 		/// <summary>
-		/// Informix provider.
+		/// Informix IBM.Data.Informix provider (including IDS provider).
 		/// Used as configuration name for Informix mapping schema <see cref="DataProvider.Informix.InformixMappingSchema"/>.
 		/// </summary>
 		public const string Informix      = "Informix";
+		/// <summary>
+		/// Informix over IBM.Data.DB2 IDS provider.
+		/// Used as configuration name for Informix mapping schema <see cref="DataProvider.Informix.InformixMappingSchema"/>.
+		/// </summary>
+		public const string InformixDB2   = "Informix.DB2";
 		/// <summary>
 		/// Microsoft SQL Server default provider (SQL Server 2008).
 		/// Used as configuration name for SQL Server base mapping schema <see cref="DataProvider.SqlServer.SqlServerMappingSchema"/>.
@@ -68,10 +80,30 @@ namespace LinqToDB
 		/// </summary>
 		public const string SqlServer2014 = "SqlServer.2014";
 		/// <summary>
+		/// Microsoft SQL Server 2016 provider.
+		/// Used as configuration name for SQL Server 2016 mapping schema <see cref="DataProvider.SqlServer.SqlServer2016MappingSchema"/>.
+		/// </summary>
+		public const string SqlServer2016 = "SqlServer.2016";
+		/// <summary>
+		/// Microsoft SQL Server 2017 provider.
+		/// Used as configuration name for SQL Server 2017 mapping schema <see cref="DataProvider.SqlServer.SqlServer2017MappingSchema"/>.
+		/// </summary>
+		public const string SqlServer2017 = "SqlServer.2017";
+		/// <summary>
 		/// MySql provider.
 		/// Used as configuration name for MySql mapping schema <see cref="DataProvider.MySql.MySqlMappingSchema"/>.
 		/// </summary>
 		public const string MySql         = "MySql";
+		/// <summary>
+		/// MySql provider.
+		/// Used as configuration name for MySql mapping schema <see cref="DataProvider.MySql.MySqlMappingSchema"/>.
+		/// </summary>
+		public const string MySqlOfficial = "MySql.Official";
+		/// <summary>
+		/// MySqlConnector provider.
+		/// Used as configuration name for MySql mapping schema <see cref="DataProvider.MySql.MySqlMappingSchema"/>.
+		/// </summary>
+		public const string MySqlConnector= "MySqlConnector";
 		/// <summary>
 		/// Oracle ODP.NET autodetected provider (native or managed).
 		/// Used as configuration name for Oracle base mapping schema <see cref="DataProvider.Oracle.OracleMappingSchema"/>.
@@ -101,6 +133,10 @@ namespace LinqToDB
 		/// </summary>
 		public const string PostgreSQL93  = "PostgreSQL.9.3";
 		/// <summary>
+		/// PostgreSQL 9.5+ data provider.
+		/// </summary>
+		public const string PostgreSQL95  = "PostgreSQL.9.5";
+		/// <summary>
 		/// Microsoft SQL Server Compact Edition provider.
 		/// Used as configuration name for SQL CE mapping schema <see cref="DataProvider.SqlCe.SqlCeMappingSchema"/>.
 		/// </summary>
@@ -119,15 +155,31 @@ namespace LinqToDB
 		/// </summary>
 		public const string SQLiteMS      = "SQLite.MS";
 		/// <summary>
-		/// Sybase ASE provider.
-		/// Used as configuration name for Sybase ASE mapping schema <see cref="DataProvider.Sybase.SybaseMappingSchema"/>.
+		/// Native SAP/Sybase ASE provider.
+		/// Used as configuration name for Sybase ASE mapping schema <see cref="DataProvider.Sybase.SybaseMappingSchema.NativeMappingSchema"/>.
 		/// </summary>
 		public const string Sybase        = "Sybase";
+		/// <summary>
+		/// Managed Sybase/SAP ASE provider from <a href="https://github.com/DataAction/AdoNetCore.AseClient">DataAction</a>.
+		/// Used as configuration name for Sybase ASE mapping schema <see cref="DataProvider.Sybase.SybaseMappingSchema.ManagedMappingSchema"/>.
+		/// </summary>
+		public const string SybaseManaged = "Sybase.Managed";
 		/// <summary>
 		/// SAP HANA provider.
 		/// Used as configuration name for SAP HANA mapping schema <see cref="DataProvider.SapHana.SapHanaMappingSchema"/>.
 		/// </summary>
 		public const string SapHana       = "SapHana";
+#if NETFRAMEWORK || NETCOREAPP
+		/// <summary>
+		/// SAP HANA provider.
+		/// Used as configuration name for SAP HANA mapping schema <see cref="DataProvider.SapHana.SapHanaMappingSchema.NativeMappingSchema"/>.
+		/// </summary>
+		public const string SapHanaNative = "SapHana.Native";
+#endif
+		/// <summary>
+		/// SAP HANA ODBC provider.
+		/// Used as configuration name for SAP HANA mapping schema <see cref="DataProvider.SapHana.SapHanaMappingSchema.OdbcMappingSchema"/>.
+		/// </summary>
+		public const string SapHanaOdbc = "SapHana.Odbc";
 	}
-#pragma warning restore 1574
 }

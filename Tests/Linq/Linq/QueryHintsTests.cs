@@ -1,9 +1,9 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 using LinqToDB.Data;
 using LinqToDB.DataProvider.SqlServer;
+
 using NUnit.Framework;
 
 namespace Tests.Linq
@@ -11,8 +11,8 @@ namespace Tests.Linq
 	[TestFixture]
 	public class QueryHintsTests : TestBase
 	{
-		[Test, DataContextSource(ProviderName.Access, ProviderName.MySql, TestProvName.MariaDB, TestProvName.MySql57)]
-		public void Comment(string context)
+		[Test]
+		public void Comment([DataSources(TestProvName.AllAccess, TestProvName.AllMySql)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -23,7 +23,7 @@ namespace Tests.Linq
 
 				var str = q.ToString();
 
-				Console.WriteLine(str);
+				TestContext.WriteLine(str);
 
 				Assert.That(str, Contains.Substring("---"));
 				Assert.That(str, Contains.Substring("----"));
@@ -40,7 +40,7 @@ namespace Tests.Linq
 
 				str = q.ToString();
 
-				Console.WriteLine(str);
+				TestContext.WriteLine(str);
 
 				Assert.That(str, Contains.Substring("---"));
 				Assert.That(str, Is.Not.Contains("----"));
@@ -55,8 +55,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2012)]
-		public void Option1(string context)
+		[Test]
+		public void Option1([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -82,8 +82,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2012)]
-		public void Option2(string context)
+		[Test]
+		public void Option2([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{

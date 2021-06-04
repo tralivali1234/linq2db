@@ -1,5 +1,4 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 
 using LinqToDB;
 
@@ -12,8 +11,8 @@ namespace Tests.Linq
 	[TestFixture]
 	public class ElementOperationTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void First(string context)
+		[Test]
+		public void First([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
@@ -21,75 +20,80 @@ namespace Tests.Linq
 					db.Parent.OrderByDescending(p => p.ParentID).First().ParentID);
 		}
 
-		[Test, DataContextSource]
-		public void FirstWhere(string context)
+		[Test]
+		public void FirstWhere([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(2, db.Parent.First(p => p.ParentID == 2).ParentID);
 		}
 
-		[Test, DataContextSource]
-		public void FirstOrDefault(string context)
+		[Test]
+		public void FirstOrDefault([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.IsNull((from p in db.Parent where p.ParentID == 100 select p).FirstOrDefault());
 		}
 
-		[Test, DataContextSource]
-		public void FirstOrDefaultWhere(string context)
+		[Test]
+		public void FirstOrDefaultWhere([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
-				Assert.AreEqual(2, db.Parent.FirstOrDefault(p => p.ParentID == 2).ParentID);
+				Assert.AreEqual(2, db.Parent.FirstOrDefault(p => p.ParentID == 2)!.ParentID);
 		}
 
-		[Test, DataContextSource]
-		public void Single(string context)
+		[Test]
+		public void Single([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(1, db.Parent.Where(p => p.ParentID == 1).Single().ParentID);
 		}
 
-		[Test, DataContextSource]
-		public void SingleWhere(string context)
+		[Test]
+		public void SingleWhere([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(2, db.Parent.Single(p => p.ParentID == 2).ParentID);
 		}
 
-		[Test, DataContextSource]
-		public void SingleOrDefault(string context)
+		[Test]
+		public void SingleOrDefault([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.IsNull((from p in db.Parent where p.ParentID == 100 select p).SingleOrDefault());
 		}
 
-		[Test, DataContextSource]
-		public void SingleOrDefaultWhere(string context)
+		[Test]
+		public void SingleOrDefaultWhere([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
-				Assert.AreEqual(2, db.Parent.SingleOrDefault(p => p.ParentID == 2).ParentID);
+				Assert.AreEqual(2, db.Parent.SingleOrDefault(p => p.ParentID == 2)!.ParentID);
 		}
 
-		[Test, DataContextSource]
-		public void FirstOrDefaultScalar(string context)
+		[Test]
+		public void FirstOrDefaultScalar([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				Assert.AreEqual(
-					   Parent.OrderBy(p => p.ParentID).FirstOrDefault().ParentID,
-					db.Parent.OrderBy(p => p.ParentID).FirstOrDefault().ParentID);
+					   Parent.OrderBy(p => p.ParentID).FirstOrDefault()!.ParentID,
+					db.Parent.OrderBy(p => p.ParentID).FirstOrDefault()!.ParentID);
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.Sybase, ProviderName.SapHana)]
-		public void NestedFirstOrDefaultScalar1(string context)
+		[Test]
+		public void NestedFirstOrDefaultScalar1([DataSources(
+			TestProvName.AllInformix, ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllSapHana)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from p in    Parent select    Child.FirstOrDefault().ChildID,
-					from p in db.Parent select db.Child.FirstOrDefault().ChildID);
+					from p in    Parent select    Child.FirstOrDefault()!.ChildID,
+					from p in db.Parent select db.Child.FirstOrDefault()!.ChildID);
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.OracleNative, ProviderName.OracleManaged, ProviderName.Sybase, ProviderName.SapHana)]
-		public void NestedFirstOrDefaultScalar2(string context)
+		[Test]
+		public void NestedFirstOrDefaultScalar2([DataSources(
+			TestProvName.AllInformix, TestProvName.AllOracle,
+			ProviderName.Sybase, ProviderName.SybaseManaged, TestProvName.AllSapHana)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -106,7 +110,7 @@ namespace Tests.Linq
 							Child
 								.Where(c => c.Parent == p)
 								.OrderByDescending(c => c.ChildID * c.ParentID)
-								.FirstOrDefault()
+								.FirstOrDefault()!
 								.ChildID
 					},
 					from p in db.Parent
@@ -116,33 +120,32 @@ namespace Tests.Linq
 						MaxChild = db.Child
 							.Where(c => c.Parent == p)
 							.OrderByDescending(c => c.ChildID * c.ParentID)
-							.FirstOrDefault()
+							.FirstOrDefault()!
 							.ChildID
 					});
 		}
 
-		[Test, DataContextSource]
-		public void NestedFirstOrDefault1(string context)
+		[Test]
+		public void NestedFirstOrDefault1([DataSources] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
 					from p in    Parent select    Child.FirstOrDefault(),
 					from p in db.Parent select db.Child.FirstOrDefault());
 		}
 
-		[Test, DataContextSource]
-		public void NestedFirstOrDefault2(string context)
+		[Test]
+		public void NestedFirstOrDefault2([DataSources] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from p in    Parent select p.Children.FirstOrDefault(),
-					from p in db.Parent select p.Children.FirstOrDefault());
+					from p in    Parent select p.Children.OrderBy(c => c.ChildID).FirstOrDefault(),
+					from p in db.Parent select p.Children.OrderBy(c => c.ChildID).FirstOrDefault());
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.Firebird, ProviderName.SapHana)]
-		public void NestedFirstOrDefault3(string context)
+		[Test]
+		public void NestedFirstOrDefault3([DataSources(TestProvName.AllInformix, TestProvName.AllSapHana, TestProvName.AllOracle)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -150,28 +153,31 @@ namespace Tests.Linq
 					from p in db.Parent select p.Children.Select(c => c.ParentID).Distinct().FirstOrDefault());
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.Firebird, ProviderName.PostgreSQL)]
-		public void NestedFirstOrDefault4(string context)
+		[Test]
+		public void NestedFirstOrDefault4([DataSources(TestProvName.AllInformix, TestProvName.AllPostgreSQLLess10)] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from p in    Parent select p.Children.Where(c => c.ParentID > 0).Distinct().FirstOrDefault(),
-					from p in db.Parent select p.Children.Where(c => c.ParentID > 0).Distinct().FirstOrDefault());
+					from p in    Parent select p.Children.Where(c => c.ParentID > 0).Distinct().OrderBy(_ => _.ChildID).FirstOrDefault(),
+					from p in db.Parent select p.Children.Where(c => c.ParentID > 0).Distinct().OrderBy(_ => _.ChildID).FirstOrDefault());
 		}
 
-		[Test, DataContextSource]
-		public void NestedFirstOrDefault5(string context)
+		//TODO: Access has nonstandard join, we have to improve it
+		[Test]
+		public void NestedFirstOrDefault5([DataSources(TestProvName.AllAccess)] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = GetDataContext(context))
 				AreEqual(
-					from p in    GrandChild select p.Child.Parent.Children.FirstOrDefault(),
-					from p in db.GrandChild select p.Child.Parent.Children.FirstOrDefault());
+					from p in GrandChild 
+					where p.ChildID > 0
+					select p.Child!.Parent!.Children.OrderBy(c => c.ChildID).FirstOrDefault(),
+					from p in db.GrandChild
+					where p.ChildID > 0
+					select p.Child!.Parent!.Children.OrderBy(c => c.ChildID).FirstOrDefault());
 		}
 
-		[Test, DataContextSource]
-		public void NestedSingleOrDefault1(string context)
+		[Test]
+		public void NestedSingleOrDefault1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -179,10 +185,9 @@ namespace Tests.Linq
 					from p in db.Parent select p.Children.Select(c => c.ParentID).Distinct().SingleOrDefault());
 		}
 
-		[Test, NorthwindDataContext]
-		public void FirstOrDefaultEntitySet(string context)
+		[Test]
+		public void FirstOrDefaultEntitySet([NorthwindDataContext] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = new NorthwindDB(context))
 			{
 				var dd = GetNorthwindAsList(context);
@@ -192,10 +197,9 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void NestedSingleOrDefaultTest(string context)
+		[Test]
+		public void NestedSingleOrDefaultTest([NorthwindDataContext] string context)
 		{
-			using (new AllowMultipleQuery())
 			using (var db = new NorthwindDB(context))
 			{
 				var dd = GetNorthwindAsList(context);
@@ -205,8 +209,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, NorthwindDataContext]
-		public void MultipleQuery(string context)
+		[Test]
+		public void MultipleQuery([NorthwindDataContext] string context)
 		{
 			using (var db = new NorthwindDB(context))
 			{
@@ -214,7 +218,7 @@ namespace Tests.Linq
 					from p in db.Product
 					select db.Category.Select(zrp => zrp.CategoryName).FirstOrDefault();
 
-				q.ToList();
+				var _ = q.ToList();
 			}
 		}
 	}

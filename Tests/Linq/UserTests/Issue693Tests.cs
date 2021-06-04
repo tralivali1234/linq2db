@@ -23,10 +23,10 @@ namespace Tests.UserTests
 			        public int     ID         { get; set; }
 
 			[Column]public Gender  Gender     { get; set; }
-			[Column]public string  FirstName  { get; set; }
+			[Column]public string  FirstName  { get; set; } = null!;
 			[DataType(DataType.NVarChar, Configuration = ProviderName.Sybase)]
 			[Column]public Test?   MiddleName { get; set; }
-			[Column]public string  LastName   { get; set; }
+			[Column]public string  LastName   { get; set; } = null!;
 		}
 
 		public enum Test
@@ -34,12 +34,14 @@ namespace Tests.UserTests
 			A
 		}
 
-		[Test, DataContextSource]
-		public void Issue693Test(string context)
+		[Test]
+		public void Issue693Test([DataSources] string context)
 		{
+			ResetPersonIdentity(context);
+
 			var ms = new MappingSchema();
 
-			ms.SetConverter<Test?, string>((obj) =>
+			ms.SetConverter<Test?, string?>((obj) =>
 			{
 				if (obj != null)
 					return obj.ToString();
@@ -49,7 +51,7 @@ namespace Tests.UserTests
 			ms.SetConverter<Test?,DataParameter>((obj) =>
 			{
 				if (obj != null)
-					return new DataParameter { Value = obj.ToString() };
+					return new DataParameter { Value = obj.ToString(), DataType = DataType.NVarChar };
 				return new DataParameter { Value = DBNull.Value };
 			});
 
@@ -59,7 +61,6 @@ namespace Tests.UserTests
 					return null;
 				return (Test?)Enum.Parse(typeof(Test), txt, true);
 			});
-
 
 			using (var db = GetDataContext(context, ms))
 			using (new DeletePerson(db))

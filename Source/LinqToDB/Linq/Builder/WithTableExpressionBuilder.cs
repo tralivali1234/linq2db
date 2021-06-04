@@ -1,27 +1,28 @@
-﻿using System;
-using System.Data;
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 
 namespace LinqToDB.Linq.Builder
 {
+	using LinqToDB.Common;
 	using LinqToDB.Expressions;
 	using SqlQuery;
 
 	class WithTableExpressionBuilder : MethodCallBuilder
 	{
+		private static readonly string[] MethodNames = { "With", "WithTableExpression" };
+
 		protected override bool CanBuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
-			return methodCall.IsQueryable("With", "WithTableExpression");
+			return methodCall.IsQueryable(MethodNames);
 		}
 
 		protected override IBuildContext BuildMethodCall(ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo)
 		{
 			var sequence = builder.BuildSequence(new BuildInfo(buildInfo, methodCall.Arguments[0]));
 			var table    = (TableBuilder.TableContext)sequence;
-			var value    = (string)methodCall.Arguments[1].EvaluateExpression();
+			var value    = (string)methodCall.Arguments[1].EvaluateExpression()!;
 
 			table.SqlTable.SqlTableType   = SqlTableType.Expression;
-			table.SqlTable.TableArguments = new ISqlExpression[0];
+			table.SqlTable.TableArguments = Array<ISqlExpression>.Empty;
 
 			switch (methodCall.Method.Name)
 			{
@@ -32,8 +33,8 @@ namespace LinqToDB.Linq.Builder
 			return sequence;
 		}
 
-		protected override SequenceConvertInfo Convert(
-			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression param)
+		protected override SequenceConvertInfo? Convert(
+			ExpressionBuilder builder, MethodCallExpression methodCall, BuildInfo buildInfo, ParameterExpression? param)
 		{
 			return null;
 		}

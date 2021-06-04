@@ -1,13 +1,12 @@
 ﻿using System;
-
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
+#if NET472
 using System.Data.Linq.SqlClient;
 #else
 using System.Data;
 #endif
 
 using System.Linq;
-
+using FluentAssertions;
 using LinqToDB;
 using LinqToDB.Mapping;
 
@@ -20,8 +19,224 @@ namespace Tests.Linq
 	[TestFixture]
 	public class StringFunctionTests : TestBase
 	{
-		[Test, DataContextSource]
-		public void Length(string context)
+		#region Non-Database tests
+
+		[Test]
+		public void Length()
+		{
+			Assert.AreEqual(null, Sql.Length((string)null!));
+			Assert.AreEqual(0,    Sql.Length(string.Empty));
+			Assert.AreEqual(4,    Sql.Length("test"));
+		}
+
+		[Test]
+		public void Substring()
+		{
+			Assert.AreEqual(null, Sql.Substring(null,   0,    0));
+			Assert.AreEqual(null, Sql.Substring("test", null, 0));
+			Assert.AreEqual(null, Sql.Substring("test", -1,   0));
+			Assert.AreEqual(null, Sql.Substring("test", 5,    0));
+			Assert.AreEqual(null, Sql.Substring("test", 0,    null));
+			Assert.AreEqual(null, Sql.Substring("test", 0,    -1));
+
+			Assert.AreEqual("",   Sql.Substring("test", 3,    0));
+			Assert.AreEqual("s",  Sql.Substring("test", 3,    1));
+			Assert.AreEqual("st", Sql.Substring("test", 3,    2));
+			Assert.AreEqual("st", Sql.Substring("test", 3,    3));
+		}
+
+		[Test]
+		public void Like()
+		{
+#if !NETFRAMEWORK
+			Assert.Throws<InvalidOperationException>(() => Sql.Like(null, null));
+			Assert.Throws<InvalidOperationException>(() => Sql.Like(null, null, null));
+#else
+			Assert.Pass("We don't test server-side method here.");
+#endif
+		}
+
+		[Test]
+		public void CharIndex1()
+		{
+			Assert.AreEqual(null, Sql.CharIndex("",            null));
+			Assert.AreEqual(null, Sql.CharIndex((string)null!, "test"));
+
+			Assert.AreEqual(0,    Sql.CharIndex("",            "test"));
+			Assert.AreEqual(0,    Sql.CharIndex("g",           "test"));
+			Assert.AreEqual(3,    Sql.CharIndex("st",          "test"));
+		}
+
+		[Test]
+		public void CharIndex2()
+		{
+			Assert.AreEqual(null, Sql.CharIndex("",            null,   0));
+			Assert.AreEqual(null, Sql.CharIndex((string)null!, "test", 0));
+			Assert.AreEqual(null, Sql.CharIndex("st",          "test", null));
+
+			Assert.AreEqual(0,    Sql.CharIndex("",            "test", 0));
+			Assert.AreEqual(0,    Sql.CharIndex("g",           "test", 0));
+			Assert.AreEqual(3,    Sql.CharIndex("st",          "test", -1));
+			Assert.AreEqual(3,    Sql.CharIndex("st",          "test", 2));
+			Assert.AreEqual(0,    Sql.CharIndex("st",          "test", 4));
+			Assert.AreEqual(0,    Sql.CharIndex("st",          "test", 5));
+		}
+
+		[Test]
+		public void CharIndex3()
+		{
+			Assert.AreEqual(null, Sql.CharIndex('t',           null));
+			Assert.AreEqual(null, Sql.CharIndex((char?)null!,  "test"));
+
+			Assert.AreEqual(0,    Sql.CharIndex(Char.MinValue, "test"));
+			Assert.AreEqual(0,    Sql.CharIndex('g',           "test"));
+			Assert.AreEqual(3,    Sql.CharIndex('s',           "test"));
+		}
+
+		[Test]
+		public void CharIndex4()
+		{
+			Assert.AreEqual(null, Sql.CharIndex('t',           null,   0));
+			Assert.AreEqual(null, Sql.CharIndex((char?)null!,  "test", 0));
+			Assert.AreEqual(null, Sql.CharIndex('t',           "test", null));
+
+			Assert.AreEqual(0,    Sql.CharIndex(Char.MinValue, "test", 0));
+			Assert.AreEqual(0,    Sql.CharIndex('g',           "test", 0));
+			Assert.AreEqual(3,    Sql.CharIndex('s',           "test", -1));
+			Assert.AreEqual(3,    Sql.CharIndex('s',           "test", 2));
+			Assert.AreEqual(0,    Sql.CharIndex('s',           "test", 4));
+			Assert.AreEqual(0,    Sql.CharIndex('s',           "test", 5));
+		}
+
+		[Test]
+		public void Reverse()
+		{
+			Assert.AreEqual(null,         Sql.Reverse(null));
+			Assert.AreEqual(string.Empty, Sql.Reverse(string.Empty));
+			Assert.AreEqual("dcba",       Sql.Reverse("abcd"));
+		}
+
+		[Test]
+		public void Left()
+		{
+			Assert.AreEqual(null,   Sql.Left(null,   0));
+			Assert.AreEqual(null,   Sql.Left("test", null));
+			Assert.AreEqual(null,   Sql.Left("test", -1));
+			Assert.AreEqual("",     Sql.Left("test", 0));
+			Assert.AreEqual("te",   Sql.Left("test", 2));
+			Assert.AreEqual("test", Sql.Left("test", 5));
+		}
+
+		[Test]
+		public void Right()
+		{
+			Assert.AreEqual(null,   Sql.Right(null,   0));
+			Assert.AreEqual(null,   Sql.Right("test", null));
+			Assert.AreEqual(null,   Sql.Right("test", -1));
+			Assert.AreEqual("",     Sql.Right("test", 0));
+			Assert.AreEqual("st",   Sql.Right("test", 2));
+			Assert.AreEqual("test", Sql.Right("test", 5));
+		}
+
+		[Test]
+		public void Stuff1()
+		{
+			// Disallowed null parameters
+			Assert.AreEqual(null,       Sql.Stuff((string)null!, 1,    1,    "test"));
+			Assert.AreEqual(null,       Sql.Stuff("test",        null, 1,    "test"));
+			Assert.AreEqual(null,       Sql.Stuff("test",        1,    null, "test"));
+			Assert.AreEqual(null,       Sql.Stuff("test",        1,    1,    null));
+
+			// Disallowed start
+			Assert.AreEqual(null,       Sql.Stuff("test",        0,    1,    "test"));
+			Assert.AreEqual(null,       Sql.Stuff("test",        5,    1,    "test"));
+
+			// Disallowed length
+			Assert.AreEqual(null,       Sql.Stuff("test",        1,    -1,   "test"));
+
+			// Correct start and length
+			Assert.AreEqual("5678",     Sql.Stuff("1234",        1,    4,    "5678"));
+
+			// Correct start
+			Assert.AreEqual("12356784", Sql.Stuff("1234",        4,    0,    "5678"));
+
+			// Correct length												 
+			Assert.AreEqual("125678",   Sql.Stuff("1234",        3,    5,    "5678"));
+		}
+
+		[Test]
+		public void Stuff2()
+		{
+			var expression = Enumerable.Empty<string>();
+			Assert.Throws<NotImplementedException>(() => Sql.Stuff(expression, 1, 1, "")); // ServerSideOnly
+		}
+
+		[Test]
+		public void Space()
+		{
+			Assert.AreEqual(null, Sql.Space(null));
+			Assert.AreEqual(null, Sql.Space(-1));
+			Assert.AreEqual("",   Sql.Space(0));
+			Assert.AreEqual(" ",  Sql.Space(1));
+		}
+
+		[Test]
+		public void PadLeft()
+		{
+			Assert.AreEqual(null,     Sql.PadLeft(null,   1,    '.'));
+			Assert.AreEqual(null,     Sql.PadLeft("test", null, '.'));
+			Assert.AreEqual(null,     Sql.PadLeft("test", 1,    null));
+
+			Assert.AreEqual(null,     Sql.PadLeft("test", -1,   '.'));
+			Assert.AreEqual("",       Sql.PadLeft("test", 0,    '.'));
+			Assert.AreEqual("tes",    Sql.PadLeft("test", 3,    '.'));
+			Assert.AreEqual("test",   Sql.PadLeft("test", 4,    '.'));
+			Assert.AreEqual(".test",  Sql.PadLeft("test", 5,    '.'));
+		}
+
+		[Test]
+		public void PadRight()
+		{
+			Assert.AreEqual(null,     Sql.PadRight(null,   1,    '.'));
+			Assert.AreEqual(null,     Sql.PadRight("test", null, '.'));
+			Assert.AreEqual(null,     Sql.PadRight("test", 1,    null));
+
+			Assert.AreEqual(null,     Sql.PadRight("test", -1,   '.'));
+			Assert.AreEqual("",       Sql.PadRight("test", 0,    '.'));
+			Assert.AreEqual("tes",    Sql.PadRight("test", 3,    '.'));
+			Assert.AreEqual("test",   Sql.PadRight("test", 4,    '.'));
+			Assert.AreEqual("test.",  Sql.PadRight("test", 5,    '.'));
+		}
+
+		[Test]
+		public void Replace1()
+		{
+			Assert.AreEqual(null,    Sql.Replace(null,   "e",  "oa"));
+			Assert.AreEqual(null,    Sql.Replace("test", null, "oa"));
+			Assert.AreEqual(null,    Sql.Replace("test", "e",  null));
+
+			Assert.AreEqual("",      Sql.Replace("",     "e",  "oa"));
+			Assert.AreEqual("test",  Sql.Replace("test", "",   "oa"));
+			Assert.AreEqual("test",  Sql.Replace("test", "g",  "oa"));
+			Assert.AreEqual("toast", Sql.Replace("test", "e",  "oa"));
+		}
+
+		[Test]
+		public void Replace2()
+		{
+			Assert.AreEqual(null,    Sql.Replace(null,   'e',  'o'));
+			Assert.AreEqual(null,    Sql.Replace("test", null, 'o'));
+			Assert.AreEqual(null,    Sql.Replace("test", 'e',  null));
+
+			Assert.AreEqual("",      Sql.Replace("",     'e',  'o'));
+			Assert.AreEqual("test",  Sql.Replace("test", 'g',  'o'));
+			Assert.AreEqual("tost",  Sql.Replace("test", 'e',  'o'));
+		}
+
+		#endregion
+
+		[Test]
+		public void Length([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -30,28 +245,53 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsConstant(string context)
+		[Test]
+		public void ContainsConstant([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var q = from p in db.Person where p.FirstName.Contains("oh") && p.ID == 1 select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				db.Person.Count(p => p.FirstName.Contains("jOh") && p.ID == 1).Should().Be(IsCaseSensitiveComparison(context) ? 0 : 1);
+				db.Person.Count(p => !p.FirstName.Contains("jOh") && p.ID == 1).Should().Be(IsCaseSensitiveComparison(context) ? 1 : 0);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsConstant2(string context)
+#if NETSTANDARD2_1PLUS
+		[Test]
+		public void ContainsConstantWithCase1([DataSources(ProviderName.SqlCe)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var q = from p in db.Person where !p.FirstName.Contains("o%h") && p.ID == 1 select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				//db.Person.Count(p =>  p.FirstName.Contains("Joh", StringComparison.Ordinal) && p.ID == 1).Should().Be(1);
+				db.Person.Count(p => !p.FirstName.Contains("Joh", StringComparison.Ordinal) && p.ID == 1).Should().Be(0);
+
+				// db.Person.Count(p =>  p.FirstName.Contains("joh", StringComparison.Ordinal) && p.ID == 1).Should().Be(0);
+				// db.Person.Count(p => !p.FirstName.Contains("joh", StringComparison.Ordinal) && p.ID == 1).Should().Be(1);
+			}
+		}
+#endif
+		[Test]
+		public void ContainsConstantWithCase2([DataSources(ProviderName.SqlCe)] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Person.Count(p => p.FirstName.Contains("Joh") && p.ID == 1).Should().Be(1);
+				db.Person.Count(p => !p.FirstName.Contains("Joh") && p.ID == 1).Should().Be(0);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsConstant3(string context)
+
+		[Test]
+		public void ContainsConstant2([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Person.Count(p => p.FirstName.Contains("o%h") && p.ID == 1).Should().Be(0);
+				db.Person.Count(p => !p.FirstName.Contains("o%h") && p.ID == 1).Should().Be(1);
+			}
+		}
+
+		[Test]
+		public void ContainsConstant3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -62,55 +302,78 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Firebird, TestProvName.Firebird3)]
-		public void ContainsConstant4(string context)
+		[Test]
+		public void ContainsConstant4([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var s = "123[456";
 
-				var q = from p in db.Person where p.ID == 1 && s.Contains("[") select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				db.Person.Count(p => p.ID == 1 && s.Contains("[")).Should().Be(1);
+				db.Person.Count(p => p.ID == 1 && !s.Contains("[")).Should().Be(0);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsConstant5(string context)
+		[Test]
+		public void ContainsConstant5([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var q = from p in db.Person where p.ID == 1 && "123[456".Contains("[") select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				db.Person.Count(p => p.ID == 1 && "123[456".Contains("[")).Should().Be(1);
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix)]
-		public void ContainsConstant41(string context)
+		[Test]
+		public void ContainsConstant41([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var s  = "123[456";
 				var ps = "[";
 
-				var q = from p in db.Person where p.ID == 1 && s.Contains(ps) select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				db.Person.Count(p => p.ID == 1 && s.Contains(ps)).Should().Be(1);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsConstant51(string context)
+		[Test]
+		public void ContainsValueAll([DataSources] string context,
+			[Values("n", "-", "*", "?", "#", "%", "[", "]", "[]", "[[", "]]")]string toTest)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var s  = "123" + toTest + "456";
+
+				db.Person.Count(p => p.ID == 1 && s.Contains(Sql.ToSql(toTest))).Should().Be(1);
+				db.Person.Count(p => p.ID == 1 && !s.Contains(Sql.ToSql(toTest))).Should().Be(0);
+			}
+		}
+
+
+		[Test]
+		public void ContainsParameterAll([DataSources] string context,
+			[Values("n", "-", "*", "?", "#", "%", "[", "]", "[]", "[[", "]]")]string toTest)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var s  = "123" + toTest + "456";
+
+				db.Person.Count(p => p.ID == 1 && s.Contains(toTest)).Should().Be(1);
+			}
+		}
+
+		[Test]
+		public void ContainsConstant51([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
 				var ps = "[";
 
-				var q = from p in db.Person where p.ID == 1 && "123[456".Contains(ps) select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				db.Person.Count(p => p.ID == 1 && "123[456".Contains(ps)).Should().Be(1);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsParameter1(string context)
+		[Test]
+		public void ContainsParameter1([DataSources] string context)
 		{
 			var str = "oh";
 
@@ -123,8 +386,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsParameter2(string context)
+		[Test]
+		public void ContainsParameter2([DataSources] string context)
 		{
 			var str = "o%h";
 
@@ -152,8 +415,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ContainsParameter4(string context)
+		[Test]
+		public void ContainsParameter4([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -179,15 +442,15 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access, ProviderName.Informix)]
-		public void ContainsNull(string context)
+		[Test]
+		public void ContainsNull([DataSources(ProviderName.Access)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				string firstName = null;
-				int?   id        = null;
+				string? firstName = null;
+				int?    id        = null;
 
-				var q =
+				var _ =
 				(
 					from p in db.Person
 					where
@@ -198,8 +461,46 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void StartsWith1(string context)
+		[Test]
+		public void StartsWithCacheCheck([DataSources] string context, [Values(StringComparison.OrdinalIgnoreCase, StringComparison.Ordinal, StringComparison.InvariantCultureIgnoreCase, StringComparison.InvariantCulture)] StringComparison comparison)
+		{
+			using (var db = GetDataContext(context))
+			{
+				var firstName = db.Person.Where(p => p.ID == 1).Select(p => p.FirstName).Single();
+				var nameToCheck = firstName.Substring(0, 3);
+				switch (comparison)
+				{
+					case StringComparison.OrdinalIgnoreCase : 
+					case StringComparison.InvariantCultureIgnoreCase : 
+					case StringComparison.CurrentCultureIgnoreCase : 
+						nameToCheck = nameToCheck.ToUpper();
+						break;
+				}
+
+				db.Person.Count(p => p.FirstName.StartsWith(nameToCheck, comparison)  && p.ID == 1).Should().Be(1);
+				db.Person.Count(p => !p.FirstName.StartsWith(nameToCheck, comparison) && p.ID == 1).Should().Be(0);
+
+				switch (comparison)
+				{
+					case StringComparison.Ordinal : 
+					case StringComparison.CurrentCulture : 
+					case StringComparison.InvariantCulture : 
+					{
+						nameToCheck = firstName.Substring(0, 3);
+						nameToCheck = nameToCheck.ToUpper();
+
+						db.Person.Count(p => p.FirstName.StartsWith(nameToCheck, comparison)  && p.ID == 1).Should().Be(0);
+						db.Person.Count(p => !p.FirstName.StartsWith(nameToCheck, comparison) && p.ID == 1).Should().Be(1);
+
+						break;
+					}
+				}
+
+			}
+		}
+
+		[Test]
+		public void StartsWith1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -208,8 +509,30 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Access)]
-		public void StartsWith2(string context)
+		[Test]
+		public void StartsWith1IgnoreCase([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Person.Count(p => p.FirstName.StartsWith("joH", StringComparison.OrdinalIgnoreCase) && p.ID == 1).Should().Be(1);
+				db.Person.Count(p => !p.FirstName.StartsWith("joH", StringComparison.OrdinalIgnoreCase) && p.ID == 1).Should().Be(0);
+			}
+		}
+
+		[Test]
+		public void StartsWith1Case([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Person.Count(p => p.FirstName.StartsWith("Jo", StringComparison.Ordinal) && p.ID == 1).Should().Be(1);
+				db.Person.Count(p => p.FirstName.StartsWith("jo", StringComparison.Ordinal) && p.ID == 1).Should().Be(0);
+
+				db.Person.Count(p => !p.FirstName.StartsWith("Jo", StringComparison.Ordinal) && p.ID == 1).Should().Be(0);
+			}
+		}
+
+		[Test]
+		public void StartsWith2([DataSources(ProviderName.DB2, TestProvName.AllAccess)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -217,8 +540,8 @@ namespace Tests.Linq
 					from p in db.Person where "John123".StartsWith(p.FirstName) select p);
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Access)]
-		public void StartsWith3(string context)
+		[Test]
+		public void StartsWith3([DataSources(ProviderName.DB2, TestProvName.AllAccess)] string context)
 		{
 			var str = "John123";
 
@@ -228,8 +551,8 @@ namespace Tests.Linq
 					from p in db.Person where str.StartsWith(p.FirstName) select p);
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Access)]
-		public void StartsWith4(string context)
+		[Test]
+		public void StartsWith4([DataSources(ProviderName.DB2, TestProvName.AllAccess)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -244,8 +567,8 @@ namespace Tests.Linq
 					select p1);
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Access)]
-		public void StartsWith5(string context)
+		[Test]
+		public void StartsWith5([DataSources(ProviderName.DB2, TestProvName.AllAccess)] string context)
 		{
 			using (var db = GetDataContext(context))
 				AreEqual(
@@ -259,19 +582,32 @@ namespace Tests.Linq
 					select p1);
 		}
 
-		[Test, DataContextSource]
-		public void EndsWith(string context)
+		[Test]
+		public void EndsWithIgnoreCase([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-				var q = from p in db.Person where p.FirstName.EndsWith("hn") && p.ID == 1 select p;
-				Assert.AreEqual(1, q.ToList().First().ID);
+				db.Person.Count(p => p.FirstName.EndsWith("JOHN") && p.ID == 1).Should().Be(IsCaseSensitiveComparison(context) ? 0 : 1);
+				db.Person.Count(p => !p.FirstName.EndsWith("JOHN") && p.ID == 1).Should().Be(IsCaseSensitiveComparison(context) ? 1 : 0);
 			}
 		}
 
-#if !NETSTANDARD1_6 && !NETSTANDARD2_0
-		[Test, DataContextSource]
-		public void Like11(string context)
+		[Test]
+		public void EndsWithWithCase([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Patient.Count(p =>  p.Diagnosis.EndsWith("Persecution", StringComparison.Ordinal) && p.PersonID == 2).Should().Be(1);
+				db.Patient.Count(p => !p.Diagnosis.EndsWith("Persecution", StringComparison.Ordinal) && p.PersonID == 2).Should().Be(0);
+
+				db.Patient.Count(p =>  p.Diagnosis.EndsWith("persecution", StringComparison.Ordinal) && p.PersonID == 2).Should().Be(0);
+				db.Patient.Count(p => !p.Diagnosis.EndsWith("persecution", StringComparison.Ordinal) && p.PersonID == 2).Should().Be(1);
+			}
+		}
+
+#if NET472
+		[Test]
+		public void Like11([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -280,8 +616,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Like12(string context)
+		[Test]
+		public void Like12([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -291,8 +627,8 @@ namespace Tests.Linq
 		}
 #endif
 
-		[Test, DataContextSource]
-		public void Like21(string context)
+		[Test]
+		public void Like21([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -301,8 +637,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Like22(string context)
+		[Test]
+		public void Like22([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -311,8 +647,19 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.SQLiteMS)]
-		public void IndexOf11(string context)
+		[Test]
+		public void Like23([DataSources] string context)
+		{
+			var pattern = @"%h~%n%";
+			using (var db = GetDataContext(context))
+			{
+				var q = from p in db.Person where !Sql.Like(p.FirstName, pattern, '~') && p.ID == 1 select p;
+				Assert.AreEqual(1, q.ToList().First().ID);
+			}
+		}
+
+		[Test]
+		public void IndexOf11([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -321,8 +668,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.SQLiteMS)]
-		public void IndexOf12(string context)
+		[Test]
+		public void IndexOf12([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -331,8 +678,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.SQLiteMS)]
-		public void IndexOf2(string context)
+		[Test]
+		public void IndexOf2([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -341,10 +688,12 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(
-			ProviderName.DB2, ProviderName.Firebird, TestProvName.Firebird3, ProviderName.Informix,
-			ProviderName.SqlCe, ProviderName.Sybase, ProviderName.Access, ProviderName.SQLiteMS)]
-		public void IndexOf3(string context)
+		[ActiveIssue(Details = "Sql.CharIndex(string, string, int) have incorrect SQL logic for all providers (except HANA)")]
+		[Test]
+		public void IndexOf3([DataSources(
+			ProviderName.DB2, TestProvName.AllFirebird,
+			ProviderName.SqlCe, TestProvName.AllAccess, ProviderName.SQLiteMS)]
+			string context)
 		{
 			var s = "e";
 			var n1 = 2;
@@ -352,14 +701,16 @@ namespace Tests.Linq
 
 			using (var db = GetDataContext(context))
 			{
-				var q = from p in db.Person where p.LastName.IndexOf(s, n1, n2) == 1 && p.ID == 2 select p;
+				var q = from p in db.Person where p.LastName.IndexOf(s, n1, n2) == 4 && p.ID == 2 select p;
 				Assert.AreEqual(2, q.ToList().First().ID);
 			}
 		}
 
-		[Test, DataContextSource(
-			ProviderName.DB2, ProviderName.Firebird, ProviderName.Informix, ProviderName.SqlCe, ProviderName.Access, ProviderName.SapHana, ProviderName.SQLiteMS)]
-		public void LastIndexOf1(string context)
+		[Test]
+		public void LastIndexOf1([DataSources(
+			ProviderName.DB2,
+			ProviderName.SqlCe, TestProvName.AllAccess, TestProvName.AllSapHana, ProviderName.SQLiteMS)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -368,8 +719,11 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.SqlCe, ProviderName.Access, ProviderName.SapHana, ProviderName.SQLiteMS)]
-		public void LastIndexOf2(string context)
+		[Test]
+		public void LastIndexOf2([DataSources(
+			ProviderName.DB2, ProviderName.SqlCe,
+			TestProvName.AllAccess, TestProvName.AllSapHana, ProviderName.SQLiteMS)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -379,8 +733,11 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.SqlCe, ProviderName.Access, ProviderName.SapHana, ProviderName.SQLiteMS)]
-		public void LastIndexOf3(string context)
+		[Test]
+		public void LastIndexOf3([DataSources(
+			ProviderName.DB2, ProviderName.SqlCe,
+			TestProvName.AllAccess, TestProvName.AllSapHana, ProviderName.SQLiteMS)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -390,8 +747,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.SQLiteMS)]
-		public void CharIndex1(string context)
+		[Test]
+		public void CharIndex1([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -400,8 +757,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Informix, ProviderName.SQLiteMS)]
-		public void CharIndex2(string context)
+		[Test]
+		public void CharIndex2([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -410,8 +767,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Left(string context)
+		[Test]
+		public void Left([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -420,8 +777,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Right(string context)
+		[Test]
+		public void Right([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -430,8 +787,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void RightInSelect(string context)
+		[Test]
+		public void RightInSelect([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -440,8 +797,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Substring1(string context)
+		[Test]
+		public void Substring1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -450,8 +807,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Substring2(string context)
+		[Test]
+		public void Substring2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -460,8 +817,11 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.DB2, ProviderName.Informix, ProviderName.SqlCe, ProviderName.Access, ProviderName.SapHana, ProviderName.SQLiteMS)]
-		public void Reverse(string context)
+		[Test]
+		public void Reverse([DataSources(
+			ProviderName.DB2, ProviderName.SqlCe,
+			TestProvName.AllAccess, TestProvName.AllSapHana, ProviderName.SQLiteMS)]
+			string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -470,8 +830,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Stuff1(string context)
+		[Test]
+		public void Stuff1([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -480,18 +840,16 @@ namespace Tests.Linq
 			}
 		}
 
-#pragma warning disable 0109
-		new class Category
+		class Category
 		{
-			[PrimaryKey, Identity] public int    Id;
-			[Column, NotNull]      public string Name;
+			[PrimaryKey, Identity] public int     Id;
+			[Column, NotNull]      public string? Name;
 		}
-#pragma warning restore 0109
 
 		class Task
 		{
-			[PrimaryKey, Identity] public int    Id;
-			[Column, NotNull]      public string Name;
+			[PrimaryKey, Identity] public int     Id;
+			[Column, NotNull]      public string? Name;
 		}
 
 		class TaskCategory
@@ -501,8 +859,8 @@ namespace Tests.Linq
 			[Column, NotNull] public int CategoryId;
 		}
 
-		[Test, IncludeDataContextSource(ProviderName.SqlServer2008, ProviderName.SqlServer2012, ProviderName.SqlServer2014)]
-		public void Stuff2(string context)
+		[Test]
+		public void Stuff2([IncludeDataSources(TestProvName.AllSqlServer2008Plus)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -520,12 +878,12 @@ namespace Tests.Linq
 							select "," + c.Name, 1, 1, "")
 					};
 
-				q.ToString();
+				TestContext.WriteLine(q.ToString());
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Insert(string context)
+		[Test]
+		public void Insert([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -534,8 +892,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Remove1(string context)
+		[Test]
+		public void Remove1([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -544,8 +902,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Remove2(string context)
+		[Test]
+		public void Remove2([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -554,8 +912,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void Space(string context)
+		[Test]
+		public void Space([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -564,8 +922,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void PadRight(string context)
+		[Test]
+		public void PadRight([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -574,8 +932,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void PadRight1(string context)
+		[Test]
+		public void PadRight1([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -584,8 +942,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void PadRight2(string context)
+		[Test]
+		public void PadRight2([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -594,8 +952,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void PadLeft(string context)
+		[Test]
+		public void PadLeft([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -604,8 +962,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void PadLeft1(string context)
+		[Test]
+		public void PadLeft1([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -614,8 +972,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.SQLiteMS)]
-		public void PadLeft2(string context)
+		[Test]
+		public void PadLeft2([DataSources(ProviderName.SQLiteMS)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -624,8 +982,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource(ProviderName.Access)]
-		public void Replace(string context)
+		[Test]
+		public void Replace([DataSources(TestProvName.AllAccess)] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -634,8 +992,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Trim(string context)
+		[Test]
+		public void Trim([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -646,8 +1004,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TrimLeft(string context)
+		[Test]
+		public void TrimLeft([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -658,8 +1016,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void TrimRight(string context)
+		[Test]
+		public void TrimRight([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -670,8 +1028,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ToLower(string context)
+		[Test]
+		public void ToLower([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -680,8 +1038,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ToLowerParameter(string context)
+		[Test]
+		public void ToLowerParameter([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -691,8 +1049,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ToUpper(string context)
+		[Test]
+		public void ToUpper([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -701,8 +1059,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void ToUpperParam(string context)
+		[Test]
+		public void ToUpperParam([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -712,8 +1070,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo(string context)
+		[Test]
+		public void CompareTo([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -722,8 +1080,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareToNotEqual1(string context)
+		[Test]
+		public void CompareToNotEqual1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -732,8 +1090,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareToNotEqual2(string context)
+		[Test]
+		public void CompareToNotEqual2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -742,8 +1100,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo1(string context)
+		[Test]
+		public void CompareTo1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -752,8 +1110,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo2(string context)
+		[Test]
+		public void CompareTo2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -762,8 +1120,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo21(string context)
+		[Test]
+		public void CompareTo21([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -772,8 +1130,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo22(string context)
+		[Test]
+		public void CompareTo22([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -782,9 +1140,8 @@ namespace Tests.Linq
 			}
 		}
 
-#if !NETSTANDARD1_6
-		[Test, DataContextSource]
-		public void CompareTo3(string context)
+		[Test]
+		public void CompareTo3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -793,8 +1150,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo31(string context)
+		[Test]
+		public void CompareTo31([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -803,8 +1160,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareTo32(string context)
+		[Test]
+		public void CompareTo32([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -812,10 +1169,9 @@ namespace Tests.Linq
 				Assert.AreEqual(1, q.ToList().First().ID);
 			}
 		}
-#endif
 
-		[Test, DataContextSource]
-		public void CompareOrdinal1(string context)
+		[Test]
+		public void CompareOrdinal1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -824,8 +1180,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void CompareOrdinal2(string context)
+		[Test]
+		public void CompareOrdinal2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -834,8 +1190,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Compare1(string context)
+		[Test]
+		public void Compare1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -844,8 +1200,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Compare2(string context)
+		[Test]
+		public void Compare2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -854,8 +1210,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Compare3(string context)
+		[Test]
+		public void Compare3([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -864,22 +1220,18 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void Compare4(string context)
+		[Test]
+		public void Compare4([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
-#if !NETSTANDARD1_6
 				var q = from p in db.Person where string.Compare(p.FirstName, 1, "Joh", 1, 2, true) == 0 && p.ID == 1 select p;
-#else
-				var q = from p in db.Person where string.Compare(p.FirstName, 1, "Joh", 1, 2, StringComparison.OrdinalIgnoreCase) == 0 && p.ID == 1 select p;
-#endif
 				Assert.AreEqual(1, q.ToList().First().ID);
 			}
 		}
 
-		[Test, DataContextSource]
-		public void IsNullOrEmpty1(string context)
+		[Test]
+		public void IsNullOrEmpty1([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -888,8 +1240,8 @@ namespace Tests.Linq
 			}
 		}
 
-		[Test, DataContextSource]
-		public void IsNullOrEmpty2(string context)
+		[Test]
+		public void IsNullOrEmpty2([DataSources] string context)
 		{
 			using (var db = GetDataContext(context))
 			{
@@ -897,5 +1249,380 @@ namespace Tests.Linq
 				Assert.AreEqual(false, q.ToList().First());
 			}
 		}
+
+		[Table]
+		class CollatedTable
+		{
+			[Column, PrimaryKey] public int    Id              { get; set; }
+			[Column            ] public string CaseSensitive   { get; set; } = null!;
+			[Column            ] public string CaseInsensitive { get; set; } = null!;
+
+			public static readonly CollatedTable TestData = new () { Id = 1, CaseSensitive = "TestString", CaseInsensitive = "TestString" };
+		}
+
+#if NETSTANDARD2_1PLUS
+		[Test]
+		public void ExplicitOrdinalIgnoreCase_Contains([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.Contains("stSt", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.Contains("stSt", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.Contains("stst", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.Contains("stst", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			}
+		}
+
+		[Test]
+		public void ExplicitOrdinal_Contains([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.Contains("stSt", StringComparison.Ordinal)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.Contains("stSt", StringComparison.Ordinal)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.Contains("stst", StringComparison.Ordinal)).Should().Be(0);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.Contains("stst", StringComparison.Ordinal)).Should().Be(0);
+			}
+		}
+
+		[Test]
+		public void Explicit_Contains([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Patient
+					.Count(r => r.Diagnosis.Contains("Paranoid", StringComparison.Ordinal)).Should().Be(1);
+				db.Patient
+					.Count(r => r.Diagnosis.Contains("paranoid", StringComparison.Ordinal)).Should().Be(0);
+				db.Patient
+					.Count(r => r.Diagnosis.Contains("paranoid", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.Patient
+					.Count(r => r.Diagnosis.Contains("Paranoid", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			}
+		}
+#endif
+
+		[Test]
+		public void Default_Contains([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.Contains("stSt")).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.Contains("stSt")).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.Contains("stst")).Should().Be(IsCollatedTableConfigured(context) || IsCaseSensitiveComparison(context) ? 0 : 1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.Contains("stst")).Should().Be(IsCollatedTableConfigured(context) || !IsCaseSensitiveComparison(context) ? 1 : 0);
+			}
+		}
+
+		[Test]
+		public void ExplicitOrdinalIgnoreCase_StartsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.StartsWith("TestSt", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.StartsWith("TestSt", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.StartsWith("testst", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.StartsWith("testst", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			}
+		}
+
+		[Test]
+		public void ExplicitOrdinal_StartsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.StartsWith("TestSt", StringComparison.Ordinal)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.StartsWith("TestSt", StringComparison.Ordinal)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.StartsWith("testst", StringComparison.Ordinal)).Should().Be(0);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.StartsWith("testst", StringComparison.Ordinal)).Should().Be(0);
+			}
+		}
+
+		[Test]
+		public void Default_StartsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.StartsWith("TestSt")).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.StartsWith("TestSt")).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.StartsWith("testst")).Should().Be(IsCollatedTableConfigured(context) || IsCaseSensitiveComparison(context) ? 0 : 1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.StartsWith("testst")).Should().Be(IsCollatedTableConfigured(context) || !IsCaseSensitiveComparison(context) ? 1 : 0);
+			}
+		}
+
+		[Test]
+		public void Explicit_StartsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Patient
+					.Count(r => r.Diagnosis.StartsWith("Hall", StringComparison.Ordinal)).Should().Be(1);
+				db.Patient
+					.Count(r => r.Diagnosis.StartsWith("hall", StringComparison.Ordinal)).Should().Be(0);
+				db.Patient
+					.Count(r => r.Diagnosis.StartsWith("hall", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.Patient
+					.Count(r => r.Diagnosis.StartsWith("Hall", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			}
+		}
+
+		[Test]
+		public void ExplicitOrdinalIgnoreCase_EndsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.EndsWith("stString", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.EndsWith("stString", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.EndsWith("ststring", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.EndsWith("ststring", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			}
+		}
+
+		[Test]
+		public void ExplicitOrdinal_EndsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.EndsWith("stString", StringComparison.Ordinal)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.EndsWith("stString", StringComparison.Ordinal)).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.EndsWith("ststring", StringComparison.Ordinal)).Should().Be(0);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.EndsWith("ststring", StringComparison.Ordinal)).Should().Be(0);
+			}
+		}
+
+		[Test]
+		public void Default_EndsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.GetTable<CollatedTable>().Delete();
+				db.Insert(CollatedTable.TestData);
+
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.EndsWith("stString")).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.EndsWith("stString")).Should().Be(1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseSensitive.EndsWith("ststring")).Should().Be(IsCollatedTableConfigured(context) || IsCaseSensitiveComparison(context) ? 0 : 1);
+				db.GetTable<CollatedTable>()
+					.Count(r => r.CaseInsensitive.EndsWith("ststring")).Should().Be(IsCollatedTableConfigured(context) || !IsCaseSensitiveComparison(context) ? 1 : 0);
+			}
+		}
+
+		[Test]
+		public void Explicit_EndsWith([DataSources] string context)
+		{
+			using (var db = GetDataContext(context))
+			{
+				db.Patient
+					.Count(r => r.Diagnosis.EndsWith("Persecution", StringComparison.Ordinal)).Should().Be(1);
+				db.Patient
+					.Count(r => r.Diagnosis.EndsWith("persecution", StringComparison.Ordinal)).Should().Be(0);
+				db.Patient
+					.Count(r => r.Diagnosis.EndsWith("persecution", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+				db.Patient
+					.Count(r => r.Diagnosis.EndsWith("Persecution", StringComparison.OrdinalIgnoreCase)).Should().Be(1);
+			}
+		}
+
+		#region Issue 3002
+		public abstract class MySpecialBaseClass : IConvertible, IEquatable<MySpecialBaseClass>
+		{
+			[NotNull]
+			public string Value { get; set; }
+
+			protected MySpecialBaseClass(string value)
+			{
+				if (value == null)
+					throw new ArgumentNullException(nameof(value));
+				Value = value;
+			}
+
+			public static bool operator ==(MySpecialBaseClass? leftSide, string? rightSide)
+				=> leftSide?.Value == rightSide;
+
+			public static bool operator !=(MySpecialBaseClass? leftSide, string? rightSide)
+				=> leftSide?.Value != rightSide;
+
+			public override string ToString() => Value;
+
+			public override int GetHashCode() => Value.GetHashCode();
+
+			public override bool Equals(object? obj)
+			{
+				if (obj == null)
+					return false;
+
+				if (obj is string str)
+					return Value.Equals(str);
+
+				if (obj.GetType() == GetType())
+					return string.Equals(((MySpecialBaseClass)obj).Value, Value);
+
+				return base.Equals(obj);
+			}
+
+			public bool Equals(MySpecialBaseClass? other)
+			{
+				if (other?.GetType() != GetType())
+					return false;
+
+				return string.Equals(other.Value, Value);
+			}
+
+			#region IConvertible
+			public TypeCode GetTypeCode() => TypeCode.String;
+
+			public string ToString(IFormatProvider? provider) => Value;
+
+			public object ToType(Type conversionType, IFormatProvider? provider)
+			{
+				if (conversionType.IsSubclassOf(typeof(MySpecialBaseClass))
+					|| conversionType == typeof(MySpecialBaseClass))
+					return this;
+
+				return Value;
+			}
+
+			public bool     ToBoolean (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public char     ToChar    (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public sbyte    ToSByte   (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public byte     ToByte    (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public short    ToInt16   (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public ushort   ToUInt16  (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public int      ToInt32   (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public uint     ToUInt32  (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public long     ToInt64   (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public ulong    ToUInt64  (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public float    ToSingle  (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public double   ToDouble  (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public decimal  ToDecimal (IFormatProvider? provider) { throw new NotImplementedException(); }
+			public DateTime ToDateTime(IFormatProvider? provider) { throw new NotImplementedException(); }
+			#endregion
+		}
+
+		public class MyClass : MySpecialBaseClass
+		{
+			public MyClass(string value)
+				: base(value)
+			{
+			}
+
+			public static implicit operator MyClass?(string? value)
+			{
+				if (value == null)
+					return null;
+				return new MyClass(value);
+			}
+
+			public static implicit operator string?(MyClass? auswahlliste)
+				=> auswahlliste?.Value;
+		}
+
+		[Table]
+		class SampleClass
+		{
+			[Column] public int Id { get; set; }
+			[Column(DataType = DataType.NVarChar, Length = 50)] public MyClass? Value { get; set; }
+			[Column] public string? Value2 { get; set; }
+		}
+
+		[Test]
+		public void Issue3002Test([DataSources(
+			// providers doesn't support IConvertible parameter coercion
+			ProviderName.SQLiteMS,
+			ProviderName.DB2,
+			ProviderName.MySqlConnector,
+			TestProvName.AllPostgreSQL,
+			TestProvName.AllInformix,
+			TestProvName.AllSybase)] string context)
+		{
+			using (var db    = GetDataContext(context))
+			using (var table = db.CreateLocalTable<SampleClass>())
+			{
+				table.Insert(() => new SampleClass()
+				{
+					Id          = 1,
+					Value       = "Test",
+					Value2      = "SampleClass"
+				});
+				table.Insert(() => new SampleClass()
+				{
+					Id     = 2,
+					Value  = "Value",
+					Value2 = "SomeTest"
+				});
+
+				var test = "Test";
+
+				Assert.True(table.Any(sampleClass => sampleClass.Value == test || sampleClass.Value2!.Contains(test)));
+				Assert.AreEqual(2, table.Count(sampleClass => sampleClass.Value == test || sampleClass.Value2!.Contains(test)));
+
+				test = "Value";
+				Assert.True(table.Any(sampleClass => sampleClass.Value == test || sampleClass.Value2!.Contains(test)));
+				Assert.AreEqual(1, table.Count(sampleClass => sampleClass.Value == test || sampleClass.Value2!.Contains(test)));
+
+				test = "Class";
+				Assert.True(table.Any(sampleClass => sampleClass.Value == test || sampleClass.Value2!.Contains(test)));
+				Assert.AreEqual(1, table.Count(sampleClass => sampleClass.Value == test || sampleClass.Value2!.Contains(test)));
+			}
+		}
+		#endregion
 	}
 }

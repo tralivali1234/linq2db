@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-
-using LinqToDB;
+﻿using System.Linq;
 
 using MySql.Data.MySqlClient;
 
@@ -14,8 +11,8 @@ namespace Tests.Exceptions
 	[TestFixture]
 	public class DataExceptionTests : TestBase
 	{
-		[Test, IncludeDataContextSource(ProviderName.MySql)]
-		public void ParameterPrefixTest(string context)
+		[Test]
+		public void ParameterPrefixTest([IncludeDataSources(TestProvName.AllMySqlData)] string context)
 		{
 			try
 			{

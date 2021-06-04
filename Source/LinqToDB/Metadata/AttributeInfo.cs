@@ -10,22 +10,22 @@ namespace LinqToDB.Metadata
 
 	class AttributeInfo
 	{
-		public AttributeInfo(string name, Dictionary<string,object> values)
+		public AttributeInfo(string name, Dictionary<string,object?> values)
 		{
 			Name   = name;
 			Values = values;
 		}
 
-		public string                    Name;
-		public Dictionary<string,object> Values;
+		public string                     Name;
+		public Dictionary<string,object?> Values;
 
-		Func<Attribute> _func;
+		Func<Attribute>? _func;
 
 		public Attribute MakeAttribute(Type type)
 		{
 			if (_func == null)
 			{
-				var ctors = type.GetConstructorsEx();
+				var ctors = type.GetConstructors();
 				var ctor  = ctors.FirstOrDefault(c => c.GetParameters().Length == 0);
 
 				if (ctor != null)
@@ -34,7 +34,7 @@ namespace LinqToDB.Metadata
 						Expression.Convert(
 							Expression.MemberInit(
 								Expression.New(ctor),
-								(IEnumerable<MemberBinding>)Values.Select(k =>
+								Values.Select(k =>
 								{
 									var member = type.GetPublicMemberEx(k.Key)[0];
 									var mtype  = member.GetMemberType();
@@ -45,7 +45,7 @@ namespace LinqToDB.Metadata
 								})),
 							typeof(Attribute)));
 
-					_func = expr.Compile();
+					_func = expr.CompileExpression();
 				}
 				else
 				{

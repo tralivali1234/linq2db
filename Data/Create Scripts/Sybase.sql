@@ -1,16 +1,18 @@
 ﻿USE master
 GO
-
-DROP DATABASE TestData
+-- for bulk copy transactions support, must be called from master
+sp_dboption tempdb, 'ddl in tran', 'true'
 GO
 
-CREATE DATABASE TestData
-	ON master = '102400K'
+DROP DATABASE {DBNAME}
+GO
+CREATE DATABASE {DBNAME} ON default = '102400K'
 GO
 
-USE TestData
+USE {DBNAME}
 GO
-
+sp_configure 'enable unicode normalization', 0
+GO
 CREATE TABLE InheritanceParent
 (
 	InheritanceParentId int          NOT NULL,
@@ -51,7 +53,7 @@ INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Tester', 'Testerson', 
 GO
 INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jane',   'Doe',       'F')
 GO
-INSERT INTO Person (FirstName, LastName, Gender) VALUES ('Jürgen', 'König',     'M')
+INSERT INTO Person (FirstName, LastName, MiddleName, Gender) VALUES ('Jürgen', 'König', 'Ko', 'M')
 GO
 -- Doctor Table Extension
 
@@ -118,15 +120,15 @@ GO
 
 CREATE TABLE AllTypes
 (
-	ID                       int           IDENTITY,
+	ID                       int               IDENTITY,
 
 	bigintDataType           bigint            NULL,
 	uBigintDataType          unsigned  bigint  NULL,
-	numericDataType          numeric           NULL,
-	bitDataType              bit           NOT NULL,
+	numericDataType          numeric(18, 1)    NULL,
+	bitDataType              bit               default(0),
 	smallintDataType         smallint          NULL,
 	uSmallintDataType        unsigned smallint NULL,
-	decimalDataType          decimal           NULL,
+	decimalDataType          decimal(18, 1)    NULL,
 	smallmoneyDataType       smallmoney        NULL,
 	intDataType              int               NULL,
 	uIntDataType             unsigned int      NULL,
@@ -256,5 +258,28 @@ CREATE TABLE TestMergeIdentity
 GO
 
 CREATE OR REPLACE PROCEDURE AddIssue792Record AS
-	INSERT INTO dbo.AllTypes(char20DataType, bitDataType) VALUES('issue792', 1)
+	INSERT INTO dbo.AllTypes(char20DataType) VALUES('issue792')
 RETURN
+
+GO
+
+CREATE Procedure Person_SelectAll
+AS
+
+SELECT * FROM Person
+
+GO
+
+CREATE TABLE KeepIdentityTest (
+	ID    NUMERIC(12, 0) IDENTITY,
+	Value INT            NULL
+)
+GO
+
+CREATE TABLE CollatedTable
+(
+	Id				INT NOT NULL,
+	CaseSensitive	NVARCHAR(20) NOT NULL,
+	CaseInsensitive	NVARCHAR(20) NOT NULL
+)
+GO

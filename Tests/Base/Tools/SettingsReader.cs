@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -12,22 +12,25 @@ namespace Tests.Tools
 {
 	public class TestConnection
 	{
-		public string ConnectionString;
-		public string Provider;
+		public string  ConnectionString = null!;
+		public string? Provider;
 	}
 
 	public class TestSettings
 	{
-		public string   BasedOn;
-		public string[] Providers;
-		public string   TraceLevel;
-		public string   DefaultConfiguration;
-		public Dictionary<string,TestConnection> Connections = new Dictionary<string,TestConnection>();
+		public string?   BasedOn;
+		public string?   BaselinesPath;
+		public string[]? Providers;
+		public string[]? Skip;
+		public string?   TraceLevel;
+		public string?   DefaultConfiguration;
+		public string?   NoLinqService;
+		public Dictionary<string,TestConnection> Connections = new ();
 	}
 
-	static class SettingsReader
+	public static class SettingsReader
 	{
-		public static TestSettings Deserialize(string configName, string defaultJson, string userJson)
+		public static TestSettings Deserialize(string configName, string defaultJson, string? userJson)
 		{
 			void Merge(TestSettings settings1, TestSettings settings2)
 			{
@@ -38,18 +41,27 @@ namespace Tests.Tools
 				if (settings1.Providers == null)
 					settings1.Providers = settings2.Providers;
 
+				if (settings1.Skip == null)
+					settings1.Skip = settings2.Skip;
+
 				if (settings1.TraceLevel == null)
 					settings1.TraceLevel = settings2.TraceLevel;
 
 				if (settings1.DefaultConfiguration == null)
 					settings1.DefaultConfiguration = settings2.DefaultConfiguration;
+
+				if (settings1.NoLinqService == null)
+					settings1.NoLinqService = settings2.NoLinqService;
+
+				if (settings1.BaselinesPath == null)
+					settings1.BaselinesPath = settings2.BaselinesPath;
 			}
 
-			var defaultSettings = JsonConvert.DeserializeObject<Dictionary<string,TestSettings>>(defaultJson);
+			var defaultSettings = JsonConvert.DeserializeObject<Dictionary<string,TestSettings>>(defaultJson)!;
 
 			if (userJson != null)
 			{
-				var userSettings = JsonConvert.DeserializeObject<Dictionary<string,TestSettings>>(userJson);
+				var userSettings = JsonConvert.DeserializeObject<Dictionary<string,TestSettings>>(userJson)!;
 
 				foreach (var uSetting in userSettings)
 				{
@@ -92,6 +104,20 @@ namespace Tests.Tools
 					Merge(settings, baseOnSettings);
 				}
 
+				//Translate connection strings enclosed in brackets as references to other existing connection strings.
+				foreach (var connection in settings.Connections)
+				{
+					var cs = connection.Value.ConnectionString;
+					if (cs.StartsWith("[") && cs.EndsWith("]"))
+					{
+						cs = cs.Substring(1, cs.Length - 2);
+						if (settings.Connections.TryGetValue(cs, out var baseConnection))
+							connection.Value.ConnectionString = baseConnection.ConnectionString;
+						else
+							throw new InvalidOperationException($"Connection {cs} not found.");
+					}
+				}
+
 				return settings;
 			}
 
@@ -125,7 +151,7 @@ namespace Tests.Tools
 						}
 					},
 					{
-						"CORE2",
+						"CORE21",
 						new TestSettings
 						{
 							Connections = new Dictionary<string,TestConnection>
@@ -178,7 +204,7 @@ namespace Tests.Tools
 		}
 	},
 
-	CORE2:
+	CORE21:
 	{
 		BasedOn     : 'Default',
 		Connections :
@@ -200,7 +226,7 @@ namespace Tests.Tools
 		}
 	},
 
-	'CORE2':
+	'CORE21':
 	{
 		BasedOn     : 'Default',
 		Connections :
@@ -232,7 +258,7 @@ namespace Tests.Tools
 						new { Key = "Con 3", ConnectionString = "CCC", Provider = "SqlServer" },
 					});
 
-				yield return new TestCaseData("Core 2", "CORE2", _defaultData, null)
+				yield return new TestCaseData("Core 2.1", "CORE21", _defaultData, null)
 					.SetName("Tests.Tools.Core2")
 					.Returns(new[]
 					{
@@ -260,7 +286,7 @@ namespace Tests.Tools
 						new { Key = "Con 4", ConnectionString = "FFF", Provider = "SqlServer" },
 					});
 
-				yield return new TestCaseData("User Core 2", "CORE2", _defaultData, _userData)
+				yield return new TestCaseData("User Core 2.1", "CORE21", _defaultData, _userData)
 					.SetName("Tests.Tools.UserCore2")
 					.Returns(new[]
 					{
